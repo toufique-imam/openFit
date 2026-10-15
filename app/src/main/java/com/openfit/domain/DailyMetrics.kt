@@ -13,14 +13,18 @@ data class Exercise(val name: String, val start: Instant, val end: Instant) {
 
 data class DailyMetrics(
     val steps: Long? = null,
+    val hourlySteps: Map<Int, Long> = emptyMap(),
     val distanceMeters: Double? = null,
     val floors: Double? = null,
     val caloriesOutKcal: Double? = null,
     val caloriesInKcal: Double? = null,
     val waterLiters: Double? = null,
     val zoneMinutes: ZoneMinutes? = null,
+    val cardioLoad: Double? = null,
     val sleep: SleepSummary? = null,
     val exercises: List<Exercise> = emptyList(),
+    val heartRateRange: IntRange? = null,
+    val latestHeartRate: Reading<Int>? = null,
     val restingBpm: Reading<Int>? = null,
     val hrvMs: Reading<Double>? = null,
     val spo2Percent: Reading<Double>? = null,

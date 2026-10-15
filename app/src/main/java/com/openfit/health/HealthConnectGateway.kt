@@ -51,6 +51,11 @@ class HealthConnectGateway(private val context: Context) {
     companion object {
         const val PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
 
+        val OPTIONAL_PERMISSIONS = setOf(
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
+            HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
+        )
+
         fun read(type: KClass<out Record>): String = HealthPermission.getReadPermission(type)
 
         private val READ_PERMISSIONS = listOf(

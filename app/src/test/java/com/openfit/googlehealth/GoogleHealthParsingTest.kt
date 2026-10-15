@@ -25,7 +25,7 @@ class GoogleHealthParsingTest {
 
     @Test
     fun readsZoneMinutesBreakdown() {
-        val rollup = JSONObject("""{"sumInFatBurnHeartZone":"12","sumInCardioHeartZone":"4","sumInPeakHeartZone":"1"}""")
+        val rollup = JSONObject("""{"sumInFatBurnHeartZone":"12","sumInCardioHeartZone":"8","sumInPeakHeartZone":"2"}""")
 
         assertEquals(ZoneMinutes(fatBurn = 12, cardio = 4, peak = 1), parseZoneMinutes(rollup))
     }

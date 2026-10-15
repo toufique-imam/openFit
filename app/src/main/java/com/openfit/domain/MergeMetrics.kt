@@ -9,14 +9,20 @@ fun mergeMetrics(byPriority: List<DailyMetrics>): DailyMetrics =
 
 fun mergeMetrics(primary: DailyMetrics, secondary: DailyMetrics): DailyMetrics = DailyMetrics(
     steps = largest(primary.steps, secondary.steps),
+    hourlySteps = (primary.hourlySteps.keys + secondary.hourlySteps.keys).associateWith { hour ->
+        maxOf(primary.hourlySteps[hour] ?: 0, secondary.hourlySteps[hour] ?: 0)
+    },
     distanceMeters = largest(primary.distanceMeters, secondary.distanceMeters),
     floors = largest(primary.floors, secondary.floors),
     caloriesOutKcal = largest(primary.caloriesOutKcal, secondary.caloriesOutKcal),
     caloriesInKcal = largest(primary.caloriesInKcal, secondary.caloriesInKcal),
     waterLiters = largest(primary.waterLiters, secondary.waterLiters),
     zoneMinutes = primary.zoneMinutes ?: secondary.zoneMinutes,
+    cardioLoad = primary.cardioLoad ?: secondary.cardioLoad,
     sleep = primary.sleep ?: secondary.sleep,
     exercises = mergeExercises(primary.exercises, secondary.exercises),
+    heartRateRange = widest(primary.heartRateRange, secondary.heartRateRange),
+    latestHeartRate = latest(primary.latestHeartRate, secondary.latestHeartRate),
     restingBpm = latest(primary.restingBpm, secondary.restingBpm),
     hrvMs = latest(primary.hrvMs, secondary.hrvMs),
     spo2Percent = latest(primary.spo2Percent, secondary.spo2Percent),
@@ -29,6 +35,10 @@ fun mergeMetrics(primary: DailyMetrics, secondary: DailyMetrics): DailyMetrics =
 
 private fun <T : Comparable<T>> largest(primary: T?, secondary: T?): T? =
     if (primary == null || secondary == null) primary ?: secondary else maxOf(primary, secondary)
+
+private fun widest(primary: IntRange?, secondary: IntRange?): IntRange? =
+    if (primary == null || secondary == null) primary ?: secondary
+    else minOf(primary.first, secondary.first)..maxOf(primary.last, secondary.last)
 
 private fun <T> latest(primary: Reading<T>?, secondary: Reading<T>?): Reading<T>? =
     if (primary == null || secondary == null) primary ?: secondary

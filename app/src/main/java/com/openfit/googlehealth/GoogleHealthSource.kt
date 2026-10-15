@@ -1,6 +1,7 @@
 package com.openfit.googlehealth
 
 import android.util.Log
+import com.openfit.domain.DailyHistory
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.Reading
 import com.openfit.health.DailyMetricsSource
@@ -8,6 +9,8 @@ import com.openfit.profile.Profile
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import org.json.JSONObject
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
@@ -25,6 +28,14 @@ class GoogleHealthSource(
         fun sampleFilter(field: String) = "$field.sample_time.physical_time >= \"$lookbackStart\""
 
         val steps = async { rollUp("steps", date, "steps")?.number("countSum")?.toLong() }
+        val hourlySteps = async {
+            tolerant("steps") {
+                val start = date.atStartOfDay(zone).toInstant()
+                val end = minOf(nextDay.atStartOfDay(zone).toInstant(), Instant.now())
+                parseHourly(api.rollUp("steps", start, end, Duration.ofHours(1)), "steps", "countSum", zone)
+            }.orEmpty()
+        }
+        val heartRateRange = async { rollUp("heart-rate", date, "heartRate")?.let(::parseHeartRateRange) }
         val distance = async { rollUp("distance", date, "distance")?.number("millimetersSum")?.div(1000) }
         val floors = async { rollUp("floors", date, "floors")?.number("countSum") }
         val calories = async { rollUp("total-calories", date, "totalCalories")?.number("kcalSum") }
@@ -81,6 +92,8 @@ class GoogleHealthSource(
 
         DailyMetrics(
             steps = steps.await(),
+            hourlySteps = hourlySteps.await(),
+            heartRateRange = heartRateRange.await(),
             distanceMeters = distance.await(),
             floors = floors.await(),
             caloriesOutKcal = calories.await(),
@@ -98,14 +111,67 @@ class GoogleHealthSource(
         )
     }
 
+    override suspend fun exerciseDays(from: LocalDate, until: LocalDate): Set<LocalDate> =
+        parseExercises(
+            reconcile(
+                "exercise",
+                "exercise.interval.civil_start_time >= \"$from\" AND exercise.interval.civil_start_time < \"${until.plusDays(1)}\"",
+                "exercise",
+            ),
+        ).map { it.start.atZone(zone).toLocalDate() }.toSet()
+
     private suspend fun rollUp(dataType: String, date: LocalDate, field: String): JSONObject? =
         tolerant(dataType) { api.dailyRollUp(dataType, date).firstRollup(field) }
 
+    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile): DailyHistory = coroutineScope {
+        val untilExclusive = until.plusDays(1)
+        fun dailyFilter(field: String) = "$field.date >= \"$from\" AND $field.date < \"$untilExclusive\""
+
+        val zoneMinutes = async {
+            tolerant("active-zone-minutes") {
+                parseDailyRollups(api.dailyRollUp("active-zone-minutes", from, untilExclusive), "activeZoneMinutes")
+                    .mapValues { (_, rollup) -> parseZoneMinutes(rollup).total }
+            }.orEmpty()
+        }
+        val restingBpm = async {
+            dailyValues(list("daily-resting-heart-rate", dailyFilter("daily_resting_heart_rate"), "dailyRestingHeartRate")) {
+                it.number("beatsPerMinute")
+            }.mapValues { (_, bpm) -> bpm.toInt() }
+        }
+        val hrv = async {
+            dailyValues(list("daily-heart-rate-variability", dailyFilter("daily_heart_rate_variability"), "dailyHeartRateVariability")) {
+                it.number("averageHeartRateVariabilityMilliseconds")
+            }
+        }
+        val sleep = async {
+            sleepMinutesByEndDate(
+                reconcile(
+                    "sleep",
+                    "sleep.interval.civil_end_time >= \"${from}T00:00:00\" AND sleep.interval.civil_end_time < \"${untilExclusive}T00:00:00\"",
+                    "sleep",
+                ),
+                zone,
+            )
+        }
+        DailyHistory(zoneMinutes = zoneMinutes.await(), restingBpm = restingBpm.await(), hrvMs = hrv.await(), sleepMinutes = sleep.await())
+    }
+
     private suspend fun list(dataType: String, filter: String, field: String): List<JSONObject> =
-        tolerant(dataType) { api.list(dataType, filter).points(field) }.orEmpty()
+        tolerant(dataType) { pages { api.list(dataType, filter, it) }.flatMap { page -> page.points(field) } }.orEmpty()
 
     private suspend fun reconcile(dataType: String, filter: String, field: String): List<JSONObject> =
-        tolerant(dataType) { api.reconcile(dataType, filter).points(field) }.orEmpty()
+        tolerant(dataType) { pages { api.reconcile(dataType, filter, it) }.flatMap { page -> page.points(field) } }.orEmpty()
+
+    private suspend fun pages(fetch: suspend (String?) -> JSONObject): List<JSONObject> {
+        val pages = mutableListOf<JSONObject>()
+        var pageToken: String? = null
+        do {
+            val page = fetch(pageToken)
+            pages += page
+            pageToken = page.optString("nextPageToken").ifEmpty { null }
+        } while (pageToken != null && pages.size < MAX_PAGES)
+        return pages
+    }
 
     private suspend fun <T> tolerant(dataType: String, block: suspend () -> T): T? = try {
         block()
@@ -118,5 +184,6 @@ class GoogleHealthSource(
     private companion object {
         const val TAG = "GoogleHealthSource"
         const val LOOKBACK_DAYS = 30L
+        const val MAX_PAGES = 10
     }
 }

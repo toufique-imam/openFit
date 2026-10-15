@@ -21,9 +21,13 @@ import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
+import androidx.health.connect.client.request.AggregateGroupByDurationRequest
 import androidx.health.connect.client.request.AggregateRequest
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
+import com.openfit.domain.DailyHistory
+import com.openfit.domain.cardioLoad
+import com.openfit.domain.maxHeartRate
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.Exercise
 import com.openfit.domain.HeartRateSample
@@ -42,6 +46,7 @@ import kotlin.reflect.KClass
 
 class HealthConnectSource(
     private val gateway: HealthConnectGateway,
+    private val dayLoadCache: DayLoadCache,
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : DailyMetricsSource {
 
@@ -64,6 +69,7 @@ class HealthConnectSource(
 
         return DailyMetrics(
             steps = totals?.get(StepsRecord.COUNT_TOTAL),
+            hourlySteps = hourlySteps(window),
             distanceMeters = totals?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters,
             floors = totals?.get(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL),
             caloriesOutKcal = totals?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories,
@@ -74,12 +80,21 @@ class HealthConnectSource(
             } else {
                 null
             },
+            cardioLoad = if (age != null && restingBpm != null && heartRate.isNotEmpty()) {
+                cardioLoad(heartRate, restingBpm.value, maxHeartRate(age), profile.sex, movingMinutes(start, end, granted))
+            } else {
+                null
+            },
             sleep = window.records(SleepSessionRecord::class, start - SLEEP_LOOKBACK)
                 .filter { it.endTime > start && it.endTime <= end }
                 .takeIf { it.isNotEmpty() }
                 ?.let { sessions -> SleepSummary(sessions.sumDurations(::asleepDuration), sessions.maxOf { it.endTime }) },
             exercises = window.records(ExerciseSessionRecord::class, start)
                 .map { Exercise(it.title ?: DEFAULT_EXERCISE_NAME, it.startTime, it.endTime) },
+            heartRateRange = heartRate.takeIf { it.isNotEmpty() }?.let { samples ->
+                samples.minOf { it.bpm }.toInt()..samples.maxOf { it.bpm }.toInt()
+            },
+            latestHeartRate = heartRate.maxByOrNull { it.time }?.let { Reading(it.bpm.toInt(), it.time) },
             restingBpm = restingBpm,
             hrvMs = window.records(HeartRateVariabilityRmssdRecord::class, start - SLEEP_LOOKBACK)
                 .latestAverage({ it.time }) { it.heartRateVariabilityMillis },
@@ -103,6 +118,115 @@ class HealthConnectSource(
         )
     }
 
+    override suspend fun exerciseDays(from: LocalDate, until: LocalDate): Set<LocalDate> {
+        if (read(ExerciseSessionRecord::class) !in gateway.grantedPermissions()) return emptySet()
+        val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
+        return readAll(ExerciseSessionRecord::class, range)
+            .map { it.startTime.atZone(zone).toLocalDate() }
+            .toSet()
+    }
+
+    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile): DailyHistory {
+        val granted = gateway.grantedPermissions()
+        val start = from.atStartOfDay(zone).toInstant()
+        val window = Window(start, until.plusDays(1).atStartOfDay(zone).toInstant(), granted)
+        val resting = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
+        val loads = dayLoads(from, until, profile, window, resting)
+        return DailyHistory(
+            zoneMinutes = loads.mapValues { it.value.zoneMinutes },
+            cardioLoad = loads.mapValues { it.value.cardioLoad },
+            restingBpm = resting
+                .filter { it.time >= start }
+                .groupBy { localDate(it.time) }
+                .mapValues { (_, readings) -> readings.maxBy { it.time }.beatsPerMinute.toInt() },
+            hrvMs = window.records(HeartRateVariabilityRmssdRecord::class, start)
+                .groupBy { localDate(it.time) }
+                .mapValues { (_, readings) -> readings.map { it.heartRateVariabilityMillis }.average() },
+            sleepMinutes = window.records(SleepSessionRecord::class, start - SLEEP_LOOKBACK)
+                .filter { it.endTime > start }
+                .groupBy { localDate(it.endTime) }
+                .mapValues { (_, sessions) -> sessions.sumDurations(::asleepDuration).toMinutes().toInt() },
+        )
+    }
+
+    private suspend fun dayLoads(
+        from: LocalDate,
+        until: LocalDate,
+        profile: Profile,
+        window: Window,
+        resting: List<RestingHeartRateRecord>,
+    ): Map<LocalDate, DayLoad> {
+        val age = profile.age
+        if (age == null || read(HeartRateRecord::class) !in window.granted) return emptyMap()
+        val profileKey = "$age:${profile.sex?.name ?: "-"}"
+        val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
+        val cached = days.associateWith { dayLoadCache.get(profileKey, it) }
+        val computed = days
+            .filter { cached[it] == null }
+            .sortedDescending()
+            .take(MAX_BACKFILL_DAYS)
+            .associateWith { day -> dayLoad(day, age, profile, resting, window.granted) }
+        val settled = LocalDate.now(zone).minusDays(1)
+        dayLoadCache.putAll(profileKey, computed.filterKeys { it < settled })
+        return (cached + computed)
+            .mapNotNull { (day, load) -> load?.takeIf { it != DayLoad.NONE }?.let { day to it } }
+            .toMap()
+    }
+
+    private suspend fun dayLoad(
+        day: LocalDate,
+        age: Int,
+        profile: Profile,
+        resting: List<RestingHeartRateRecord>,
+        granted: Set<String>,
+    ): DayLoad {
+        val dayStart = day.atStartOfDay(zone).toInstant()
+        val dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant()
+        val samples = readAll(HeartRateRecord::class, TimeRangeFilter.between(dayStart, dayEnd))
+            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        if (samples.isEmpty()) return DayLoad.NONE
+        val restingBpm = resting.filter { it.time < dayEnd }.maxByOrNull { it.time }?.beatsPerMinute?.toInt()
+            ?: estimateRestingBpm(samples)
+            ?: return DayLoad.NONE
+        return DayLoad(
+            zoneMinutes = zoneMinutes(samples, heartRateZones(age, restingBpm)).total,
+            cardioLoad = cardioLoad(samples, restingBpm, maxHeartRate(age), profile.sex, movingMinutes(dayStart, dayEnd, granted)),
+        )
+    }
+
+    private suspend fun movingMinutes(start: Instant, end: Instant, granted: Set<String>): Set<Long>? {
+        val steps = read(StepsRecord::class) in granted
+        val exercise = read(ExerciseSessionRecord::class) in granted
+        if (!steps && !exercise) return null
+        val range = TimeRangeFilter.between(start, end)
+        val moving = mutableSetOf<Long>()
+        if (steps) {
+            client.aggregateGroupByDuration(AggregateGroupByDurationRequest(setOf(StepsRecord.COUNT_TOTAL), range, Duration.ofMinutes(1)))
+                .filter { (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) > 0L }
+                .forEach { moving += it.startTime.epochSecond / 60 }
+        }
+        if (exercise) {
+            readAll(ExerciseSessionRecord::class, range).forEach { session ->
+                moving += session.startTime.epochSecond / 60..session.endTime.epochSecond / 60
+            }
+        }
+        return moving
+    }
+
+    private fun localDate(time: Instant): LocalDate = time.atZone(zone).toLocalDate()
+
+    private suspend fun hourlySteps(window: Window): Map<Int, Long> {
+        if (read(StepsRecord::class) !in window.granted) return emptyMap()
+        val request = AggregateGroupByDurationRequest(
+            metrics = setOf(StepsRecord.COUNT_TOTAL),
+            timeRangeFilter = TimeRangeFilter.between(window.start, window.end),
+            timeRangeSlicer = Duration.ofHours(1),
+        )
+        return client.aggregateGroupByDuration(request).associate { bucket ->
+            bucket.startTime.atZone(zone).hour to (bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L)
+        }
+    }
+
     private inner class Window(val start: Instant, val end: Instant, val granted: Set<String>) {
         suspend fun <T : Record> records(type: KClass<T>, from: Instant): List<T> =
             if (read(type) in granted) readAll(type, TimeRangeFilter.between(from, end)) else emptyList()
@@ -124,7 +248,7 @@ class HealthConnectSource(
             val response = client.readRecords(ReadRecordsRequest(type, range, pageToken = pageToken))
             records += response.records
             pageToken = response.pageToken
-        } while (pageToken != null)
+        } while (!pageToken.isNullOrEmpty())
         return records
     }
 
@@ -140,6 +264,7 @@ class HealthConnectSource(
         val SLEEP_LOOKBACK: Duration = Duration.ofHours(18)
         val NIGHT: Duration = Duration.ofHours(12)
         const val DEFAULT_EXERCISE_NAME = "Exercise"
+        const val MAX_BACKFILL_DAYS = 7
 
         val AGGREGATES: Map<KClass<out Record>, AggregateMetric<*>> = mapOf(
             StepsRecord::class to StepsRecord.COUNT_TOTAL,

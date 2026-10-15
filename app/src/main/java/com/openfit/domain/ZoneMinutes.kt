@@ -12,7 +12,7 @@ data class ZoneMinutes(val fatBurn: Int, val cardio: Int, val peak: Int) {
 }
 
 fun heartRateZones(age: Int, restingBpm: Int): HeartRateZones {
-    val maxBpm = 220 - age
+    val maxBpm = maxHeartRate(age)
     val reserve = maxBpm - restingBpm
     fun atReserve(fraction: Double) = (restingBpm + reserve * fraction).roundToInt()
     return HeartRateZones(
@@ -23,7 +23,7 @@ fun heartRateZones(age: Int, restingBpm: Int): HeartRateZones {
 }
 
 fun zoneMinutes(samples: List<HeartRateSample>, zones: HeartRateZones): ZoneMinutes {
-    val minuteAverages = averageBpmPerMinute(samples)
+    val minuteAverages = averageBpmByMinute(samples).values
     return ZoneMinutes(
         fatBurn = minuteAverages.count { it >= zones.fatBurnFrom && it < zones.cardioFrom },
         cardio = minuteAverages.count { it >= zones.cardioFrom && it < zones.peakFrom },
@@ -32,13 +32,12 @@ fun zoneMinutes(samples: List<HeartRateSample>, zones: HeartRateZones): ZoneMinu
 }
 
 fun estimateRestingBpm(samples: List<HeartRateSample>): Int? {
-    val sorted = averageBpmPerMinute(samples).sorted()
+    val sorted = averageBpmByMinute(samples).values.sorted()
     if (sorted.isEmpty()) return null
     return sorted[(sorted.size * 0.05).toInt()].roundToInt()
 }
 
-private fun averageBpmPerMinute(samples: List<HeartRateSample>): List<Double> =
+fun averageBpmByMinute(samples: List<HeartRateSample>): Map<Long, Double> =
     samples
         .groupBy { it.time.epochSecond / 60 }
-        .values
-        .map { minute -> minute.map { it.bpm }.average() }
+        .mapValues { (_, minute) -> minute.map { it.bpm }.average() }

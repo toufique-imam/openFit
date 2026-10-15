@@ -20,11 +20,55 @@ fun JSONObject.points(field: String): List<JSONObject> =
         ?.mapNotNull { it.optJSONObject(field) }
         .orEmpty()
 
+fun parseHourly(response: JSONObject, field: String, value: String, zone: ZoneId): Map<Int, Long> =
+    response.optJSONArray("rollupDataPoints")
+        ?.objects()
+        ?.mapNotNull { point ->
+            val start = point.instant("startTime") ?: return@mapNotNull null
+            val amount = point.optJSONObject(field)?.number(value) ?: return@mapNotNull null
+            start.atZone(zone).hour to amount.toLong()
+        }
+        ?.groupBy({ it.first }, { it.second })
+        ?.mapValues { (_, amounts) -> amounts.sum() }
+        .orEmpty()
+
+fun parseHeartRateRange(rollup: JSONObject): IntRange? {
+    val min = rollup.number("beatsPerMinuteMin") ?: return null
+    val max = rollup.number("beatsPerMinuteMax") ?: return null
+    return min.toInt()..max.toInt()
+}
+
+// Rollup sums are zone-minute points, so cardio and peak minutes are already counted twice.
 fun parseZoneMinutes(rollup: JSONObject): ZoneMinutes = ZoneMinutes(
     fatBurn = rollup.number("sumInFatBurnHeartZone")?.toInt() ?: 0,
-    cardio = rollup.number("sumInCardioHeartZone")?.toInt() ?: 0,
-    peak = rollup.number("sumInPeakHeartZone")?.toInt() ?: 0,
+    cardio = (rollup.number("sumInCardioHeartZone")?.toInt() ?: 0) / 2,
+    peak = (rollup.number("sumInPeakHeartZone")?.toInt() ?: 0) / 2,
 )
+
+fun parseDailyRollups(response: JSONObject, field: String): Map<LocalDate, JSONObject> =
+    response.optJSONArray("rollupDataPoints")
+        ?.objects()
+        ?.mapNotNull { point ->
+            val date = civilDate(point.optJSONObject("civilStartTime")?.optJSONObject("date")) ?: return@mapNotNull null
+            point.optJSONObject(field)?.let { date to it }
+        }
+        ?.toMap()
+        .orEmpty()
+
+fun dailyValues(points: List<JSONObject>, value: (JSONObject) -> Double?): Map<LocalDate, Double> =
+    points
+        .mapNotNull { point -> civilDate(point.optJSONObject("date"))?.let { date -> value(point)?.let { date to it } } }
+        .toMap()
+
+fun sleepMinutesByEndDate(sessions: List<JSONObject>, zone: ZoneId): Map<LocalDate, Int> =
+    sessions
+        .mapNotNull { session ->
+            val end = session.optJSONObject("interval")?.instant("endTime") ?: return@mapNotNull null
+            val minutes = session.optJSONObject("summary")?.number("minutesAsleep") ?: return@mapNotNull null
+            end.atZone(zone).toLocalDate() to minutes.toInt()
+        }
+        .groupBy({ it.first }, { it.second })
+        .mapValues { (_, minutes) -> minutes.sum() }
 
 fun latestDaily(points: List<JSONObject>, zone: ZoneId, value: (JSONObject) -> Double?): Reading<Double>? =
     points

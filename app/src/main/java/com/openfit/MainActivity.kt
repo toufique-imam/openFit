@@ -9,6 +9,7 @@ import androidx.activity.enableEdgeToEdge
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openfit.googlehealth.GoogleHealthAuth
 import com.openfit.health.HealthConnectGateway
+import com.openfit.health.DayLoadCache
 import com.openfit.profile.ProfileStore
 import com.openfit.ui.theme.OpenFitTheme
 import com.openfit.ui.today.TodayRoute
@@ -23,7 +24,12 @@ class MainActivity : ComponentActivity() {
             OpenFitTheme {
                 TodayRoute(
                     viewModel = viewModel {
-                        TodayViewModel(HealthConnectGateway(applicationContext), ProfileStore(applicationContext), GoogleHealthAuth(applicationContext))
+                        TodayViewModel(
+                            HealthConnectGateway(applicationContext),
+                            ProfileStore(applicationContext),
+                            GoogleHealthAuth(applicationContext),
+                            DayLoadCache(applicationContext),
+                        )
                     },
                     onOpenHealthConnectStore = ::openHealthConnectStore,
                 )

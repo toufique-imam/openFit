@@ -6,6 +6,8 @@ import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import java.time.Duration
+import java.time.Instant
 import java.time.LocalDate
 
 class GoogleHealthException(val code: Int, val body: String) : Exception("Google Health API $code: $body") {
@@ -14,24 +16,38 @@ class GoogleHealthException(val code: Int, val body: String) : Exception("Google
 
 class GoogleHealthApi(private val accessToken: String) {
 
-    suspend fun dailyRollUp(dataType: String, date: LocalDate): JSONObject =
+    suspend fun dailyRollUp(dataType: String, date: LocalDate): JSONObject = dailyRollUp(dataType, date, date.plusDays(1))
+
+    suspend fun dailyRollUp(dataType: String, from: LocalDate, untilExclusive: LocalDate): JSONObject =
         request(
             "POST",
             "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:dailyRollUp",
             JSONObject()
-                .put("range", JSONObject().put("start", civil(date)).put("end", civil(date.plusDays(1))))
+                .put("range", JSONObject().put("start", civil(from)).put("end", civil(untilExclusive)))
                 .put("windowSizeDays", 1)
                 .put("dataSourceFamily", WEARABLES),
         )
 
-    suspend fun list(dataType: String, filter: String): JSONObject =
-        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints?${query(filter)}")
+    suspend fun rollUp(dataType: String, start: Instant, end: Instant, window: Duration): JSONObject =
+        request(
+            "POST",
+            "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:rollUp",
+            JSONObject()
+                .put("range", JSONObject().put("startTime", start.toString()).put("endTime", end.toString()))
+                .put("windowSize", "${window.seconds}s")
+                .put("dataSourceFamily", WEARABLES),
+        )
 
-    suspend fun reconcile(dataType: String, filter: String): JSONObject =
-        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:reconcile?${query(filter)}")
+    suspend fun list(dataType: String, filter: String, pageToken: String? = null): JSONObject =
+        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints?${query(filter, pageToken)}")
 
-    private fun query(filter: String) =
-        "filter=${URLEncoder.encode(filter, "UTF-8")}&dataSourceFamily=${URLEncoder.encode(WEARABLES, "UTF-8")}"
+    suspend fun reconcile(dataType: String, filter: String, pageToken: String? = null): JSONObject =
+        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:reconcile?${query(filter, pageToken)}")
+
+    private fun query(filter: String, pageToken: String?) = buildString {
+        append("filter=${URLEncoder.encode(filter, "UTF-8")}&dataSourceFamily=${URLEncoder.encode(WEARABLES, "UTF-8")}")
+        if (!pageToken.isNullOrEmpty()) append("&pageToken=${URLEncoder.encode(pageToken, "UTF-8")}")
+    }
 
     private fun civil(date: LocalDate) = JSONObject()
         .put("date", JSONObject().put("year", date.year).put("month", date.monthValue).put("day", date.dayOfMonth))
