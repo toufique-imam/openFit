@@ -45,4 +45,8 @@
     <string name="permissions_grant">Grant access</string>
     <string name="permissions_partial">Some data types are not shared with openFit, so a few tiles may be empty.</string>
     <string name="privacy_policy">openFit only reads health data from Health Connect to show it on this device. Nothing is uploaded or shared.</string>
+    <string name="google_health_offer">Connect your Google account to also read Fitbit\'s own Active Zone Minutes, sleep and vitals from the Google Health API.</string>
+    <string name="google_health_reconnect">Google Health needs you to sign in again.</string>
+    <string name="google_health_connect">Connect Google Health</string>
+    <string name="google_health_disconnect">Disconnect Google Health</string>
 </resources>

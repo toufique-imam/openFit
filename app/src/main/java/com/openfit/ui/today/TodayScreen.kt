@@ -1,6 +1,9 @@
 package com.openfit.ui.today
 
+import android.app.PendingIntent
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.IntentSenderRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -34,6 +37,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -54,6 +58,7 @@ import com.openfit.R
 import com.openfit.domain.DailyMetrics
 import com.openfit.profile.Profile
 import com.openfit.ui.theme.MetricColors
+import kotlinx.coroutines.launch
 import java.time.Duration
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
@@ -65,6 +70,14 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) 
         PermissionController.createRequestPermissionResultContract(),
     ) { viewModel.refresh() }
     val requestPermissions = { permissions: Set<String> -> permissionLauncher.launch(permissions) }
+    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+        viewModel.refresh()
+    }
+    val scope = rememberCoroutineScope()
+    val launchConsent = { consent: PendingIntent -> consentLauncher.launch(IntentSenderRequest.Builder(consent).build()) }
+    val connectGoogleHealth: () -> Unit = {
+        scope.launch { viewModel.connectGoogleHealth()?.let(launchConsent) }
+    }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
@@ -90,6 +103,9 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) 
             onRefresh = viewModel::refresh,
             onRequestPermissions = { requestPermissions(current.missingPermissions) },
             onSaveProfile = viewModel::saveProfile,
+            onConnectGoogleHealth = connectGoogleHealth,
+            onGoogleHealthConsent = launchConsent,
+            onDisconnectGoogleHealth = viewModel::disconnectGoogleHealth,
         )
     }
 }
@@ -101,6 +117,9 @@ private fun TodayScreen(
     onRefresh: () -> Unit,
     onRequestPermissions: () -> Unit,
     onSaveProfile: (Profile) -> Unit,
+    onConnectGoogleHealth: () -> Unit,
+    onGoogleHealthConsent: (PendingIntent) -> Unit,
+    onDisconnectGoogleHealth: () -> Unit,
 ) {
     var editingProfile by rememberSaveable { mutableStateOf(false) }
     val metrics = state.metrics
@@ -138,6 +157,19 @@ private fun TodayScreen(
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     StepsHero(steps = metrics.steps, goal = profile.dailyStepGoal)
+                }
+                googleHealthNotice(state.googleHealth)?.let { notice ->
+                    item(span = { GridItemSpan(maxLineSpan) }) {
+                        Card(Modifier.fillMaxWidth()) {
+                            Column(Modifier.padding(16.dp)) {
+                                Text(notice.message ?: stringResource(notice.messageRes))
+                                TextButton(onClick = {
+                                    val status = state.googleHealth
+                                    if (status is GoogleHealthStatus.NeedsConsent) onGoogleHealthConsent(status.consent) else onConnectGoogleHealth()
+                                }) { Text(stringResource(R.string.google_health_connect)) }
+                            }
+                        }
+                    }
                 }
                 if (state.missingPermissions.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
@@ -177,6 +209,11 @@ private fun TodayScreen(
     if (editingProfile) {
         ProfileDialog(
             profile = profile,
+            googleHealthConnected = state.googleHealth != GoogleHealthStatus.Off,
+            onDisconnectGoogleHealth = {
+                editingProfile = false
+                onDisconnectGoogleHealth()
+            },
             onDismiss = { editingProfile = false },
             onSave = {
                 editingProfile = false
@@ -246,7 +283,13 @@ private fun ProgressRing(progress: Float, color: Color, size: Dp, stroke: Dp) {
 }
 
 @Composable
-private fun ProfileDialog(profile: Profile, onDismiss: () -> Unit, onSave: (Profile) -> Unit) {
+private fun ProfileDialog(
+    profile: Profile,
+    googleHealthConnected: Boolean,
+    onDisconnectGoogleHealth: () -> Unit,
+    onDismiss: () -> Unit,
+    onSave: (Profile) -> Unit,
+) {
     var age by remember { mutableStateOf(profile.age?.toString().orEmpty()) }
     var stepGoal by remember { mutableStateOf(profile.dailyStepGoal.toString()) }
     var zoneGoal by remember { mutableStateOf(profile.dailyZoneMinutesGoal.toString()) }
@@ -259,6 +302,9 @@ private fun ProfileDialog(profile: Profile, onDismiss: () -> Unit, onSave: (Prof
                 NumberField(stringResource(R.string.age), age) { age = it }
                 NumberField(stringResource(R.string.daily_step_goal), stepGoal) { stepGoal = it }
                 NumberField(stringResource(R.string.daily_zone_minutes_goal), zoneGoal) { zoneGoal = it }
+                if (googleHealthConnected) {
+                    TextButton(onClick = onDisconnectGoogleHealth) { Text(stringResource(R.string.google_health_disconnect)) }
+                }
             }
         },
         confirmButton = {
@@ -305,6 +351,15 @@ private fun CenteredMessage(
             Button(onClick = onClick) { Text(label) }
         }
     }
+}
+
+private class Notice(@StringRes val messageRes: Int, val message: String? = null)
+
+private fun googleHealthNotice(status: GoogleHealthStatus): Notice? = when (status) {
+    GoogleHealthStatus.Connected -> null
+    GoogleHealthStatus.Off -> Notice(R.string.google_health_offer)
+    is GoogleHealthStatus.NeedsConsent -> Notice(R.string.google_health_reconnect)
+    is GoogleHealthStatus.Failed -> Notice(R.string.google_health_reconnect, status.message)
 }
 
 private class StatTileModel(@StringRes val label: Int, val value: String?, @StringRes val unit: Int?, val color: Color)
