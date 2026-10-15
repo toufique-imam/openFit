@@ -21,10 +21,11 @@ class ValueText {
 
 fun valueText(block: ValueText.() -> Unit): AnnotatedString = ValueText().apply(block).build()
 
-fun ValueText.duration(duration: Duration) {
+/** "5h 7m"; lists pad the minutes ("8h 01m") as Fitbit does. */
+fun ValueText.duration(duration: Duration, padMinutes: Boolean = false) {
     big(duration.toHours().toString())
     small("h ")
-    big(duration.toMinutesPart().toString())
+    big(if (padMinutes) "%02d".format(duration.toMinutesPart()) else duration.toMinutesPart().toString())
     small("m")
 }
 

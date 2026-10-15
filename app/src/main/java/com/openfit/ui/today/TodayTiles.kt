@@ -139,6 +139,7 @@ fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
             MiniMetric(
                 label = stringResource(R.string.focus_sleep),
                 value = asleep?.let { valueText { duration(it) } },
+                onClick = { onOpen(MetricPage.Sleep) },
             ) {
                 if (asleep == null) {
                     IconBadge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, MINI_GAUGE)
@@ -195,6 +196,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             title = stringResource(R.string.tile_sleep_duration),
             value = asleep?.let { valueText { duration(it) } } ?: noValue(stringResource(R.string.no_data)),
             subtitle = dayLabel(state),
+            onClick = { onOpen(MetricPage.Sleep) },
         ) {
             if (asleep == null) {
                 IconBadge(Icons.Outlined.Bedtime, OpenFitColors.Lavender)

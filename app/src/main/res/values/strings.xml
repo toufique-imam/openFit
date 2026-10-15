@@ -350,4 +350,63 @@
     <string name="hourly_chip_inactive">Inactive time</string>
     <string name="hourly_list_header">Hourly activity</string>
     <string name="hourly_list_header_avg">Hourly activity (avg)</string>
+
+    <!-- Sleep detail -->
+    <string name="sleep_title">Sleep</string>
+    <string name="sleep_of_goal">of %s goal</string>
+    <string name="sleep_score_title">Sleep Score</string>
+    <string name="sleep_rating_excellent">Excellent</string>
+    <string name="sleep_rating_good">Good</string>
+    <string name="sleep_rating_fair">Fair</string>
+    <string name="sleep_rating_poor">Poor</string>
+    <string name="sleep_timeline">Sleep timeline</string>
+    <string name="sleep_schedule_current">Your current sleep schedule is %1$s – %2$s</string>
+    <string name="sleep_stage_awake">Awake</string>
+    <string name="sleep_stage_rem">REM</string>
+    <string name="sleep_stage_light">Light</string>
+    <string name="sleep_stage_deep">Deep</string>
+    <string name="sleep_stage_row">%1$s • %2$s</string>
+    <string name="sleep_stage_row_percent">%1$s • %2$d%% • %3$s</string>
+    <string name="sleep_chip_stages">Sleep stages</string>
+    <string name="sleep_chip_benchmark">Benchmark</string>
+    <string name="sleep_chip_average">30-day average</string>
+    <string name="sleep_legend_typical">Typical range for people like you</string>
+    <string name="sleep_legend_average">Your average</string>
+    <string name="sleep_more_title">More about your sleep</string>
+    <string name="sleep_oxygen_title">Estimated oxygen variation</string>
+    <string name="sleep_oxygen_low">Low</string>
+    <string name="sleep_oxygen_moderate">Moderate</string>
+    <string name="sleep_oxygen_high">High</string>
+    <string name="sleep_tracking_title">Sleep tracking</string>
+    <string name="sleep_tracking_body">Sleep tracking uses body signals collected by your device to estimate your sleep metrics. Tracking sleep can help you better understand how well you feel when you’re awake.</string>
+    <string name="sleep_tracking_sheet">Your device writes your sleep and its stages to Health Connect. openFit reads them to show your time asleep, a sleep timeline and a sleep score.\n\nThe sleep score adds up time asleep (up to 50 points), time in deep and REM sleep (up to 25) and how restful the night was, from the share of time awake (up to 25). 90+ is excellent, 80–89 good, 60–79 fair and below 60 poor.</string>
+    <string name="sleep_timeline_sheet">Your sleep moves through stages several times a night. Light sleep makes up most of it; deep sleep supports physical recovery and REM sleep supports memory and mood. Waking briefly many times a night is normal.</string>
+    <string name="sleep_per_day_avg">per day (avg)</string>
+    <plurals name="sleep_goal_days_current">
+        <item quantity="one">You’ve hit your goal on %d day so far</item>
+        <item quantity="other">You’ve hit your goal on %d days so far</item>
+    </plurals>
+    <plurals name="sleep_goal_days_past">
+        <item quantity="one">You hit your goal on %d day</item>
+        <item quantity="other">You hit your goal on %d days</item>
+    </plurals>
+    <string name="sleep_score_avg_label">Sleep score (avg)</string>
+    <string name="sleep_over_week">Over the week</string>
+    <string name="sleep_over_month">Over the month</string>
+    <string name="sleep_over_year">Over the year</string>
+    <string name="sleep_avg_excellent">%1$s, your average Sleep Score was excellent. This restorative rest is exactly what you need to stay fully recharged.</string>
+    <string name="sleep_avg_good">%1$s, your average Sleep Score was good. You got the quality sleep needed to build a strong foundation.</string>
+    <string name="sleep_avg_fair">%1$s, your average Sleep Score was fair. You got rest, but more consistency could help you feel more energised.</string>
+    <string name="sleep_avg_poor">%1$s, your average Sleep Score was poor. It looks like rest has been a challenge lately – prioritising sleep could help you feel better.</string>
+    <string name="sleep_on_schedule">days on schedule</string>
+    <string name="sleep_schedule_average">On average, your sleep schedule was %1$s–%2$s</string>
+    <string name="sleep_stage_avg">in %s sleep (avg)</string>
+    <string name="sleep_chip_duration">Duration</string>
+    <string name="sleep_chip_score">Score</string>
+    <string name="sleep_chip_schedule">Schedule</string>
+    <string name="sleep_chip_stage">%s sleep</string>
+    <string name="sleep_weekly_average">Weekly average</string>
+    <string name="sleep_monthly_average">Monthly average</string>
+    <string name="sleep_row_score">Sleep score: %1$d • %2$s</string>
+    <string name="sleep_no_night">Wear your device to bed to track your sleep</string>
 </resources>
