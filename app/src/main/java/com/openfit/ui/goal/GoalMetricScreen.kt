@@ -7,6 +7,12 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material3.MaterialTheme
+import com.openfit.profile.UnitSystem
+import com.openfit.profile.Profile
+import androidx.compose.material.icons.outlined.LocalFireDepartment
+import androidx.compose.material.icons.outlined.Stairs
+import androidx.compose.material.icons.outlined.LocationOn
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -36,6 +42,7 @@ import com.openfit.ui.detail.periodLabel
 import com.openfit.ui.detail.periodRows
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.today.ArcGauge
+import com.openfit.ui.today.twoDecimals
 import com.openfit.ui.today.whole
 import kotlin.math.abs
 
@@ -48,7 +55,7 @@ fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? GoalMetricUiState.Ready
     DetailScaffold(
-        title = stringResource(R.string.tile_steps),
+        title = stringResource(ready?.metric?.title ?: R.string.tile_steps),
         accent = ACCENT.accent,
         period = ready?.period ?: ChartPeriod.Day,
         onPeriod = viewModel::selectPeriod,
@@ -76,16 +83,18 @@ private fun LazyListScope.dayContent(state: GoalMetricUiState.Ready) {
     val isToday = state.anchor == state.today
     item {
         val remaining = state.goal - value
+        val unit = stringResource(state.metric.unit(state.profile))
+        val format = state.metric.format
         DayHeaderRow(
-            value = whole(value),
-            status = stringResource(R.string.steps_of_goal, whole(state.goal)),
+            value = format(value),
+            status = stringResource(R.string.goal_of, format(state.goal), unit),
             description = when {
-                remaining > 0 -> stringResource(if (isToday) R.string.steps_away_today else R.string.steps_away_past, whole(remaining))
-                remaining < 0 -> stringResource(R.string.steps_exceeded, whole(abs(remaining)))
-                else -> stringResource(R.string.steps_met)
+                format(remaining) == format(0.0) -> stringResource(R.string.goal_met)
+                remaining > 0 -> stringResource(if (isToday) R.string.goal_away_today else R.string.goal_away_past, format(remaining), unit)
+                else -> stringResource(R.string.goal_exceeded, format(abs(remaining)), unit)
             },
         ) {
-            ArcGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, ACCENT, (value / state.goal).toFloat(), background = OpenFitColors.Background)
+            ArcGauge(state.metric.icon, ACCENT, (value / state.goal).toFloat(), background = OpenFitColors.Background)
         }
     }
     item {
@@ -94,7 +103,7 @@ private fun LazyListScope.dayContent(state: GoalMetricUiState.Ready) {
             values = state.hourly,
             color = ACCENT.accent,
             axisMax = axis.max,
-            axisLabels = listOf(0.0, axis.middle.toDouble(), axis.max).map { AxisLabel(it, compact(it)) },
+            axisLabels = listOf(0.0, axis.max / 2, axis.max).map { AxisLabel(it, compact(it)) },
             xLabels = HOUR_LABELS,
             modifier = Modifier.padding(top = 32.dp),
         )
@@ -106,21 +115,24 @@ private fun LazyListScope.periodContent(state: GoalMetricUiState.Ready) {
     val current = isCurrentPeriod(state.period, state.anchor, state.today)
     item {
         Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 13.dp)) {
-            HeaderValue(summary.averagePerDay?.let(::whole) ?: "0", stringResource(R.string.steps_per_day_avg))
-            val total = whole(summary.total)
+            val format = state.metric.format
+            HeaderValue(
+                summary.averagePerDay?.let(format) ?: "0",
+                stringResource(R.string.goal_per_day_avg, stringResource(state.metric.unit(state.profile))),
+            )
+            val phrase = stringResource(state.metric.phrase, format(summary.total), stringResource(state.metric.longUnit(state.profile)))
             Text(
                 when {
-                    state.period == ChartPeriod.Year ->
-                        stringResource(if (current) R.string.steps_year_current else R.string.steps_year_past, total)
+                    state.period == ChartPeriod.Year -> stringResource(if (current) R.string.goal_year_current else R.string.goal_year_past, phrase)
                     summary.goalDays > 0 -> pluralStringResource(
-                        if (current) R.plurals.steps_goal_days_current else R.plurals.steps_goal_days_past,
+                        if (current) R.plurals.goal_days_current else R.plurals.goal_days_past,
                         summary.goalDays,
                         summary.goalDays,
-                        total,
+                        phrase,
                     )
-                    !current -> stringResource(R.string.steps_no_goal_past, total)
-                    state.period == ChartPeriod.Week -> stringResource(R.string.steps_no_goal_week, total)
-                    else -> stringResource(R.string.steps_no_goal_month, total)
+                    !current -> stringResource(R.string.goal_none_past, phrase)
+                    state.period == ChartPeriod.Week -> stringResource(R.string.goal_none_week, phrase)
+                    else -> stringResource(R.string.goal_none_month, phrase)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = OpenFitColors.OnSurfaceVariant,
@@ -140,12 +152,50 @@ private fun LazyListScope.periodContent(state: GoalMetricUiState.Ready) {
             modifier = Modifier.padding(top = 32.dp),
         )
     }
-    periodRows(state.period, state.anchor, state.today, state.rows)
+    periodRows(state.period, state.anchor, state.today, state.rows) { state.metric.format(it.load) }
 }
 
-/** Axis labels the way Fitbit writes them: 500, 1.6k, 10k. */
+/** Axis labels the way Fitbit writes them: 2.5, 500, 1.6k, 10k. */
 private fun compact(value: Double): String = when {
-    value < 1000 -> whole(value)
+    value < 1000 -> twoDecimals(value)
     value % 1000 == 0.0 -> "${(value / 1000).toInt()}k"
     else -> "${"%.1f".format(value / 1000).trimEnd('0').trimEnd('.')}k"
 }
+
+private val GoalMetric.title: Int
+    get() = when (this) {
+        GoalMetric.Steps -> R.string.tile_steps
+        GoalMetric.Distance -> R.string.tile_distance
+        GoalMetric.Floors -> R.string.tile_floors
+        GoalMetric.Energy -> R.string.tile_energy_burned
+    }
+
+private val GoalMetric.icon: ImageVector
+    get() = when (this) {
+        GoalMetric.Steps -> Icons.AutoMirrored.Outlined.DirectionsWalk
+        GoalMetric.Distance -> Icons.Outlined.LocationOn
+        GoalMetric.Floors -> Icons.Outlined.Stairs
+        GoalMetric.Energy -> Icons.Outlined.LocalFireDepartment
+    }
+
+/** The short unit after numbers ("of 10,000 steps", "km per day (avg)"). */
+private fun GoalMetric.unit(profile: Profile): Int = when (this) {
+    GoalMetric.Steps -> R.string.unit_steps
+    GoalMetric.Distance -> if (profile.units == UnitSystem.Imperial) R.string.unit_mi else R.string.unit_km
+    GoalMetric.Floors -> R.string.unit_floors
+    GoalMetric.Energy -> R.string.unit_cal
+}
+
+/** The unit inside takeaway sentences ("burned a total of 14,000 calories"). */
+private fun GoalMetric.longUnit(profile: Profile): Int = if (this == GoalMetric.Energy) R.string.unit_calories else unit(profile)
+
+private val GoalMetric.phrase: Int
+    get() = when (this) {
+        GoalMetric.Steps -> R.string.phrase_steps
+        GoalMetric.Distance -> R.string.phrase_distance
+        GoalMetric.Floors -> R.string.phrase_floors
+        GoalMetric.Energy -> R.string.phrase_energy
+    }
+
+private val GoalMetric.format: (Double) -> String
+    get() = if (this == GoalMetric.Distance) ::twoDecimals else { value -> whole(value) }

@@ -76,10 +76,11 @@ class MainActivity : ComponentActivity() {
                             LaunchedEffect(screen) { cardioViewModel.open(screen.date) }
                             CardioLoadRoute(viewModel = cardioViewModel, onBack = pop)
                         }
-                        MetricPage.Steps -> {
-                            val stepsViewModel = viewModel { GoalMetricViewModel(GoalMetric.Steps, gateway, profileStore) }
-                            LaunchedEffect(screen) { stepsViewModel.open(screen.date) }
-                            GoalMetricRoute(viewModel = stepsViewModel, onBack = pop)
+                        MetricPage.Steps, MetricPage.Distance, MetricPage.Floors, MetricPage.Energy -> {
+                            val metric = GoalMetric.valueOf(screen.page.name)
+                            val goalViewModel = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore) }
+                            LaunchedEffect(screen) { goalViewModel.open(screen.date) }
+                            GoalMetricRoute(viewModel = goalViewModel, onBack = pop)
                         }
                         MetricPage.Readiness -> {
                             val readinessViewModel = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache) }

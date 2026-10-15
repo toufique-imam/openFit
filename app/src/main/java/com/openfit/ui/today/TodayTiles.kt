@@ -286,6 +286,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
                 stringResource(if (imperial) R.string.unit_mi else R.string.unit_km),
             ),
             subtitle = dayLabel(state),
+            onClick = { onOpen(MetricPage.Distance) },
         ) {
             ArcGauge(Icons.Outlined.LocationOn, OpenFitColors.Mint, (meters / profile.dailyDistanceGoalMeters).toFloat())
         }
@@ -296,13 +297,14 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             title = stringResource(R.string.tile_energy_burned),
             value = quantityText(whole(calories), stringResource(R.string.unit_cal)),
             subtitle = dayLabel(state),
+            onClick = { onOpen(MetricPage.Energy) },
         ) {
             ArcGauge(Icons.Outlined.LocalFireDepartment, OpenFitColors.Mint, (calories / profile.dailyCaloriesOutGoal).toFloat())
         }
     }
     item {
         val floors = metrics.floors ?: 0.0
-        MetricTile(stringResource(R.string.tile_floors), AnnotatedString(whole(floors.toInt())), dayLabel(state)) {
+        MetricTile(stringResource(R.string.tile_floors), AnnotatedString(whole(floors.toInt())), dayLabel(state), onClick = { onOpen(MetricPage.Floors) }) {
             ArcGauge(Icons.Outlined.Stairs, OpenFitColors.Mint, (floors / profile.dailyFloorsGoal).toFloat())
         }
     }

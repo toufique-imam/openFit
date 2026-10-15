@@ -230,24 +230,31 @@
     <string name="readiness_legend_moderate">30 - 64 Moderate</string>
     <string name="readiness_legend_high">65–100 High</string>
 
-    <!-- Steps detail -->
-    <string name="steps_of_goal">of %s steps</string>
-    <string name="steps_away_today">You’re %s steps away from hitting your daily goal</string>
-    <string name="steps_away_past">You were %s steps away from hitting your daily goal</string>
-    <string name="steps_exceeded">You exceeded your daily goal by %s steps. Great job!</string>
-    <string name="steps_met">You hit your daily goal. Great job!</string>
-    <string name="steps_per_day_avg">steps per day (avg)</string>
-    <plurals name="steps_goal_days_current">
-        <item quantity="one">You’ve hit your goal on %1$d day so far, and took a total of %2$s steps</item>
-        <item quantity="other">You’ve hit your goal on %1$d days so far, and took a total of %2$s steps</item>
+    <!-- Goal metric detail (steps, distance, floors, energy burned) -->
+    <string name="goal_of">of %1$s %2$s</string>
+    <string name="goal_away_today">You’re %1$s %2$s away from hitting your daily goal</string>
+    <string name="goal_away_past">You were %1$s %2$s away from hitting your daily goal</string>
+    <string name="goal_exceeded">You exceeded your daily goal by %1$s %2$s. Great job!</string>
+    <string name="goal_met">You hit your daily goal. Great job!</string>
+    <string name="goal_per_day_avg">%s per day (avg)</string>
+    <plurals name="goal_days_current">
+        <item quantity="one">You’ve hit your goal on %1$d day so far, and %2$s</item>
+        <item quantity="other">You’ve hit your goal on %1$d days so far, and %2$s</item>
     </plurals>
-    <plurals name="steps_goal_days_past">
-        <item quantity="one">You hit your goal on %1$d day, and took a total of %2$s steps</item>
-        <item quantity="other">You hit your goal on %1$d days, and took a total of %2$s steps</item>
+    <plurals name="goal_days_past">
+        <item quantity="one">You hit your goal on %1$d day, and %2$s</item>
+        <item quantity="other">You hit your goal on %1$d days, and %2$s</item>
     </plurals>
-    <string name="steps_no_goal_week">You haven’t hit your goal yet this week. You took a total of %1$s steps so far.</string>
-    <string name="steps_no_goal_month">You haven’t hit your goal yet this month. You took a total of %1$s steps so far.</string>
-    <string name="steps_no_goal_past">You didn’t hit your goal. You took a total of %1$s steps.</string>
-    <string name="steps_year_current">You’ve taken a total of %1$s steps so far this year</string>
-    <string name="steps_year_past">You took a total of %1$s steps</string>
+    <string name="goal_none_week">You haven’t hit your goal yet this week. You %1$s so far.</string>
+    <string name="goal_none_month">You haven’t hit your goal yet this month. You %1$s so far.</string>
+    <string name="goal_none_past">You didn’t hit your goal. You %1$s.</string>
+    <string name="goal_year_current">You %1$s so far this year</string>
+    <string name="goal_year_past">You %1$s</string>
+    <string name="phrase_steps">took a total of %1$s %2$s</string>
+    <string name="phrase_distance">covered a total of %1$s %2$s</string>
+    <string name="phrase_floors">climbed a total of %1$s %2$s</string>
+    <string name="phrase_energy">burned a total of %1$s %2$s</string>
+    <string name="unit_steps">steps</string>
+    <string name="unit_floors">floors</string>
+    <string name="unit_calories">calories</string>
 </resources>

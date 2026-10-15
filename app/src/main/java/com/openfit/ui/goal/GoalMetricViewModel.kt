@@ -16,6 +16,7 @@ import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectTotals
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
+import com.openfit.profile.UnitSystem
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -25,16 +26,29 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 
-/** A Fitbit goal screen: which daily total it shows and where its goal comes from. */
-enum class GoalMetric(val total: DailyTotal, val goal: (Profile) -> Double) {
+private const val METERS_PER_MILE = 1_609.344
+
+/** A Fitbit goal screen: which daily total it shows, in which unit, and where its goal comes from. */
+enum class GoalMetric(val total: DailyTotal, val goal: (Profile) -> Double, val display: (Double, Profile) -> Double = { value, _ -> value }) {
     Steps(DailyTotal.Steps, { it.dailyStepGoal.toDouble() }),
+    Distance(
+        DailyTotal.DistanceMeters,
+        { distanceFromMeters(it.dailyDistanceGoalMeters, it) },
+        { meters, profile -> distanceFromMeters(meters, profile) },
+    ),
+    Floors(DailyTotal.Floors, { it.dailyFloorsGoal.toDouble() }),
+    Energy(DailyTotal.CaloriesOutKcal, { it.dailyCaloriesOutGoal.toDouble() }),
 }
+
+private fun distanceFromMeters(meters: Double, profile: Profile): Double =
+    if (profile.units == UnitSystem.Imperial) meters / METERS_PER_MILE else meters / 1_000
 
 sealed interface GoalMetricUiState {
     data object Loading : GoalMetricUiState
     data class Failed(val message: String) : GoalMetricUiState
     data class Ready(
         val metric: GoalMetric,
+        val profile: Profile,
         val period: ChartPeriod,
         val anchor: LocalDate,
         val today: LocalDate,
@@ -88,11 +102,13 @@ class GoalMetricViewModel(
                 val today = LocalDate.now()
                 val all = periodDays(period, anchor)
                 val days = all.filter { it <= today }
-                val values = totals.daily(metric.total, days.first(), days.last())
-                val hourly = if (period == ChartPeriod.Day) totals.hourly(metric.total, anchor) else emptyMap()
-                val goal = metric.goal(profileStore.load())
+                val profile = profileStore.load()
+                val values = totals.daily(metric.total, days.first(), days.last()).mapValues { metric.display(it.value, profile) }
+                val hourly = if (period == ChartPeriod.Day) totals.hourly(metric.total, anchor).mapValues { metric.display(it.value, profile) } else emptyMap()
+                val goal = metric.goal(profile)
                 GoalMetricUiState.Ready(
                     metric = metric,
+                    profile = profile,
                     period = period,
                     anchor = anchor,
                     today = today,
