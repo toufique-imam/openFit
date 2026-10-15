@@ -19,9 +19,12 @@ data class Readiness(val score: Int, val illness: Boolean) {
 const val LOW_READINESS = 29
 const val HIGH_READINESS = 65
 private const val BASELINE_DAYS = 30L
-private const val HRV_WEIGHT = 0.4
-private const val RESTING_WEIGHT = 0.3
-private const val SLEEP_WEIGHT = 0.3
+// Fitted to Fitbit's September 2026 scores (RMSE 14 → 9 points; see docs/findings_algorithms.md): HRV dominates.
+private const val HRV_WEIGHT = 0.7
+private const val RESTING_WEIGHT = 0.2
+private const val SLEEP_WEIGHT = 0.1
+private const val SCORE_CENTER = 60
+private const val SCORE_GAIN = 24
 private const val MIN_LN_HRV_SD = 0.05
 private const val MIN_RESTING_SD = 2.0
 private const val MIN_SLEEP_SD_HOURS = 0.5
@@ -42,7 +45,7 @@ fun readiness(date: LocalDate, history: DailyHistory): Readiness? {
     if (sleep == null || components.size < MIN_COMPONENTS || components.none { it.confidence > 0 }) return null
 
     val combined = components.sumOf { it.weight * it.confidence * it.z } / components.sumOf { it.weight }
-    val score = (50 + 20 * combined).roundToInt().coerceIn(0, 100)
+    val score = (SCORE_CENTER + SCORE_GAIN * combined).roundToInt().coerceIn(1, 100)
     return Readiness(score, illness = likelyIll(date, baselineDays, history.restingBpm, resting, hrv))
 }
 
@@ -105,3 +108,83 @@ private fun standardDeviation(values: List<Double>): Double {
 }
 
 private fun Double.clamp(): Double = coerceIn(-MAX_Z, MAX_Z)
+
+/** How a recovery signal compares with the personal baseline, as Fitbit words it ("Lower than usual"…). */
+enum class FactorLevel { MuchLower, Lower, Usual, Higher, MuchHigher }
+
+enum class SleepFactor { Good, Fair, Poor }
+
+/** "What impacted your readiness": each signal against the 30-day baseline; null when it is missing. */
+data class ReadinessBreakdown(
+    val hrv: FactorLevel?,
+    val hrvPercent: Int?,
+    val restingDeltaBpm: Int?,
+    val sleep: SleepFactor?,
+)
+
+enum class ReadinessSummary { MostlyHigh, MostlyModerate, MostlyLow, Mixed }
+
+private const val USUAL_Z = 1.0
+private const val FAR_Z = 2.0
+private const val GOOD_SLEEP_Z = -0.5
+private const val FAIR_SLEEP_Z = -1.5
+
+fun readinessBreakdown(date: LocalDate, history: DailyHistory): ReadinessBreakdown {
+    val baselineDays = (1..BASELINE_DAYS).map { date.minusDays(it) }
+    val hrvToday = history.hrvMs[date]?.takeIf { it > 0 }
+    val hrvBaseline = baselineDays.mapNotNull { history.hrvMs[it]?.takeIf { value -> value > 0 } }
+    val hrvLevel = if (hrvToday != null && hrvBaseline.size >= 2) {
+        val logs = hrvBaseline.map(::ln)
+        val z = (ln(hrvToday) - logs.average()) / standardDeviation(logs).coerceAtLeast(MIN_LN_HRV_SD)
+        when {
+            z <= -FAR_Z -> FactorLevel.MuchLower
+            z <= -USUAL_Z -> FactorLevel.Lower
+            z < USUAL_Z -> FactorLevel.Usual
+            z < FAR_Z -> FactorLevel.Higher
+            else -> FactorLevel.MuchHigher
+        }
+    } else {
+        null
+    }
+    val restingToday = history.restingBpm[date]
+    val restingBaseline = baselineDays.mapNotNull { history.restingBpm[it]?.toDouble() }
+    val sleep = sleepComponent(date, baselineDays, history.sleepMinutes)?.z
+    return ReadinessBreakdown(
+        hrv = hrvLevel,
+        hrvPercent = if (hrvToday != null && hrvBaseline.isNotEmpty()) ((hrvToday / hrvBaseline.average() - 1) * 100).roundToInt() else null,
+        restingDeltaBpm = if (restingToday != null && restingBaseline.size >= 2) (restingToday - restingBaseline.average()).roundToInt() else null,
+        sleep = sleep?.let {
+            when {
+                it >= GOOD_SLEEP_Z -> SleepFactor.Good
+                it >= FAIR_SLEEP_Z -> SleepFactor.Fair
+                else -> SleepFactor.Poor
+            }
+        },
+    )
+}
+
+/** Fitbit's chart takeaway: "Mostly …" when one level covers more than half the scored days, otherwise "Mixed". */
+fun readinessSummary(scores: Collection<Int>): ReadinessSummary? {
+    if (scores.isEmpty()) return null
+    val levels = scores.groupingBy { Readiness(it, illness = false).level }.eachCount()
+    val (level, count) = levels.maxBy { it.value }
+    if (count * 2 <= scores.size) return ReadinessSummary.Mixed
+    return when (level) {
+        ReadinessLevel.High -> ReadinessSummary.MostlyHigh
+        ReadinessLevel.Moderate -> ReadinessSummary.MostlyModerate
+        ReadinessLevel.Low -> ReadinessSummary.MostlyLow
+    }
+}
+
+/** The per-signal z-scores behind [readiness] (null when a signal is missing), for calibration and explanations. */
+data class ReadinessInputs(val hrvZ: Double?, val restingZ: Double?, val sleepZ: Double?, val baselineNights: Int)
+
+fun readinessInputs(date: LocalDate, history: DailyHistory): ReadinessInputs {
+    val baselineDays = (1..BASELINE_DAYS).map { date.minusDays(it) }
+    return ReadinessInputs(
+        hrvZ = hrvComponent(date, baselineDays, history.hrvMs)?.z,
+        restingZ = restingComponent(date, baselineDays, history.restingBpm)?.z,
+        sleepZ = sleepComponent(date, baselineDays, history.sleepMinutes)?.z,
+        baselineNights = baselineDays.count { history.sleepMinutes[it] != null },
+    )
+}

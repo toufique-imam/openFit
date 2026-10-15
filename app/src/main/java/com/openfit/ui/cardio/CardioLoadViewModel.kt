@@ -3,7 +3,7 @@ package com.openfit.ui.cardio
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.CardioLoadDay
-import com.openfit.domain.CardioPeriod
+import com.openfit.domain.ChartPeriod
 import com.openfit.domain.ChartAxis
 import com.openfit.domain.DailyHistory
 import com.openfit.domain.FitnessGoal
@@ -69,7 +69,7 @@ sealed interface CardioLoadUiState {
     data object Loading : CardioLoadUiState
     data class Failed(val message: String) : CardioLoadUiState
     data class Ready(
-        val period: CardioPeriod,
+        val period: ChartPeriod,
         val anchor: LocalDate,
         val today: LocalDate,
         val profile: Profile,
@@ -94,18 +94,18 @@ class CardioLoadViewModel(
     private val _state = MutableStateFlow<CardioLoadUiState>(CardioLoadUiState.Loading)
     val state: StateFlow<CardioLoadUiState> = _state.asStateFlow()
 
-    private var period = CardioPeriod.Day
+    private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
     private var loading: Job? = null
 
     fun open(date: LocalDate) {
-        period = CardioPeriod.Day
+        period = ChartPeriod.Day
         anchor = date
         _state.value = CardioLoadUiState.Loading
         load()
     }
 
-    fun selectPeriod(selected: CardioPeriod) {
+    fun selectPeriod(selected: ChartPeriod) {
         if (selected == period) return
         period = selected
         load()
@@ -131,7 +131,7 @@ class CardioLoadViewModel(
                 val days = periodDays(period, anchor).filter { it <= today }
                 val from = days.first().minusDays(HISTORY_LEAD_DAYS)
                 val until = days.last()
-                val detail = if (period == CardioPeriod.Day) source.cardioLoadDay(anchor, profile) else null
+                val detail = if (period == ChartPeriod.Day) source.cardioLoadDay(anchor, profile) else null
                 var history = source.history(from, until, profile, backfillDays = BACKFILL_DAYS)
                 publish(profile, today, days, history, detail, backfilling = history.pendingDays > 0)
                 var rounds = 1
@@ -182,14 +182,14 @@ class CardioLoadViewModel(
             anchor = anchor,
             today = today,
             profile = profile,
-            day = if (period == CardioPeriod.Day) {
+            day = if (period == ChartPeriod.Day) {
                 val load = loads[anchor]
                 val range = ranges[anchor]
                 CardioDayView(load, range, if (load != null && range != null) targetStatus(load, range) else null, detail)
             } else {
                 null
             },
-            chart = if (period == CardioPeriod.Day) null else periodView(days, loads, ranges, end),
+            chart = if (period == ChartPeriod.Day) null else periodView(days, loads, ranges, end),
             training = TrainingView(acuteChronicRatio(end, loads)),
             backfilling = backfilling,
         )
@@ -198,23 +198,23 @@ class CardioLoadViewModel(
     private fun periodView(days: List<LocalDate>, loads: Map<LocalDate, Double>, ranges: Map<LocalDate, LoadRange>, end: LocalDate): CardioPeriodView {
         val allDays = periodDays(period, anchor)
         val points = when (period) {
-            CardioPeriod.Year -> monthlyPoints(anchor.year, loads.filterKeys { it <= end }, ranges)
+            ChartPeriod.Year -> monthlyPoints(anchor.year, loads.filterKeys { it <= end }, ranges)
             else -> dailyPoints(allDays, loads.filterKeys { it <= end }, ranges)
         }
         val highest = points.maxOfOrNull { point -> maxOf(point.load ?: 0.0, point.range?.high ?: 0.0) } ?: 0.0
-        val monthly = if (period == CardioPeriod.Year) points.mapNotNull { it.load } else emptyList()
+        val monthly = if (period == ChartPeriod.Year) points.mapNotNull { it.load } else emptyList()
         return CardioPeriodView(
             points = points,
             axis = chartAxis(highest),
             averagePerDay = averagePerDay(days, loads),
             daysInTarget = daysInTarget(points),
             rows = when (period) {
-                CardioPeriod.Week -> dayRows(days, loads)
-                CardioPeriod.Month -> weekRows(YearMonth.from(anchor), loads.filterKeys { it <= end })
-                CardioPeriod.Year -> monthRows(anchor.year, loads.filterKeys { it <= end })
-                CardioPeriod.Day -> emptyList()
+                ChartPeriod.Week -> dayRows(days, loads)
+                ChartPeriod.Month -> weekRows(YearMonth.from(anchor), loads.filterKeys { it <= end })
+                ChartPeriod.Year -> monthRows(anchor.year, loads.filterKeys { it <= end })
+                ChartPeriod.Day -> emptyList()
             },
-            monthStatus = if (period == CardioPeriod.Month) monthStatus(YearMonth.from(anchor), loads, end) else null,
+            monthStatus = if (period == ChartPeriod.Month) monthStatus(YearMonth.from(anchor), loads, end) else null,
             monthlyAverages = monthly.takeIf { it.isNotEmpty() }?.let { it.min()..it.max() },
         )
     }

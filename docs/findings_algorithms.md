@@ -45,28 +45,21 @@ Source: arXiv 2508.11613 (Google's published Cardio Load model, a TRIMP variant)
 
 ## Daily Readiness (`Readiness.kt`)
 
-Fitbit's readiness formula is server-side and unpublished. Ours is a z-score blend against the
-user's own 30-day baseline:
+Fitbit's own description: the score "compares your sleep, resting heart rate, and heart rate variability (HRV) against your personal baseline", needs 7 nights to be reliable, takes HRV from the longest sleep (≥ 3 h) of the past 24 h against "your HRV over the past month", and bands Low 1–29 / Moderate 30–64 / High 65–100. The formula itself is server-side; openFit's is a z-score blend against a 30-day baseline:
 
 | Component | Weight | Signal |
 | --- | --- | --- |
-| HRV | 0.4 | ln(HRV); half today's z, half the 7-day mean's z |
-| Resting HR | 0.3 | negative z (lower is better) |
-| Sleep | 0.3 | Weighted last 4 nights (0.4/0.3/0.2/0.1) vs baseline; −1 z penalty under 6 h |
+| HRV | 0.7 | ln(HRV); half today's z, half the 7-day mean's z |
+| Resting HR | 0.2 | negative z (lower is better) |
+| Sleep | 0.1 | Weighted last 4 nights (0.4/0.3/0.2/0.1) vs baseline; −1 z penalty under 6 h |
 
-- Each z is clamped to ±3. Minimum standard deviations are ln-HRV 0.05, resting HR 2 bpm and sleep
-  0.5 h, so a very flat baseline doesn't explode the score.
-- Confidence ramps from 0 to 1 as the baseline goes from 4 to 14 days.
-- Score = 50 + 20 · Σ(w·conf·z) / Σw, clamped to 0–100.
-- Bands: Low ≤ 29, High ≥ 65, otherwise Moderate.
-- **No score** unless last night's sleep exists and at least two components are available. Fitbit
-  also shows "No score" until sleep syncs. Without this rule, a 2 am resting-HR-only score read
-  "100 · High".
-- **Illness flag** (any of):
-  - resting HR ≥ baseline + 7 bpm today
-  - ≥ baseline + 4 bpm for 3 days running
-  - resting z ≤ −2.5 together with HRV z ≤ −2.0
-- **Calibration data point:** Fitbit showed 48 · Moderate on 25 Sept 2026 (screenshot in `ss/Today`).
+- Each z is clamped to ±3; minimum SDs: ln-HRV 0.05, resting HR 2 bpm, sleep 0.5 h. Confidence ramps 0 → 1 as the baseline grows from 4 to 14 nights.
+- **Score = 60 + 24 · Σ(w·conf·z) / Σw**, clamped to 1–100.
+- **Calibration (Oct 2026):** Fitbit's daily scores for 13–30 Sept were read off its month chart (bars match its labelled week to ±0.5). With openFit's own z-scores the old weights (0.4/0.3/0.3, 50 + 20R) were off by 14 points RMS and compressed toward 50; a grid search gave center 60, gain ≈ 24 and HRV-dominant weights (RMS 8.4–8.8). Only 17 days and baselines of 5–22 nights were available (Health Connect data starts 8 Sept), so revisit once a full month of baseline exists. Fitbit's 23 Sept score (88) is not explained by HRV, RHR or sleep, and Fitbit's readiness strings mention activity, so recent load may be an extra input.
+- **No score** unless last night's sleep exists and at least two components are available.
+- **Illness flag** (any of): resting HR ≥ baseline + 7 bpm; ≥ baseline + 4 bpm for 3 days; resting z ≤ −2.5 with HRV z ≤ −2.0.
+- **Breakdown** ("What impacted your readiness"): HRV level from last night's ln-HRV z (±1 usual, ±2 much); resting HR as the bpm difference from the baseline mean; past week of sleep Good (z ≥ −0.5) / Fair (≥ −1.5) / Poor.
+- **Period takeaway:** "Mostly high/moderate/low" when one level covers more than half the scored days, otherwise "Mixed" (Fitbit called 57/79/57/88/65/48/26 "Mixed").
 
 ## Cardio Load target range (`CardioTargets.kt`)
 

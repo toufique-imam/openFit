@@ -76,4 +76,22 @@ class ReadinessTest {
 
         assertTrue(damped.score in 51 until full.score)
     }
+
+    @Test
+    fun breakdownDescribesEachSignalAgainstTheBaseline() {
+        val breakdown = readinessBreakdown(today, typical.withToday(hrv = 80.0, resting = 54, sleep = 450))
+
+        assertEquals(FactorLevel.MuchHigher, breakdown.hrv)
+        assertEquals(-2, breakdown.restingDeltaBpm)
+        assertEquals(SleepFactor.Good, breakdown.sleep)
+        assertEquals(FactorLevel.Usual, readinessBreakdown(today, typical.withToday(hrv = 55.0, resting = 56, sleep = 450)).hrv)
+    }
+
+    @Test
+    fun summaryMatchesFitbitsWeekAndMonthTakeaways() {
+        // Fitbit's 20–26 Sept scores (57, 79, 57, 88, 65, 48, 26) were labelled "Mixed".
+        assertEquals(ReadinessSummary.Mixed, readinessSummary(listOf(57, 79, 57, 88, 65, 48, 26)))
+        assertEquals(ReadinessSummary.MostlyModerate, readinessSummary(listOf(55, 60, 40, 70, 50)))
+        assertNull(readinessSummary(emptyList()))
+    }
 }

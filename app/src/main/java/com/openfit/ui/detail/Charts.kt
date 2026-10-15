@@ -1,4 +1,4 @@
-package com.openfit.ui.cardio
+package com.openfit.ui.detail
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
@@ -176,6 +176,69 @@ fun PeriodChart(
 
         yLabels(measurer, labelStyle, axis.max, axis.middle, top, bottom)
         xLabels(measurer, labelStyle, labels.map { (index, label) -> x(index) to label }, bottom, centered = true)
+    }
+}
+
+/** Readiness-style bar chart: rounded bars per slot on a fixed 0–100 scale with dotted guides at 30 and 65. */
+@Composable
+fun BarChart(
+    points: List<PeriodPoint>,
+    color: Color,
+    labels: List<Pair<Int, String>>,
+    guides: List<Int>,
+    axisMax: Double,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
+        val left = PLOT_LEFT.toPx()
+        val width = PLOT_WIDTH.toPx()
+        val slot = width / points.size.coerceAtLeast(1)
+        val top = 0f
+        val bottom = PLOT_HEIGHT.toPx()
+        val barWidth = (slot * 0.4f).coerceIn(3.dp.toPx(), 16.dp.toPx())
+        fun y(value: Double): Float = yFor(value, axisMax, top, bottom)
+
+        guides.forEachIndexed { index, guide ->
+            // The upper guide is dotted three times as densely as the lower one, as in Fitbit's charts.
+            val step = if (index == guides.lastIndex) width / 21 else width / 7
+            var x = left
+            while (x <= left + width + 0.5f) {
+                drawCircle(OpenFitColors.OnSurfaceVariant, 1.dp.toPx(), Offset(x, y(guide.toDouble())))
+                x += step
+            }
+        }
+        points.forEachIndexed { index, point ->
+            val value = point.load ?: return@forEachIndexed
+            // Bars sit in the middle of their slot, unlike line-chart points which sit at its start.
+            val x = left + (index + 0.5f) * slot
+            val barTop = minOf(y(value), bottom - barWidth)
+            drawRoundRect(color, Offset(x - barWidth / 2, barTop), Size(barWidth, bottom - barTop), cornerRadius = androidx.compose.ui.geometry.CornerRadius(barWidth / 2))
+        }
+        val x = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
+        (listOf(0) + guides + axisMax.toInt()).forEach { value ->
+            val layout = measurer.measure(value.toString(), labelStyle)
+            drawText(layout, topLeft = Offset(x, y(value.toDouble()) - layout.size.height / 2f))
+        }
+        xLabels(measurer, labelStyle, labels.map { (index, label) -> left + (index + 0.5f) * slot to label }, bottom, centered = true)
+    }
+}
+
+/** Legend for dotted guides: one dot for the lower range, two for the upper, as Fitbit draws them. */
+@Composable
+fun GuideLegend(items: List<Pair<Int, String>>, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        items.forEachIndexed { index, (dots, label) ->
+            if (index > 0) Spacer(Modifier.width(32.dp))
+            Canvas(Modifier.size(width = 12.dp, height = 12.dp)) {
+                val gap = 4.dp.toPx()
+                val start = size.width / 2 - gap * (dots - 1) / 2
+                repeat(dots) { drawCircle(OpenFitColors.OnSurfaceVariant, 1.dp.toPx(), Offset(start + it * gap, size.height / 2)) }
+            }
+            Spacer(Modifier.width(12.dp))
+            Text(label, style = MaterialTheme.typography.bodyLarge, color = OpenFitColors.OnSurface)
+        }
     }
 }
 

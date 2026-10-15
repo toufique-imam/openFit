@@ -52,6 +52,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openfit.R
+import com.openfit.ui.MetricPage
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.LoadRange
 import com.openfit.domain.Reading
@@ -84,7 +85,7 @@ private val MINI_GAUGE: Dp = 66.dp
 private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-fun FocusSection(state: TodayUiState.Ready, onOpenCardioLoad: () -> Unit) {
+fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
     val metrics = state.metrics
     val profile = state.profile
     val asleep = metrics.sleep?.asleep
@@ -93,7 +94,8 @@ fun FocusSection(state: TodayUiState.Ready, onOpenCardioLoad: () -> Unit) {
     val readiness = state.readiness
     Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         FocusRing(
-            onTopClick = onOpenCardioLoad,
+            onTopClick = { onOpen(MetricPage.CardioLoad) },
+            onBottomClick = { onOpen(MetricPage.Readiness) },
             top = FocusMetric(
                 label = stringResource(R.string.cardio_load),
                 icon = Icons.Outlined.MonitorHeart,
@@ -177,7 +179,7 @@ private fun RowScope.MiniMetric(label: String, value: AnnotatedString?, gauge: @
     }
 }
 
-fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpenCardioLoad: () -> Unit) {
+fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
     val metrics = state.metrics
     val profile = state.profile
 
@@ -202,6 +204,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpenCardioLoad: () 
             title = stringResource(R.string.readiness),
             value = readiness?.let { AnnotatedString(it.score.toString()) } ?: noValue(stringResource(R.string.no_score)),
             subtitle = listOfNotNull(dayLabel(state), readiness?.let { stringResource(readinessLabel(it)) }).joinToString(" • "),
+            onClick = { onOpen(MetricPage.Readiness) },
         ) {
             if (readiness == null) {
                 IconBadge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Lavender)
@@ -224,7 +227,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpenCardioLoad: () 
                     else -> stringResource(R.string.target_range, whole(range.low), whole(range.high))
                 },
             ).joinToString(" • "),
-            onClick = onOpenCardioLoad,
+            onClick = { onOpen(MetricPage.CardioLoad) },
         ) {
             ArcGauge(Icons.Outlined.MonitorHeart, OpenFitColors.Mint, range?.progress(metrics.cardioLoad) ?: 0f, range = range?.fractions())
         }
@@ -458,7 +461,7 @@ fun MetricTile(
 }
 
 @Composable
-private fun IconBadge(icon: ImageVector, color: MetricColor, size: Dp = TILE_GAUGE) {
+fun IconBadge(icon: ImageVector, color: MetricColor, size: Dp = TILE_GAUGE) {
     Box(Modifier.size(size).clip(CircleShape).background(color.track), contentAlignment = Alignment.Center) {
         Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(size * 0.36f))
     }

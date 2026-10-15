@@ -62,6 +62,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
+import com.openfit.ui.MetricPage
 import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
 import com.openfit.profile.Profile
@@ -74,7 +75,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 @Composable
-fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, onOpenCardioLoad: (LocalDate) -> Unit) {
+fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, onOpen: (MetricPage, LocalDate) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
@@ -118,7 +119,7 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, 
                     onSaveProfile = viewModel::saveProfile,
                     onConnectGoogleHealth = connectGoogleHealth,
                     onDisconnectGoogleHealth = viewModel::disconnectGoogleHealth,
-                    onOpenCardioLoad = { onOpenCardioLoad(current.date) },
+                    onOpen = { page -> onOpen(page, current.date) },
                 )
             }
         }
@@ -135,7 +136,7 @@ private fun TodayScreen(
     onSaveProfile: (Profile) -> Unit,
     onConnectGoogleHealth: () -> Unit,
     onDisconnectGoogleHealth: () -> Unit,
-    onOpenCardioLoad: () -> Unit,
+    onOpen: (MetricPage) -> Unit,
 ) {
     var editingProfile by rememberSaveable { mutableStateOf(false) }
     var pickingDate by rememberSaveable { mutableStateOf(false) }
@@ -159,8 +160,8 @@ private fun TodayScreen(
             if (state.missingPermissions.isNotEmpty()) {
                 item { Notice(stringResource(R.string.permissions_partial), stringResource(R.string.permissions_grant), onRequestPermissions) }
             }
-            item { FocusSection(state, onOpenCardioLoad) }
-            todaySections(state, onOpenCardioLoad)
+            item { FocusSection(state, onOpen) }
+            todaySections(state, onOpen)
         }
     }
 

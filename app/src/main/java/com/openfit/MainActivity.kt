@@ -19,6 +19,9 @@ import com.openfit.health.HealthConnectGateway
 import com.openfit.profile.ProfileStore
 import com.openfit.ui.cardio.CardioLoadRoute
 import com.openfit.ui.cardio.CardioLoadViewModel
+import com.openfit.ui.MetricPage
+import com.openfit.ui.readiness.ReadinessRoute
+import com.openfit.ui.readiness.ReadinessViewModel
 import com.openfit.ui.theme.OpenFitTheme
 import com.openfit.ui.today.TodayRoute
 import com.openfit.ui.today.TodayViewModel
@@ -26,14 +29,17 @@ import java.time.LocalDate
 
 private sealed interface Screen {
     data object Today : Screen
-    data class CardioLoad(val date: LocalDate) : Screen
+    data class Metric(val page: MetricPage, val date: LocalDate) : Screen
 }
 
 private val BackStackSaver = listSaver<SnapshotStateList<Screen>, String>(
-    save = { stack -> stack.map { if (it is Screen.CardioLoad) "cardio:${it.date}" else "today" } },
+    save = { stack -> stack.map { if (it is Screen.Metric) "${it.page.name}:${it.date}" else "today" } },
     restore = { saved ->
         mutableStateListOf<Screen>().apply {
-            saved.forEach { add(if (it.startsWith("cardio:")) Screen.CardioLoad(LocalDate.parse(it.removePrefix("cardio:"))) else Screen.Today) }
+            saved.forEach { entry ->
+                val (page, date) = entry.split(':').let { it.first() to it.getOrNull(1) }
+                add(if (date == null) Screen.Today else Screen.Metric(MetricPage.valueOf(page), LocalDate.parse(date)))
+            }
         }
     },
 )
@@ -59,12 +65,19 @@ class MainActivity : ComponentActivity() {
                     Screen.Today -> TodayRoute(
                         viewModel = todayViewModel,
                         onOpenHealthConnectStore = ::openHealthConnectStore,
-                        onOpenCardioLoad = { date -> backStack.add(Screen.CardioLoad(date)) },
+                        onOpen = { page, date -> backStack.add(Screen.Metric(page, date)) },
                     )
-                    is Screen.CardioLoad -> {
-                        val cardioViewModel = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache) }
-                        LaunchedEffect(screen) { cardioViewModel.open(screen.date) }
-                        CardioLoadRoute(viewModel = cardioViewModel, onBack = pop)
+                    is Screen.Metric -> when (screen.page) {
+                        MetricPage.CardioLoad -> {
+                            val cardioViewModel = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache) }
+                            LaunchedEffect(screen) { cardioViewModel.open(screen.date) }
+                            CardioLoadRoute(viewModel = cardioViewModel, onBack = pop)
+                        }
+                        MetricPage.Readiness -> {
+                            val readinessViewModel = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache) }
+                            LaunchedEffect(screen) { readinessViewModel.open(screen.date) }
+                            ReadinessRoute(viewModel = readinessViewModel, onBack = pop)
+                        }
                     }
                 }
             }

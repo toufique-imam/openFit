@@ -5,7 +5,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.time.YearMonth
 
-class CardioPeriodsTest {
+class ChartPeriodsTest {
 
     private val week = LocalDate.of(2026, 9, 20)
     private val loads = listOf(18.0, 103.0, 49.0, 14.0, 77.0, 6.0, 11.0)
@@ -21,11 +21,11 @@ class CardioPeriodsTest {
 
     @Test
     fun weeksRunSundayToSaturday() {
-        val days = periodDays(CardioPeriod.Week, LocalDate.of(2026, 9, 24))
+        val days = periodDays(ChartPeriod.Week, LocalDate.of(2026, 9, 24))
 
         assertEquals(LocalDate.of(2026, 9, 20), days.first())
         assertEquals(LocalDate.of(2026, 9, 26), days.last())
-        assertEquals(30, periodDays(CardioPeriod.Month, LocalDate.of(2026, 9, 24)).size)
+        assertEquals(30, periodDays(ChartPeriod.Month, LocalDate.of(2026, 9, 24)).size)
     }
 
     @Test
@@ -35,11 +35,11 @@ class CardioPeriodsTest {
             week.plusDays(4) to LoadRange(58.0, 91.0, 140.0),
             week.plusDays(5) to LoadRange(11.0, 46.0, 144.0),
         )
-        val points = dailyPoints(periodDays(CardioPeriod.Week, week), loads, ranges)
+        val points = dailyPoints(periodDays(ChartPeriod.Week, week), loads, ranges)
 
         assertEquals(1, daysInTarget(points))
-        assertEquals(39.7, averagePerDay(periodDays(CardioPeriod.Week, week), loads)!!, 0.05)
-        assertEquals(LocalDate.of(2026, 9, 26), dayRows(periodDays(CardioPeriod.Week, week), loads).first().start)
+        assertEquals(39.7, averagePerDay(periodDays(ChartPeriod.Week, week), loads)!!, 0.05)
+        assertEquals(LocalDate.of(2026, 9, 26), dayRows(periodDays(ChartPeriod.Week, week), loads).first().start)
     }
 
     @Test

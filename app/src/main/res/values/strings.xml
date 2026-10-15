@@ -192,4 +192,41 @@
     <string name="cardio_year_range">Across the year, your daily average ranged from %1$s to %2$s. Over time, increasing cardio load can increase your overall fitness.</string>
     <string name="cardio_year_empty">Wear your device multiple months to track average cardio load across the year, and better understand your training</string>
     <string name="cardio_backfilling">Calculating past days…</string>
+
+    <!-- Daily Readiness detail -->
+    <string name="readiness_high_label">High readiness</string>
+    <string name="readiness_moderate_label">Moderate readiness</string>
+    <string name="readiness_low_label">Low readiness</string>
+    <string name="readiness_day_high">A high score indicates that your body is well recovered based on sleep and heart rate</string>
+    <string name="readiness_day_moderate">Moderate readiness means your recovery signals were usual for you. Your body is ready for a workout.</string>
+    <string name="readiness_day_low">A low score indicates your body may need time to rest and recover</string>
+    <string name="readiness_day_none">To get a readiness score, make sure you wear your device to sleep</string>
+    <string name="readiness_impact_title">What impacted your readiness</string>
+    <string name="readiness_impact_subtitle">openFit looks at key indicators of recovery to give you a readiness score each day</string>
+    <string name="readiness_hrv_title">Heart rate variability (HRV)</string>
+    <string name="readiness_sleep_title">Past week of sleep</string>
+    <string name="readiness_rhr_title">Resting heart rate (RHR)</string>
+    <string name="factor_much_lower">Much lower than usual</string>
+    <string name="factor_lower">Lower than usual</string>
+    <string name="factor_usual">About usual</string>
+    <string name="factor_higher">Higher than usual</string>
+    <string name="factor_much_higher">Much higher than usual</string>
+    <string name="factor_bpm_lower">%d BPM lower than usual</string>
+    <string name="factor_bpm_higher">%d BPM higher than usual</string>
+    <string name="sleep_good">Good</string>
+    <string name="sleep_fair">Fair</string>
+    <string name="sleep_poor">Poor</string>
+    <string name="readiness_about_title">About Daily Readiness</string>
+    <string name="readiness_about_body">Your Daily Readiness score ranges from 1–100 and helps you understand how ready you are to work out</string>
+    <string name="readiness_about_sheet">Daily Readiness compares last night’s heart rate variability, your resting heart rate and your past week of sleep with your own 30-day baseline. Wear your device to sleep for at least a week to get a reliable score.\n\nLow (1–29): prioritize recovery, with lighter exercise like stretching or yoga.\nModerate (30–64): your recovery signals are about usual; your body is balancing exercise and stress with recovery.\nHigh (65–100): your body is well rested and recovered.</string>
+    <string name="readiness_mostly_high">Mostly high</string>
+    <string name="readiness_mostly_moderate">Mostly moderate</string>
+    <string name="readiness_mostly_low">Mostly low</string>
+    <string name="readiness_mixed">Mixed</string>
+    <string name="readiness_mostly_high_body">High readiness means you were rested, recovered, and primed to work out</string>
+    <string name="readiness_mostly_moderate_body">Moderate readiness indicates a healthy balance between exercise and recovery</string>
+    <string name="readiness_mostly_low_body">Low readiness scores might suggest you’d benefit from more recovery time, or lighter workouts</string>
+    <string name="readiness_mixed_body">A mix of moderate and low readiness scores could be a sign that you’re challenging yourself. Your body needs time to recover and adapt.</string>
+    <string name="readiness_legend_moderate">30 - 64 Moderate</string>
+    <string name="readiness_legend_high">65–100 High</string>
 </resources>

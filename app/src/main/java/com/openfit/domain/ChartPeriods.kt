@@ -6,7 +6,7 @@ import java.time.YearMonth
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.ceil
 
-enum class CardioPeriod { Day, Week, Month, Year }
+enum class ChartPeriod { Day, Week, Month, Year }
 
 /** One point on a Week/Month/Year chart: a day (or a month on the Year chart) with its load and target range. */
 data class PeriodPoint(val start: LocalDate, val load: Double?, val range: LoadRange?)
@@ -35,21 +35,21 @@ fun dayChartAxis(range: LoadRange?, load: Double): ChartAxis {
 fun weekStart(date: LocalDate): LocalDate = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
 
 /** The days the period containing [anchor] covers. */
-fun periodDays(period: CardioPeriod, anchor: LocalDate): List<LocalDate> {
+fun periodDays(period: ChartPeriod, anchor: LocalDate): List<LocalDate> {
     val (start, end) = when (period) {
-        CardioPeriod.Day -> anchor to anchor
-        CardioPeriod.Week -> weekStart(anchor).let { it to it.plusDays(6) }
-        CardioPeriod.Month -> YearMonth.from(anchor).let { it.atDay(1) to it.atEndOfMonth() }
-        CardioPeriod.Year -> anchor.withDayOfYear(1).let { it to it.plusYears(1).minusDays(1) }
+        ChartPeriod.Day -> anchor to anchor
+        ChartPeriod.Week -> weekStart(anchor).let { it to it.plusDays(6) }
+        ChartPeriod.Month -> YearMonth.from(anchor).let { it.atDay(1) to it.atEndOfMonth() }
+        ChartPeriod.Year -> anchor.withDayOfYear(1).let { it to it.plusYears(1).minusDays(1) }
     }
     return generateSequence(start) { it.plusDays(1) }.takeWhile { it <= end }.toList()
 }
 
-fun shiftPeriod(period: CardioPeriod, anchor: LocalDate, steps: Long): LocalDate = when (period) {
-    CardioPeriod.Day -> anchor.plusDays(steps)
-    CardioPeriod.Week -> anchor.plusWeeks(steps)
-    CardioPeriod.Month -> anchor.plusMonths(steps)
-    CardioPeriod.Year -> anchor.plusYears(steps)
+fun shiftPeriod(period: ChartPeriod, anchor: LocalDate, steps: Long): LocalDate = when (period) {
+    ChartPeriod.Day -> anchor.plusDays(steps)
+    ChartPeriod.Week -> anchor.plusWeeks(steps)
+    ChartPeriod.Month -> anchor.plusMonths(steps)
+    ChartPeriod.Year -> anchor.plusYears(steps)
 }
 
 fun dailyPoints(days: List<LocalDate>, loads: Map<LocalDate, Double>, ranges: Map<LocalDate, LoadRange>): List<PeriodPoint> =
