@@ -2,6 +2,7 @@ package com.openfit.ui.today
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openfit.R
 import com.openfit.domain.DailyMetrics
+import com.openfit.domain.LoadRange
 import com.openfit.domain.Reading
 import com.openfit.domain.Readiness
 import com.openfit.domain.ReadinessLevel
@@ -82,26 +84,29 @@ private val MINI_GAUGE: Dp = 66.dp
 private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
 
 @Composable
-fun FocusSection(state: TodayUiState.Ready) {
+fun FocusSection(state: TodayUiState.Ready, onOpenCardioLoad: () -> Unit) {
     val metrics = state.metrics
     val profile = state.profile
     val asleep = metrics.sleep?.asleep
-    val cardio = state.cardioTarget
+    val load = metrics.cardioLoad
+    val range = state.cardioRange
     val readiness = state.readiness
     Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         FocusRing(
+            onTopClick = onOpenCardioLoad,
             top = FocusMetric(
                 label = stringResource(R.string.cardio_load),
                 icon = Icons.Outlined.MonitorHeart,
                 value = AnnotatedString(
                     when {
-                        cardio == null -> stringResource(if (profile.age == null) R.string.focus_needs_age else R.string.no_data)
-                        cardio.weeklyMet -> stringResource(R.string.cardio_value_met, whole(metrics.cardioLoad ?: 0.0))
-                        else -> stringResource(R.string.cardio_value_target, whole(metrics.cardioLoad ?: 0.0), whole(cardio.daily))
+                        load == null -> stringResource(if (profile.age == null) R.string.focus_needs_age else R.string.no_data)
+                        range == null -> stringResource(R.string.cardio_value_no_target, whole(load))
+                        else -> stringResource(R.string.cardio_value_range, whole(load), whole(range.low), whole(range.high))
                     },
                 ),
-                progress = cardio?.let { (it.doneThisWeek / it.weekly).toFloat() },
+                progress = range?.progress(load),
                 color = OpenFitColors.Mint,
+                range = range?.fractions(),
             ),
             bottom = FocusMetric(
                 label = stringResource(R.string.readiness),
@@ -172,7 +177,7 @@ private fun RowScope.MiniMetric(label: String, value: AnnotatedString?, gauge: @
     }
 }
 
-fun LazyListScope.todaySections(state: TodayUiState.Ready) {
+fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpenCardioLoad: () -> Unit) {
     val metrics = state.metrics
     val profile = state.profile
 
@@ -208,20 +213,20 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready) {
 
     section(R.string.section_activity)
     item {
-        val cardio = state.cardioTarget
+        val range = state.cardioRange
         MetricTile(
             title = stringResource(R.string.cardio_load),
             value = AnnotatedString(whole(metrics.cardioLoad ?: 0.0)),
             subtitle = listOfNotNull(
                 dayLabel(state),
                 when {
-                    cardio == null -> stringResource(R.string.no_target)
-                    cardio.weeklyMet -> stringResource(R.string.target_week_met)
-                    else -> stringResource(R.string.target_daily, whole(cardio.daily))
+                    range == null -> stringResource(R.string.no_target)
+                    else -> stringResource(R.string.target_range, whole(range.low), whole(range.high))
                 },
             ).joinToString(" • "),
+            onClick = onOpenCardioLoad,
         ) {
-            ArcGauge(Icons.Outlined.MonitorHeart, OpenFitColors.Mint, cardio?.let { (it.doneThisWeek / it.weekly).toFloat() } ?: 0f)
+            ArcGauge(Icons.Outlined.MonitorHeart, OpenFitColors.Mint, range?.progress(metrics.cardioLoad) ?: 0f, range = range?.fractions())
         }
     }
     item {
@@ -414,8 +419,18 @@ private fun LazyListScope.section(@StringRes title: Int) {
 }
 
 @Composable
-fun MetricTile(title: String, value: AnnotatedString, subtitle: String, trailing: @Composable () -> Unit) {
-    Surface(shape = RoundedCornerShape(16.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
+fun MetricTile(
+    title: String,
+    value: AnnotatedString,
+    subtitle: String,
+    onClick: (() -> Unit)? = null,
+    trailing: @Composable () -> Unit,
+) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = OpenFitColors.Card,
+        modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+    ) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
@@ -448,6 +463,10 @@ private fun IconBadge(icon: ImageVector, color: MetricColor, size: Dp = TILE_GAU
         Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(size * 0.36f))
     }
 }
+
+private fun LoadRange.progress(load: Double?): Float = ((load ?: 0.0) / scale).toFloat()
+
+private fun LoadRange.fractions(): ClosedFloatingPointRange<Float> = (low / scale).toFloat()..(high / scale).toFloat()
 
 private fun noValue(text: String): AnnotatedString = AnnotatedString(text, SpanStyle(fontSize = 22.sp))
 

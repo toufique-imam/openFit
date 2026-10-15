@@ -5,15 +5,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.DailyHistory
+import com.openfit.domain.LoadRange
 import com.openfit.domain.LoadTarget
 import com.openfit.domain.Readiness
 import com.openfit.domain.mergeHistory
 import com.openfit.domain.mergeMetrics
-import com.openfit.domain.cardioLoadFloor
 import com.openfit.domain.completedWeeks
+import com.openfit.domain.dailyCardioRange
 import com.openfit.domain.dailyTarget
 import com.openfit.domain.readiness
-import com.openfit.domain.weeklyCardioTarget
 import com.openfit.domain.weeklyZoneTarget
 import com.openfit.googlehealth.GoogleHealthApi
 import com.openfit.googlehealth.GoogleHealthAuth
@@ -63,7 +63,7 @@ sealed interface TodayUiState {
         val week: List<LocalDate>,
         val exerciseDays: Set<LocalDate>,
         val readiness: Readiness?,
-        val cardioTarget: LoadTarget?,
+        val cardioRange: LoadRange?,
         val zoneTarget: LoadTarget,
         val profile: Profile,
         val missingPermissions: Set<String>,
@@ -157,7 +157,6 @@ class TodayViewModel(
         val readiness = readiness(date, loaded.history.withToday(date, metrics))
         val zoneMinutes = loaded.history.zoneMinutes.mapValues { it.value.toDouble() }
         val zoneWeeks = completedWeeks(zoneMinutes, week.first())
-        val cardioWeeks = completedWeeks(loaded.history.cardioLoad, week.first())
         val dayIndex = week.indexOf(date)
         return TodayUiState.Ready(
             date = date,
@@ -166,18 +165,7 @@ class TodayViewModel(
             week = week,
             exerciseDays = loaded.exerciseDays,
             readiness = readiness,
-            cardioTarget = metrics.cardioLoad?.let { load ->
-                val tracked = cardioWeeks.filterNotNull()
-                dailyTarget(
-                    weekly = weeklyCardioTarget(profile.fitnessGoal, tracked, cardioLoadFloor(cardioWeeks, zoneWeeks)),
-                    doneBeforeToday = week.take(dayIndex).sumOf { loaded.history.cardioLoad[it] ?: 0.0 },
-                    doneToday = load,
-                    dayIndex = dayIndex,
-                    readiness = readiness,
-                    chronicWeekly = tracked.takeLast(HISTORY_WEEKS.toInt()).takeIf { it.isNotEmpty() }?.average(),
-                    previousSixDays = (1L..6L).sumOf { loaded.history.cardioLoad[date.minusDays(it)] ?: 0.0 },
-                )
-            },
+            cardioRange = dailyCardioRange(date, profile.fitnessGoal, loaded.history.cardioLoad, readiness),
             zoneTarget = dailyTarget(
                 weekly = weeklyZoneTarget(profile.fitnessGoal, zoneWeeks.filterNotNull()),
                 doneBeforeToday = week.take(dayIndex).sumOf { zoneMinutes[it] ?: 0.0 },

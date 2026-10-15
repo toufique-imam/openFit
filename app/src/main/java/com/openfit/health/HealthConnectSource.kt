@@ -27,6 +27,9 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.openfit.domain.DailyHistory
 import com.openfit.domain.cardioLoad
+import com.openfit.domain.workoutLoads
+import com.openfit.domain.cardioLoadByMinute
+import com.openfit.domain.CardioLoadDay
 import com.openfit.domain.maxHeartRate
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.Exercise
@@ -89,8 +92,7 @@ class HealthConnectSource(
                 .filter { it.endTime > start && it.endTime <= end }
                 .takeIf { it.isNotEmpty() }
                 ?.let { sessions -> SleepSummary(sessions.sumDurations(::asleepDuration), sessions.maxOf { it.endTime }) },
-            exercises = window.records(ExerciseSessionRecord::class, start)
-                .map { Exercise(it.title ?: DEFAULT_EXERCISE_NAME, it.startTime, it.endTime) },
+            exercises = window.records(ExerciseSessionRecord::class, start).map { it.toExercise() },
             heartRateRange = heartRate.takeIf { it.isNotEmpty() }?.let { samples ->
                 samples.minOf { it.bpm }.toInt()..samples.maxOf { it.bpm }.toInt()
             },
@@ -126,12 +128,12 @@ class HealthConnectSource(
             .toSet()
     }
 
-    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile): DailyHistory {
+    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile, backfillDays: Int): DailyHistory {
         val granted = gateway.grantedPermissions()
         val start = from.atStartOfDay(zone).toInstant()
         val window = Window(start, until.plusDays(1).atStartOfDay(zone).toInstant(), granted)
         val resting = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
-        val loads = dayLoads(from, until, profile, window, resting)
+        val (loads, pending) = dayLoads(from, until, profile, window, resting, backfillDays)
         return DailyHistory(
             zoneMinutes = loads.mapValues { it.value.zoneMinutes },
             cardioLoad = loads.mapValues { it.value.cardioLoad },
@@ -146,6 +148,20 @@ class HealthConnectSource(
                 .filter { it.endTime > start }
                 .groupBy { localDate(it.endTime) }
                 .mapValues { (_, sessions) -> sessions.sumDurations(::asleepDuration).toMinutes().toInt() },
+            pendingDays = pending,
+        )
+    }
+
+    override suspend fun loadHistory(from: LocalDate, until: LocalDate, profile: Profile, backfillDays: Int): DailyHistory {
+        val granted = gateway.grantedPermissions()
+        val start = from.atStartOfDay(zone).toInstant()
+        val window = Window(start, until.plusDays(1).atStartOfDay(zone).toInstant(), granted)
+        val resting = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
+        val (loads, pending) = dayLoads(from, until, profile, window, resting, backfillDays)
+        return DailyHistory(
+            zoneMinutes = loads.mapValues { it.value.zoneMinutes },
+            cardioLoad = loads.mapValues { it.value.cardioLoad },
+            pendingDays = pending,
         )
     }
 
@@ -155,22 +171,24 @@ class HealthConnectSource(
         profile: Profile,
         window: Window,
         resting: List<RestingHeartRateRecord>,
-    ): Map<LocalDate, DayLoad> {
+        backfillDays: Int,
+    ): Pair<Map<LocalDate, DayLoad>, Int> {
         val age = profile.age
-        if (age == null || read(HeartRateRecord::class) !in window.granted) return emptyMap()
+        if (age == null || read(HeartRateRecord::class) !in window.granted) return emptyMap<LocalDate, DayLoad>() to 0
         val profileKey = "$age:${profile.sex?.name ?: "-"}"
         val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
         val cached = days.associateWith { dayLoadCache.get(profileKey, it) }
-        val computed = days
-            .filter { cached[it] == null }
+        val uncached = days.filter { cached[it] == null }
+        val computed = uncached
             .sortedDescending()
-            .take(MAX_BACKFILL_DAYS)
+            .take(backfillDays)
             .associateWith { day -> dayLoad(day, age, profile, resting, window.granted) }
         val settled = LocalDate.now(zone).minusDays(1)
         dayLoadCache.putAll(profileKey, computed.filterKeys { it < settled })
-        return (cached + computed)
+        val loads = (cached + computed)
             .mapNotNull { (day, load) -> load?.takeIf { it != DayLoad.NONE }?.let { day to it } }
             .toMap()
+        return loads to (uncached.size - computed.size)
     }
 
     private suspend fun dayLoad(
@@ -192,6 +210,23 @@ class HealthConnectSource(
             zoneMinutes = zoneMinutes(samples, heartRateZones(age, restingBpm)).total,
             cardioLoad = cardioLoad(samples, restingBpm, maxHeartRate(age), profile.sex, movingMinutes(dayStart, dayEnd, granted)),
         )
+    }
+
+    override suspend fun cardioLoadDay(date: LocalDate, profile: Profile): CardioLoadDay? {
+        val age = profile.age ?: return null
+        val granted = gateway.grantedPermissions()
+        if (read(HeartRateRecord::class) !in granted) return null
+        val start = date.atStartOfDay(zone).toInstant()
+        val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
+        val window = Window(start, end, granted)
+        val samples = window.records(HeartRateRecord::class, start)
+            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val restingBpm = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK).maxByOrNull { it.time }?.beatsPerMinute?.toInt()
+            ?: estimateRestingBpm(samples)
+            ?: return CardioLoadDay(date, emptyMap(), emptyList())
+        val byMinute = cardioLoadByMinute(samples, restingBpm, maxHeartRate(age), profile.sex, movingMinutes(start, end, granted))
+        val exercises = window.records(ExerciseSessionRecord::class, start).map { it.toExercise() }
+        return CardioLoadDay(date, byMinute, workoutLoads(byMinute, exercises))
     }
 
     private suspend fun movingMinutes(start: Instant, end: Instant, granted: Set<String>): Set<Long>? {
@@ -263,8 +298,36 @@ class HealthConnectSource(
         val MEASUREMENT_LOOKBACK: Duration = Duration.ofDays(30)
         val SLEEP_LOOKBACK: Duration = Duration.ofHours(18)
         val NIGHT: Duration = Duration.ofHours(12)
-        const val DEFAULT_EXERCISE_NAME = "Exercise"
-        const val MAX_BACKFILL_DAYS = 7
+        const val DEFAULT_EXERCISE_NAME = "Workout"
+
+        val EXERCISE_NAMES: Map<Int, String> = mapOf(
+            ExerciseSessionRecord.EXERCISE_TYPE_WALKING to "Walk",
+            ExerciseSessionRecord.EXERCISE_TYPE_RUNNING to "Run",
+            ExerciseSessionRecord.EXERCISE_TYPE_RUNNING_TREADMILL to "Treadmill run",
+            ExerciseSessionRecord.EXERCISE_TYPE_HIKING to "Hike",
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING to "Outdoor bike",
+            ExerciseSessionRecord.EXERCISE_TYPE_BIKING_STATIONARY to "Bike",
+            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_POOL to "Swim",
+            ExerciseSessionRecord.EXERCISE_TYPE_SWIMMING_OPEN_WATER to "Swim",
+            ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING to "Weights",
+            ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING to "Weights",
+            ExerciseSessionRecord.EXERCISE_TYPE_ELLIPTICAL to "Elliptical",
+            ExerciseSessionRecord.EXERCISE_TYPE_HIGH_INTENSITY_INTERVAL_TRAINING to "HIIT",
+            ExerciseSessionRecord.EXERCISE_TYPE_YOGA to "Yoga",
+            ExerciseSessionRecord.EXERCISE_TYPE_PILATES to "Pilates",
+            ExerciseSessionRecord.EXERCISE_TYPE_ROWING_MACHINE to "Rowing machine",
+            ExerciseSessionRecord.EXERCISE_TYPE_STAIR_CLIMBING to "Stairclimber",
+            ExerciseSessionRecord.EXERCISE_TYPE_DANCING to "Dancing",
+            ExerciseSessionRecord.EXERCISE_TYPE_TENNIS to "Tennis",
+            ExerciseSessionRecord.EXERCISE_TYPE_BADMINTON to "Badminton",
+            ExerciseSessionRecord.EXERCISE_TYPE_SOCCER to "Soccer",
+            ExerciseSessionRecord.EXERCISE_TYPE_BASKETBALL to "Basketball",
+            ExerciseSessionRecord.EXERCISE_TYPE_GOLF to "Golf",
+            ExerciseSessionRecord.EXERCISE_TYPE_MARTIAL_ARTS to "Martial arts",
+        )
+
+        fun ExerciseSessionRecord.toExercise(): Exercise =
+            Exercise(title?.takeIf { it.isNotBlank() } ?: EXERCISE_NAMES[exerciseType] ?: DEFAULT_EXERCISE_NAME, startTime, endTime)
 
         val AGGREGATES: Map<KClass<out Record>, AggregateMetric<*>> = mapOf(
             StepsRecord::class to StepsRecord.COUNT_TOTAL,

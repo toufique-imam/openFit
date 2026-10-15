@@ -68,47 +68,59 @@ user's own 30-day baseline:
   - resting z ≤ −2.5 together with HRV z ≤ −2.0
 - **Calibration data point:** Fitbit showed 48 · Moderate on 25 Sept 2026 (screenshot in `ss/Today`).
 
-## Targets (`Targets.kt`)
+## Cardio Load target range (`CardioTargets.kt`)
+
+Fitbit 4.67 gives a **daily target range** ("Target 11–46"). Its strings say the range is "personalized based on your recent cardio load and your readiness", and that the fitness target (maintaining / improving) sets "how challenging your daily target load will be". The 2025 white paper (`docs/2508.11613v2.pdf`) describes the *newer* weekly target, not this one, so the daily model was reverse-engineered from the screenshots in `ss/Cardio Load` (week of 20–26 Sept 2026, readiness 48, goal "maintaining"):
+
+| Day | Load | Fitbit range | implied low / high ÷ chronic |
+| --- | --- | --- | --- |
+| Sun 20 | 18 | 57–89 | 1.03 / 1.14 |
+| Mon 21 | 103 | 66–96 | 1.01 / 1.11 |
+| Tue 22 | 49 | 4–37 | 1.04 / 1.14 |
+| Wed 23 | 14 | ~4–28 | – / 1.12 |
+| Thu 24 | 77 | 58–91 | 1.05 / 1.15 |
+| Fri 25 | 6 | 11–46 | 1.05 / 1.16 |
+
+The bounds move day to day by exactly the load that enters or leaves a rolling 7-day window, so the range is "today's load that brings the last 7 days to a window around the chronic weekly load":
+
+- **chronic** = 28-day rolling mean of weekly load before today (four rolling 7-day blocks, each needing ≥ 4 tracked days). A daily EWMA or max(RM, EWMA) fits no better; RM is used.
+- **range** = [low, high] × chronic − (load of the previous 6 days), with:
+  - Maintain: 1.04–1.14; Improve: 1.14–1.24 (assumed +0.10, no Fitbit data yet).
+  - Readiness Low (≤ 29): window −0.10; High (≥ 65): +0.05 (assumed; the moderate days above fit unshifted).
+  - Illness flag: 0 – 0.05 × chronic. Overreached weeks: low = 0, high ≥ 0.05 × chronic.
+- **No target** without today's readiness or a week of history (Fitbit shows "0 · No target" + "No score" together).
+- **Ring and Day-chart scale** = 0.45 × chronic (Fitbit's day-chart axis of 139 = 0.45 × 310, and Fri's band ends at 0.32 of the arc = 46 / 144).
+- The fit leaves ±0.02 × chronic (≈ ±7 load) unexplained (readiness and chart-reading error). `CardioTargetsTest` reproduces Fitbit's 24/25 Sept ranges from its own loads within 8.
+
+### Training status ("Your past seven days of training")
+
+Fitbit: "Every day, Fitbit looks at how much cardio load you've earned the past 7 days and compares it to the past 28 days." openFit: acute = last 7 days (≥ 4 tracked, scaled), chronic = mean of the 28-day blocks (needs ≥ 2). Thresholds (assumed, standard ACWR bands): < 0.6 undertraining, < 0.8 at risk of undertraining, < 1.1 maintaining, < 1.3 improving, < 1.5 at risk of overtraining, else overtraining. Fitbit's bar has six equal segments (yellow, mint, mint, teal, teal, yellow); the marker is placed linearly within its segment.
+
+### Week / Month / Year views (`CardioPeriods.kt`)
+
+- Points sit at x = 24 + i × 288 / n dp; each has its own range box (one slot wide).
+- Axis top = 1.2 × the highest value or band; middle label = top / 2 rounded **up** to a multiple of 5 (Fitbit: 123/65, 106/55, 139/70).
+- Month list = the Sunday weeks touching the month, newest first, as daily averages ("27 Sept – 3 Oct").
+- Month headline = the month's average day vs the 28 days before it: < 0.8 undertrained, < 1.15 maintained, < 1.3 improved, else overtrained. Fitbit called September (44/day after August's 40, ratio 1.10) "Maintained fitness", so the improve threshold is above 1.10.
+- Year points = monthly average day and the average of that month's ranges.
+
+### Validation against Fitbit (20–26 Sept)
+
+| | Sun | Mon | Tue | Wed | Thu | Fri | Sat |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Fitbit | 18 | 103 | 49 | 14 | 77 | 6 | 11 |
+| openFit | 12 | 88 | 39 | 13 | 70 | 6 | 9 |
+
+openFit reads ~15 % low. Suspects, in order: sex unset in the profile (the neutral exponent gives ~8–10 % less at high intensity than k = 1.92), the step-based movement gate dropping minutes Fitbit's accelerometer counts, the 30–40 % HRR weighting (×0.5 is a guess), and max HR (220 − age).
+
+## Active Zone Minutes targets (`Targets.kt`)
 
 The user only picks a goal, **Maintain** or **Improve** (Profile). Everything else is derived.
 
-### Weekly targets
-
-- `completedWeeks`: the last 4 Sunday-start weeks. A week counts if it has ≥ 4 tracked days, and is
-  scaled to 7 days.
-- `habitualLoad` = max(4-week mean, EWMA with α = 0.4).
-- **Cardio Load weekly target**
-  - Maintain: max(floor, habitual).
-  - Improve: max(floor, min(1.10 · habitual, 1.3 · 4-week mean)). The cap keeps the
-    acute:chronic workload ratio ≤ 1.3.
-  - Floor: median weekly CL/AZM ratio × 150, so that "150 guideline minutes" is expressed in load
-    units. It defaults to 130 when there's no history.
-- **AZM weekly target**
-  - Guideline: 150 (Maintain) or 300 (Improve).
-  - Below the guideline: ramp up by min(1.1 · habitual + 10, guideline).
-  - At or above it: Maintain keeps the habitual level; Improve uses 1.05 · habitual, capped at 600.
-
-### Daily target (`dailyTarget`)
-
-1. Spread the remaining weekly target evenly: remaining ÷ days left in the week.
-2. Scale by readiness: × min(1.15, 0.5 + score/100). No readiness means × 1.
-3. Apply caps:
-   - ≤ 2 × the even daily share, so a lazy start can't push catch-up too far.
-   - Acute:chronic: today ≤ 1.3 · chronic weekly − the previous 6 days. Only applies once chronic
-     ≥ 70.
-   - Illness flag → ≤ 0.25 × even share.
-   - Low readiness → ≤ even share (no catch-up).
-4. "Week done" shows once the weekly target is met.
-
-### Future: target range
-
-Fitbit shows the Cardio Load target as a range ("6 · Target 11–46") and draws it as a band on the
-arc. Two candidate approaches:
-
-- Derive the band from the same daily number (e.g. 0.5×–1.5×).
-- Make the lower bound "maintain" and the upper bound "improve".
-
-The arc already supports this geometrically; see the UI findings.
+- `completedWeeks`: the last 4 Sunday-start weeks. A week counts if it has ≥ 4 tracked days, and is scaled to 7 days.
+- `habitualLoad` = max(4-week mean, EWMA with α = 0.4) (the white paper's eq. 3).
+- Weekly AZM: guideline 150 (Maintain) or 300 (Improve). Below the guideline ramp up by min(1.1 · habitual + 10, guideline); at or above it Maintain keeps the habitual level and Improve uses 1.05 · habitual, capped at 600.
+- Daily AZM (`dailyTarget`): remaining weekly ÷ days left, × min(1.15, 0.5 + readiness/100), capped at 2 × the even share; illness → ≤ 0.25 × even share; low readiness → ≤ even share.
 
 ## Hourly activity (`HourlyActivity.kt`)
 

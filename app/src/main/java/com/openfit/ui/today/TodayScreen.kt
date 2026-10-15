@@ -74,7 +74,7 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 @Composable
-fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) {
+fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, onOpenCardioLoad: (LocalDate) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
@@ -118,6 +118,7 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) 
                     onSaveProfile = viewModel::saveProfile,
                     onConnectGoogleHealth = connectGoogleHealth,
                     onDisconnectGoogleHealth = viewModel::disconnectGoogleHealth,
+                    onOpenCardioLoad = { onOpenCardioLoad(current.date) },
                 )
             }
         }
@@ -134,6 +135,7 @@ private fun TodayScreen(
     onSaveProfile: (Profile) -> Unit,
     onConnectGoogleHealth: () -> Unit,
     onDisconnectGoogleHealth: () -> Unit,
+    onOpenCardioLoad: () -> Unit,
 ) {
     var editingProfile by rememberSaveable { mutableStateOf(false) }
     var pickingDate by rememberSaveable { mutableStateOf(false) }
@@ -157,8 +159,8 @@ private fun TodayScreen(
             if (state.missingPermissions.isNotEmpty()) {
                 item { Notice(stringResource(R.string.permissions_partial), stringResource(R.string.permissions_grant), onRequestPermissions) }
             }
-            item { FocusSection(state) }
-            todaySections(state)
+            item { FocusSection(state, onOpenCardioLoad) }
+            todaySections(state, onOpenCardioLoad)
         }
     }
 

@@ -22,14 +22,17 @@ is left, so that work can resume without re-deriving it.
   knowledge base for ideas and cited formulas (`docs/engine-plan.md`,
   `src/screens/more/howItWorksContent.ts`). It is PolyForm Noncommercial licensed and partly ported
   from another app, so treat it as a spec only and don't copy code.
-- **Cardio Load paper**: [arXiv 2508.11613](https://arxiv.org/html/2508.11613v2) (Google, 2025).
+- **Cardio Load paper**: [arXiv 2508.11613](https://arxiv.org/html/2508.11613v2) (Google, 2025). A local copy
+  may sit at `docs/2508.11613v2.pdf`; it is gitignored (all rights reserved).
 
 ## Roadmap
 
 Roughly in priority order. Details are in the linked files.
 
-1. **Cardio Load target range.** Fitbit shows "Target 11–46" and draws the range as a band on
-   the arc. openFit shows a single daily number. See algorithms §Targets and UI §Big ring.
+1. **Cardio Load accuracy.** The target range, training status and detail screen
+   (Day/Week/Month/Year) are done. openFit's daily loads read ~15 % below Fitbit's. Set the
+   profile's sex, then compare again; next suspects are the step-based movement gate and the
+   30–40 % HRR weighting. See algorithms §Validation.
 2. **Missing Today tiles**:
    - Health Metrics ("3 of 3 · In personal range")
    - Stress and mindfulness (Mindful days, Stress Management Score)

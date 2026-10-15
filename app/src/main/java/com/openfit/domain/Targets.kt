@@ -4,9 +4,9 @@ import java.time.LocalDate
 import kotlin.math.max
 import kotlin.math.min
 
-enum class FitnessGoal(val weeklyZoneMinutes: Int) {
-    Maintain(150),
-    Improve(300),
+enum class FitnessGoal(val weeklyZoneMinutes: Int, val lowLoadRatio: Double, val highLoadRatio: Double) {
+    Maintain(150, lowLoadRatio = 1.04, highLoadRatio = 1.14),
+    Improve(300, lowLoadRatio = 1.14, highLoadRatio = 1.24),
 }
 
 data class LoadTarget(val weekly: Double, val daily: Double, val doneThisWeek: Double) {
@@ -21,9 +21,6 @@ private const val ZONE_RAMP_STEP = 10.0
 private const val MAX_ACUTE_TO_CHRONIC = 1.3
 private const val MAX_ZONE_MINUTES = 600.0
 private const val IMPROVE_ABOVE_GOAL = 1.05
-private const val GUIDELINE_ZONE_MINUTES = 150.0
-private const val DEFAULT_CARDIO_FLOOR = 130.0
-private const val MIN_ZONE_WEEK_FOR_RATIO = 30.0
 private const val CATCH_UP_LIMIT = 2.0
 private const val MIN_CHRONIC_FOR_CAP = 70.0
 private const val ILLNESS_SHARE = 0.25
@@ -41,24 +38,6 @@ fun habitualLoad(weeks: List<Double>): Double? {
     val rolling = weeks.takeLast(WEEKS_OF_HISTORY).average()
     val smoothed = weeks.drop(1).fold(weeks.first()) { average, week -> EWMA_ALPHA * week + (1 - EWMA_ALPHA) * average }
     return max(rolling, smoothed)
-}
-
-fun weeklyCardioTarget(goal: FitnessGoal, weeks: List<Double>, floor: Double): Double {
-    val habitual = habitualLoad(weeks) ?: return floor
-    return when (goal) {
-        FitnessGoal.Maintain -> max(floor, habitual)
-        FitnessGoal.Improve -> max(floor, min(PROGRESSION * habitual, MAX_ACUTE_TO_CHRONIC * weeks.takeLast(WEEKS_OF_HISTORY).average()))
-    }
-}
-
-fun cardioLoadFloor(cardioWeeks: List<Double?>, zoneWeeks: List<Double?>): Double {
-    val ratios = cardioWeeks.zip(zoneWeeks).mapNotNull { (cardio, zone) ->
-        if (cardio != null && zone != null && zone >= MIN_ZONE_WEEK_FOR_RATIO) cardio / zone else null
-    }
-    if (ratios.isEmpty()) return DEFAULT_CARDIO_FLOOR
-    val sorted = ratios.sorted()
-    val median = if (sorted.size % 2 == 1) sorted[sorted.size / 2] else (sorted[sorted.size / 2 - 1] + sorted[sorted.size / 2]) / 2
-    return median * GUIDELINE_ZONE_MINUTES
 }
 
 fun weeklyZoneTarget(goal: FitnessGoal, weeks: List<Double>): Double {

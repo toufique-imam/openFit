@@ -18,21 +18,6 @@ class TargetsTest {
     }
 
     @Test
-    fun cardioTargetMaintainsOrImprovesAboveTheFloor() {
-        val weeks = listOf(180.0, 200.0, 220.0, 200.0)
-
-        assertEquals(200.0, weeklyCardioTarget(FitnessGoal.Maintain, weeks, floor = 130.0), 1.0)
-        assertEquals(220.0, weeklyCardioTarget(FitnessGoal.Improve, weeks, floor = 130.0), 1.0)
-        assertEquals(130.0, weeklyCardioTarget(FitnessGoal.Maintain, emptyList(), floor = 130.0), 0.0)
-    }
-
-    @Test
-    fun cardioFloorScalesTheGuidelineByYourLoadPerZoneMinute() {
-        assertEquals(180.0, cardioLoadFloor(listOf(240.0, 120.0, null), listOf(200.0, 100.0, 50.0)), 1e-9)
-        assertEquals(130.0, cardioLoadFloor(listOf(240.0), listOf(20.0)), 0.0)
-    }
-
-    @Test
     fun zoneTargetRampsTowardsTheGuideline() {
         assertEquals(150.0, weeklyZoneTarget(FitnessGoal.Maintain, emptyList()), 0.0)
         assertEquals(54.0, weeklyZoneTarget(FitnessGoal.Maintain, listOf(40.0)), 1e-9)

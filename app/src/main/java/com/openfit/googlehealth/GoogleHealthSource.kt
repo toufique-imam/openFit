@@ -123,7 +123,7 @@ class GoogleHealthSource(
     private suspend fun rollUp(dataType: String, date: LocalDate, field: String): JSONObject? =
         tolerant(dataType) { api.dailyRollUp(dataType, date).firstRollup(field) }
 
-    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile): DailyHistory = coroutineScope {
+    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile, backfillDays: Int): DailyHistory = coroutineScope {
         val untilExclusive = until.plusDays(1)
         fun dailyFilter(field: String) = "$field.date >= \"$from\" AND $field.date < \"$untilExclusive\""
 

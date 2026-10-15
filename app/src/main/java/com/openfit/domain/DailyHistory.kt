@@ -8,6 +8,8 @@ data class DailyHistory(
     val restingBpm: Map<LocalDate, Int> = emptyMap(),
     val hrvMs: Map<LocalDate, Double> = emptyMap(),
     val sleepMinutes: Map<LocalDate, Int> = emptyMap(),
+    /** Days in the requested range whose load is still to be computed (backfill continues on the next call). */
+    val pendingDays: Int = 0,
 )
 
 fun mergeHistory(byPriority: List<DailyHistory>): DailyHistory =
@@ -18,5 +20,6 @@ fun mergeHistory(byPriority: List<DailyHistory>): DailyHistory =
             restingBpm = merged.restingBpm + next.restingBpm,
             hrvMs = merged.hrvMs + next.hrvMs,
             sleepMinutes = merged.sleepMinutes + next.sleepMinutes,
+            pendingDays = maxOf(merged.pendingDays, next.pendingDays),
         )
     }

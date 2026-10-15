@@ -2,6 +2,9 @@ package com.openfit.ui.today
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -25,6 +28,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
@@ -37,7 +41,9 @@ import androidx.compose.ui.unit.sp
 import com.openfit.domain.HourStatus
 import com.openfit.ui.theme.MetricColor
 import com.openfit.ui.theme.OpenFitColors
+import kotlin.math.abs
 import kotlin.math.cos
+import kotlin.math.sign
 import kotlin.math.sin
 
 private const val GAUGE_START = 126f
@@ -47,20 +53,42 @@ private const val FOCUS_GAP = 7.5f
 private const val FOCUS_SWEEP = 180f - 2 * FOCUS_GAP
 private val GAUGE_ICON = 24.dp
 
-data class FocusMetric(val label: String, val icon: ImageVector, val value: AnnotatedString, val progress: Float?, val color: MetricColor)
+private const val MIN_SWEEP = 0.1f
+
+data class FocusMetric(
+    val label: String,
+    val icon: ImageVector,
+    val value: AnnotatedString,
+    val progress: Float?,
+    val color: MetricColor,
+    val range: ClosedFloatingPointRange<Float>? = null,
+)
 
 @Composable
-fun FocusRing(top: FocusMetric, bottom: FocusMetric, modifier: Modifier = Modifier, size: Dp = 240.dp, stroke: Dp = 10.dp) {
+fun FocusRing(
+    top: FocusMetric,
+    bottom: FocusMetric,
+    modifier: Modifier = Modifier,
+    size: Dp = 240.dp,
+    stroke: Dp = 10.dp,
+    onTopClick: (() -> Unit)? = null,
+    onBottomClick: (() -> Unit)? = null,
+) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val width = stroke.toPx()
-            focusArc(top.color, startAngle = 180f + FOCUS_GAP, direction = 1f, progress = top.progress, width = width)
-            focusArc(bottom.color, startAngle = 180f - FOCUS_GAP, direction = -1f, progress = bottom.progress, width = width)
+            val band = Band(outline = 2.dp.toPx(), halo = 2.dp.toPx(), background = OpenFitColors.Background)
+            gauge(top.color, ArcFrame(180f + FOCUS_GAP, FOCUS_SWEEP, inset = width / 2), width, top.progress, top.range, band)
+            gauge(bottom.color, ArcFrame(180f - FOCUS_GAP, -FOCUS_SWEEP, inset = width / 2), width, bottom.progress, bottom.range, band)
         }
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             FocusLabel(top)
             Spacer(Modifier.height(18.dp))
             FocusLabel(bottom)
+        }
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f).fillMaxWidth().clip(TopHalf).then(if (onTopClick != null) Modifier.clickable(onClick = onTopClick) else Modifier))
+            Box(Modifier.weight(1f).fillMaxWidth().clip(BottomHalf).then(if (onBottomClick != null) Modifier.clickable(onClick = onBottomClick) else Modifier))
         }
     }
 }
@@ -81,19 +109,58 @@ private fun FocusLabel(metric: FocusMetric) {
     )
 }
 
-private fun DrawScope.focusArc(color: MetricColor, startAngle: Float, direction: Float, progress: Float?, width: Float) {
-    val style = Stroke(width, cap = StrokeCap.Round)
-    val inset = width / 2
-    val arcSize = Size(size.width - width, size.height - width)
-    val topLeft = Offset(inset, inset)
-    drawArc(color.track, startAngle, direction * FOCUS_SWEEP, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
-    if (progress == null) return
-    val sweep = FOCUS_SWEEP * progress.coerceIn(0f, 1f)
-    if (sweep > 0f) {
-        drawArc(color.accent, startAngle, direction * sweep, useCenter = false, topLeft = topLeft, size = arcSize, style = style)
-    } else {
-        drawCircle(color.accent, radius = width / 2, center = pointOnArc(startAngle, inset = width / 2))
+private val TopHalf = RoundedCornerShape(topStartPercent = 50, topEndPercent = 50)
+private val BottomHalf = RoundedCornerShape(bottomStartPercent = 50, bottomEndPercent = 50)
+
+private class ArcFrame(val start: Float, val sweep: Float, val inset: Float) {
+    fun angle(fraction: Float): Float = start + sweep * fraction
+}
+
+/** A target range drawn as an outlined capsule on the arc, with the track cut away [halo] around it. */
+private class Band(val outline: Float, val halo: Float, val background: Color)
+
+private fun DrawScope.gauge(
+    color: MetricColor,
+    frame: ArcFrame,
+    width: Float,
+    progress: Float?,
+    range: ClosedFloatingPointRange<Float>?,
+    band: Band,
+    from: Float = 0f,
+) {
+    arc(color.track, frame, 0f, 1f, width)
+    if (progress != null) {
+        val start = from.coerceIn(0f, 1f)
+        val end = progress.coerceIn(start, 1f)
+        if (end > start) {
+            arc(color.accent, frame, start, end, width)
+        } else {
+            drawCircle(color.accent, radius = width / 2, center = pointOnArc(frame.angle(start), frame.inset))
+        }
     }
+    if (range == null) return
+    val low = range.start.coerceIn(0f, 1f)
+    val high = range.endInclusive.coerceIn(low, 1f)
+    val inner = width - 2 * band.outline
+    arc(band.background, frame, low, high, width + 2 * band.halo)
+    arc(color.accent, frame, low, high, width)
+    arc(band.background, frame, low, high, inner)
+    arc(color.track, frame, low, high, inner)
+    val filled = (progress ?: 0f).coerceAtMost(high)
+    if (filled > low) arc(color.accent, frame, low, filled, inner)
+}
+
+private fun DrawScope.arc(color: Color, frame: ArcFrame, from: Float, to: Float, width: Float) {
+    val sweep = frame.sweep * (to - from)
+    drawArc(
+        color,
+        frame.angle(from),
+        if (abs(sweep) < MIN_SWEEP) MIN_SWEEP * frame.sweep.sign else sweep,
+        useCenter = false,
+        topLeft = Offset(frame.inset, frame.inset),
+        size = Size(size.width - 2 * frame.inset, size.height - 2 * frame.inset),
+        style = Stroke(width, cap = StrokeCap.Round),
+    )
 }
 
 @Composable
@@ -103,27 +170,15 @@ fun ArcGauge(
     progress: Float,
     modifier: Modifier = Modifier,
     from: Float = 0f,
+    range: ClosedFloatingPointRange<Float>? = null,
+    background: Color = OpenFitColors.Card,
     size: Dp = 66.dp,
     stroke: Dp = 6.dp,
 ) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
-            val width = stroke.toPx()
-            val style = Stroke(width, cap = StrokeCap.Round)
-            drawArc(color.track, GAUGE_START, GAUGE_SWEEP, useCenter = false, style = style)
-            val start = from.coerceIn(0f, 1f)
-            val end = progress.coerceIn(start, 1f)
-            if (end > start) {
-                drawArc(
-                    color.accent,
-                    GAUGE_START + GAUGE_SWEEP * start,
-                    GAUGE_SWEEP * (end - start),
-                    useCenter = false,
-                    style = style,
-                )
-            } else {
-                drawCircle(color.accent, radius = width / 2, center = pointOnArc(GAUGE_START + GAUGE_SWEEP * start, inset = 0f))
-            }
+            val band = Band(outline = 1.dp.toPx(), halo = 1.dp.toPx(), background = background)
+            gauge(color, ArcFrame(GAUGE_START, GAUGE_SWEEP, inset = 0f), stroke.toPx(), progress, range, band, from)
         }
         Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(GAUGE_ICON))
         if (from == 0f && progress >= 1f) {
