@@ -1,0 +1,31 @@
+<resources>
+    <string name="app_name">openFit</string>
+    <string name="today">Today</string>
+    <string name="profile">Profile</string>
+    <string name="steps">steps</string>
+    <string name="of_goal_steps">of %,d</string>
+    <string name="of_goal">of %d</string>
+    <string name="zone_minutes">Active Zone Minutes</string>
+    <string name="zone_minutes_needs_age">Set your age in Profile</string>
+    <string name="resting_heart_rate">Resting heart rate</string>
+    <string name="distance">Distance</string>
+    <string name="floors">Floors</string>
+    <string name="calories">Calories burned</string>
+    <string name="sleep">Sleep</string>
+    <string name="unit_bpm">bpm</string>
+    <string name="unit_km">km</string>
+    <string name="unit_kcal">kcal</string>
+    <string name="age">Age</string>
+    <string name="daily_step_goal">Daily step goal</string>
+    <string name="daily_zone_minutes_goal">Daily Active Zone Minutes goal</string>
+    <string name="save">Save</string>
+    <string name="cancel">Cancel</string>
+    <string name="retry">Retry</string>
+    <string name="hc_unavailable">Health Connect is not available on this device.</string>
+    <string name="hc_update_required">Health Connect needs to be installed or updated.</string>
+    <string name="hc_open_store">Open Play Store</string>
+    <string name="permissions_rationale">openFit reads your activity, heart rate and sleep from Health Connect to build your dashboard. Make sure the Google Health app is syncing to Health Connect.</string>
+    <string name="permissions_grant">Grant access</string>
+    <string name="permissions_partial">Some data types are not shared with openFit, so a few tiles may be empty.</string>
+    <string name="privacy_policy">openFit only reads health data from Health Connect to show it on this device. Nothing is uploaded or shared.</string>
+</resources>
