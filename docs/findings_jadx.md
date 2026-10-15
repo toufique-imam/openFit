@@ -75,3 +75,48 @@ variant is gated by a flag in `adlk` (~72). openFit follows the default path.
 - The segmented-ring segment geometry (`bhlv.B`). The gap was measured on device.
 - Detail screens behind each tile.
 - The Health Metrics, Stress and Mindfulness tiles.
+
+## Cardio Load detail screen (decompiled)
+
+| Class | Role |
+| --- | --- |
+| `tln.n` / `tln.o` | Screen shell (Scaffold, top bar, tab row) |
+| `tln.m` | Overflow menu |
+| `tln.s`, `r`, `q`, `p` | Week/Month/Year layout, header, chart, history list |
+| `xlw.b` | Day tab section order |
+| `xlw.h` | Day header |
+| `xlw.g` | Day chart (212dp) |
+| `xlw.i` | Workouts list |
+| `xlw.a` | Breakdown |
+| `xlw.e` | Seven-day training |
+| `xlw.c` | Fitness target |
+| `xmu` | Day state: status text, description choice, breakdown percentages |
+| `xns` | Week/Month/Year state |
+| `xnu` | History list |
+| `xkh` | Helpers: bucket top, progress, axis max, status text |
+| `xke` | Acute:chronic bands |
+| `xkd` and subclasses | The six bar segments |
+| `nfe` | Y-axis label rule |
+| `bgld` | X labels |
+| `bfjw.gp` | Curve smoothing |
+| `bfon` case 12 | Legend swatch |
+| `bhlg` / `bhla` | 66dp gauge with target band |
+| `aapd` | Network client |
+
+**Server-side.** The client computes none of the target range, the ACWR or the scale. It fetches them:
+
+- **Daily target:** a goal `(lowerValue, upperValue)` from the goals store.
+- **Ratio:** `cardio-acute-chronic-workload-ratio`, one double per day.
+- **Scale:** `cardio-load-observed-interval` buckets, from very low to very high. The ring and day-chart scale is the "very high" upper bound.
+- **Calibration:** `calibrations/cardio-load`, giving a status and the remaining days.
+- **Loads:** rollups of `CardioLoad` and `CardioLoadPerMinute`, each with `combined`, `active` and `passive`.
+
+openFit's models for these are in [findings_algorithms.md](findings_algorithms.md).
+
+**Client-side rules:**
+
+- **Status text:** "Calibrating", "No target", "Target lo-hi" (today) or "Below target" (past), "In target" (inclusive), "Above target".
+- **Breakdown:** the logged share is min(non-manual workout load / combined, 1).
+- **Training status:** the ratio is clamped at 1.89 and truncated to 2 decimals, then banded: < 0.4 undertraining, < 0.8 at risk, < 1.1 maintaining, < 1.3 improving, < 1.5 at risk, else overtraining.
+- **Month headline:** the average daily ratio (needs ≥ 7 days), banded 0.8 / 1.1 / 1.3.
+- **Values:** loads are int-cast (truncated). Averages skip zero days.

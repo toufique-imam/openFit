@@ -124,3 +124,52 @@ opsz = font size. Material 3 sizes:
 - **Missing tiles:** Health Metrics, Mindful days, Stress Management Score.
 - **Missing chrome:** bottom navigation, the + FAB, the Fitbit header, a sticky date header.
 - **Missing rendering:** target-range band and second-lap rendering.
+
+## Metric detail screens (Cardio Load, Readiness, Steps)
+
+Shared frame (`ui/detail/DetailScaffold.kt`); values from the decompiled Cardio Load screen, cross-checked on screenshots.
+
+- **Top bar**: back arrow, title in titleLarge 22/28, overflow menu. Cardio Load's menu: "Activity settings", "Manage data".
+- **Tabs**: Day / Week / Month / Year, four 90dp tabs, 16sp Medium. Selected uses the metric accent, unselected #BEC9C3. Indicator is 2dp, full tab width, square; no divider.
+- **Date row**: 48dp chevrons, title titleMedium 16sp centered. The next chevron is dimmed while the period contains today. Labels:
+  - Day: "Today", or "Thu, 24 Sept".
+  - Week: "This week", or "20–26 Sept".
+  - Month: "This month", or "September".
+  - Year: "This year", or "2025".
+- **Day header**:
+  - Value in displayMedium 45sp plus a status in bodyMedium 14sp, on one baseline.
+  - Description in bodyMedium 14/20, #BEC9C3.
+  - 66dp gauge at the right edge, 24dp from the screen side, with its top 14dp below the header top.
+  - Text margins are 24dp.
+- **Charts**:
+  - **Frame**: 212dp tall. The plot runs from x = 24dp to 312dp, y from 341 to 512dp on screen. Y labels are bodySmall 12sp, left-aligned at x = 325dp.
+  - **Line charts**: point i sits at 24 + i·288/n.
+  - **Bar charts**: bars are centered in their slots, 16dp wide for ≤ 12 slots, 6dp for 24, 3.5dp for a month.
+  - **Y axis**: top = 1.2 × the highest point or band. Middle = half the top, rounded up to a 1/2/5 × 10ⁿ step (139/70, 123/65, 106/55).
+  - **Day chart**: top = the server's "very high" bucket (≈ 0.45 × chronic) unless the day exceeds it.
+- **Dotted lines**: 2dp round dots every 5dp. Target bands are the accent at 12 %. Logged workouts are #E3E987 at 12 %, with dotted vertical edges.
+- **Lines**:
+  - Width 1.5dp; the day chart is smoothed (Catmull-Rom, 1/6) and turns yellow inside workouts.
+  - Dots are 6dp. A dot gets a 1.5dp background ring only when it is inside its target.
+  - The day line ends in a ringed dot.
+- **Legend**: centered row with 24dp gaps. Swatch 16 × 10dp: the color at 16 %, inset 1.5 × 2dp, with a 1dp dot at each corner. Then 8dp, then a bodyMedium label in #BEC9C3.
+- **Lists**:
+  - Header row: period label on the left; "Daily average" on the right for Month and Year.
+  - Grouped cards: 68dp tall, 4dp gaps, 16dp margins, 16dp outer and 4dp inner corners.
+  - Label 14sp Medium, value headlineMedium 28sp.
+- **Workout cards**: 92dp tall. Time in 14sp Medium on the left; on the right the name in 28sp and "Cardio load: N" in bodyMedium.
+- **Breakdown bars**: a 4dp #292D2C track under a 10dp mint pill. Hidden when all load came from logged workouts.
+- **Training bar**:
+  - Six equal segments with 1dp separators: yellow, mint, mint, teal #018673, teal, yellow.
+  - Segments cover the ratio ranges 0–0.8, 0.8–0.945, 0.945–1.1, 1.1–1.195, 1.195–1.3 and 1.3–1.89. The marker is linear within its segment.
+  - Marker: 12dp, a dark ring around a light center.
+- **Section titles**: titleMedium 16sp. "Learn more" and "Adjust my target" links use the accent.
+- **Readiness**:
+  - Accent lavender.
+  - Bars on a 0–100 scale with dotted guides at 30 (sparse) and 65 (dense).
+  - Legend "30 - 64 Moderate" (one dot) and "65–100 High" (two dots).
+  - "What impacted your readiness" cards: HRV, past week of sleep and RHR.
+- **Steps (goal metrics)**:
+  - Solid goal line in the accent; bars that reach it carry a check (16dp bars) or a small dot (thin bars).
+  - Axis labels: 0, goal/2, goal (in the accent), plus a rounded-up top only when it clears the goal by 15 %.
+  - Hourly chart top: two significant figures with an even last digit (3,050 → 3.2k).
