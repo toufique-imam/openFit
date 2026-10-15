@@ -20,6 +20,8 @@ import com.openfit.profile.ProfileStore
 import com.openfit.ui.cardio.CardioLoadRoute
 import com.openfit.ui.cardio.CardioLoadViewModel
 import com.openfit.ui.MetricPage
+import com.openfit.ui.hourly.HourlyRoute
+import com.openfit.ui.hourly.HourlyViewModel
 import com.openfit.ui.exercise.ExerciseRoute
 import com.openfit.ui.exercise.ExerciseViewModel
 import com.openfit.ui.heart.HeartRoute
@@ -95,6 +97,11 @@ class MainActivity : ComponentActivity() {
                             val exerciseViewModel = viewModel { ExerciseViewModel(gateway, profileStore) }
                             LaunchedEffect(screen) { exerciseViewModel.open(screen.date) }
                             ExerciseRoute(viewModel = exerciseViewModel, onBack = pop)
+                        }
+                        MetricPage.Hourly -> {
+                            val hourlyViewModel = viewModel { HourlyViewModel(gateway) }
+                            LaunchedEffect(screen) { hourlyViewModel.open(screen.date) }
+                            HourlyRoute(viewModel = hourlyViewModel, onBack = pop)
                         }
                         MetricPage.Readiness -> {
                             val readinessViewModel = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache) }

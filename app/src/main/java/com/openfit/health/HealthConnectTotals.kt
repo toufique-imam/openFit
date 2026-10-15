@@ -55,6 +55,39 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
             .toMap()
     }
 
+    /** Per-minute sums (epoch minute → value) for one day between [fromHour] and [untilHour], capped at now. */
+    suspend fun minutely(total: DailyTotal, date: LocalDate, fromHour: Int, untilHour: Int): Map<Long, Double> {
+        if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
+        val start = date.atTime(fromHour, 0).atZone(zone).toInstant()
+        val end = minOf(date.atTime(untilHour.coerceAtMost(23), 59, 59).atZone(zone).toInstant(), Instant.now())
+        if (end <= start) return emptyMap()
+        val request = AggregateGroupByDurationRequest(setOf(metric(total)), TimeRangeFilter.between(start, end), Duration.ofMinutes(1))
+        return gateway.client.aggregateGroupByDuration(request)
+            .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.epochSecond / 60 to it } }
+            .toMap()
+    }
+
+    /** Hourly sums for every day in a range, one request per month. */
+    suspend fun hourlyByDay(total: DailyTotal, from: LocalDate, until: LocalDate): Map<LocalDate, Map<Int, Double>> {
+        if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
+        val result = mutableMapOf<LocalDate, MutableMap<Int, Double>>()
+        var chunk = from
+        while (chunk <= until) {
+            val chunkEnd = minOf(chunk.plusMonths(1).withDayOfMonth(1).minusDays(1), until)
+            val start = chunk.atStartOfDay(zone).toInstant()
+            val end = minOf(chunkEnd.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
+            if (end > start) {
+                val request = AggregateGroupByDurationRequest(setOf(metric(total)), TimeRangeFilter.between(start, end), Duration.ofHours(1))
+                gateway.client.aggregateGroupByDuration(request).forEach { bucket ->
+                    val time = bucket.startTime.atZone(zone)
+                    value(total, bucket.result)?.let { result.getOrPut(time.toLocalDate()) { mutableMapOf() }[time.hour] = it }
+                }
+            }
+            chunk = chunkEnd.plusDays(1)
+        }
+        return result
+    }
+
     private fun metric(total: DailyTotal) = when (total) {
         DailyTotal.Steps -> StepsRecord.COUNT_TOTAL
         DailyTotal.DistanceMeters -> DistanceRecord.DISTANCE_TOTAL

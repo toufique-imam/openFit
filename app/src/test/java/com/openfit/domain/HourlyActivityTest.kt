@@ -24,4 +24,17 @@ class HourlyActivityTest {
         assertEquals(HourStatus.Met, result.hours[4])
         assertEquals(HourStatus.Upcoming, result.hours[5])
     }
+
+    @Test
+    fun glanceCountsActiveMinutesAndLongInactiveStretches() {
+        // 0–4 active, 5–19 still (15 min), 20 active, 21–25 still (5 min, too short to count), 26–29 active.
+        val steps = ((0L..4L) + 20L + (26L..29L)).associateWith { 30.0 }
+
+        val glance = activityGlance(steps, 0, 30)
+
+        assertEquals(10, glance.activeMinutes)
+        assertEquals(15, glance.inactiveMinutes)
+        assertEquals(15, glance.longestInactiveMinutes)
+    }
 }
+

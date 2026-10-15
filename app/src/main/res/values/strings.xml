@@ -331,4 +331,23 @@
     </plurals>
     <string name="exercise_detail">%1$s · %2$s</string>
     <string name="exercise_none">No exercise logged</string>
+
+    <!-- Hourly activity detail -->
+    <string name="hourly_hours_with_steps">hours with 250+ steps</string>
+    <string name="hourly_hours_per_day">hours per day (avg)</string>
+    <string name="hourly_glance_title">Your day at a glance</string>
+    <string name="hourly_active_time">Active time · %1$d%% · %2$s</string>
+    <string name="hourly_inactive_time">Inactive time · %1$d%% · %2$s</string>
+    <string name="hourly_longest_title">Longest inactive period</string>
+    <string name="hourly_longest_body">Aim to break up sedentary time each hour. Take a stroll to clear your head or loosen up with some stretches.</string>
+    <string name="hourly_week_total">Across the week that’s a total of %1$s hours with 250+ steps</string>
+    <string name="hourly_month_total">Across the month that’s a total of %1$s hours with 250+ steps</string>
+    <string name="hourly_year_best">So far your best month was %1$s, with a total of %2$s hours with 250+ steps</string>
+    <string name="hourly_year_best_past">Your best month was %1$s, with a total of %2$s hours with 250+ steps</string>
+    <string name="hourly_inactive_per_day">min inactive per day (avg)</string>
+    <string name="hourly_inactive_total">Across the period that’s a total of %1$s of inactive time between 9am and 5pm</string>
+    <string name="hourly_chip_hours">Hourly activity</string>
+    <string name="hourly_chip_inactive">Inactive time</string>
+    <string name="hourly_list_header">Hourly activity</string>
+    <string name="hourly_list_header_avg">Hourly activity (avg)</string>
 </resources>

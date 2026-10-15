@@ -134,3 +134,17 @@ The user only picks a goal, **Maintain** or **Improve** (Profile). Everything el
 - An ML model isn't warranted yet. The rule-based targets need a few weeks of side-by-side data
   against Fitbit first. If they drift, fit the constants (readiness weights, progression rate) by
   regression on that data rather than training a model.
+
+## Hourly activity glance (known gap)
+
+Fitbit's "Your day at a glance" splits time into active and stationary minutes using the watch's own motion classification (`breakdown_section_stationary`). Health Connect only exposes step records, which Fitbit writes in coarse intervals, so a minute-level "no steps" proxy overstates inactivity badly.
+
+For Thu 15 Oct:
+
+| | Fitbit | openFit |
+| --- | --- | --- |
+| Active | 2 h 34 m | 55 min |
+| Inactive | 1 h 12 m | 7 h 38 m |
+| Longest inactive period | 23 min | 3 h 34 m |
+
+The hours-with-250-steps counts match Fitbit exactly (2 of 9 that day; 15 hours that week). A better proxy needs a motion signal: heart-rate variability while awake, or exercise and step density over 5-minute windows. Until then the glance is approximate.

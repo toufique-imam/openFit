@@ -274,6 +274,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             title = stringResource(R.string.tile_hourly_activity),
             value = valueText { count(hourly.met, hourly.hours.size) },
             subtitle = dayLabel(state),
+            onClick = { onOpen(MetricPage.Hourly) },
         ) {
             HourlyBars(hourly.hours, "%02d:00".format(hourly.window.first), "%02d:00".format(hourly.window.last), OpenFitColors.Mint)
         }
