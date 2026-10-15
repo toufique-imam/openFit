@@ -5,6 +5,9 @@ import java.time.LocalDate
 import java.time.YearMonth
 import java.time.temporal.TemporalAdjusters
 import kotlin.math.ceil
+import kotlin.math.floor
+import kotlin.math.log10
+import kotlin.math.pow
 
 enum class ChartPeriod { Day, Week, Month, Year }
 
@@ -20,16 +23,23 @@ data class ChartAxis(val max: Double, val middle: Int)
 private const val AXIS_HEADROOM = 1.2
 private const val AXIS_STEP = 5
 
-fun chartAxis(highest: Double): ChartAxis {
-    val max = (highest * AXIS_HEADROOM).coerceAtLeast(AXIS_STEP * 2.0)
-    return ChartAxis(max, (ceil(max / 2 / AXIS_STEP) * AXIS_STEP).toInt())
+fun chartAxis(highest: Double): ChartAxis = axisWithMiddle((highest * AXIS_HEADROOM).coerceAtLeast(AXIS_STEP * 2.0))
+
+/**
+ * Fitbit's middle label: half the top, rounded up to a step of 1, 2 or 5 x 10^n, the first of those at least 5 % of
+ * the range (else the 5 x 10^n one). 139 -> 70, 123 -> 65, 106 -> 55.
+ */
+fun axisWithMiddle(max: Double): ChartAxis {
+    val minimumStep = max * 0.05
+    val magnitude = 10.0.pow(floor(log10(minimumStep)))
+    val step = listOf(1.0, 2.0, 5.0).map { it * magnitude }.firstOrNull { it >= minimumStep } ?: (5 * magnitude)
+    return ChartAxis(max, (ceil(max / 2 / step) * step).toInt())
 }
 
 /** Day chart: Fitbit scales it to the ring's full scale (0.45 × chronic weekly load), stretching only for big days. */
 fun dayChartAxis(range: LoadRange?, load: Double): ChartAxis {
-    range ?: return chartAxis(load)
-    val max = maxOf(range.scale, load * AXIS_HEADROOM)
-    return ChartAxis(max, (ceil(max / 2 / AXIS_STEP) * AXIS_STEP).toInt())
+    if (range != null && load <= range.scale) return axisWithMiddle(range.scale)
+    return chartAxis(maxOf(range?.high ?: 0.0, load))
 }
 
 fun weekStart(date: LocalDate): LocalDate = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
@@ -62,15 +72,16 @@ fun monthlyPoints(year: Int, loads: Map<LocalDate, Double>, ranges: Map<LocalDat
         val monthRanges = days.mapNotNull { ranges[it] }
         PeriodPoint(
             start = days.first(),
-            load = days.mapNotNull { loads[it] }.takeIf { it.isNotEmpty() }?.average(),
+            load = averagePerDay(days, loads),
             range = monthRanges.takeIf { it.isNotEmpty() }?.let { list ->
                 LoadRange(list.map { it.low }.average(), list.map { it.high }.average(), list.map { it.scale }.average())
             },
         )
     }
 
+/** Average of the days with a non-zero value, as Fitbit averages ("per day (avg)", "Daily average"). */
 fun averagePerDay(days: List<LocalDate>, loads: Map<LocalDate, Double>): Double? =
-    days.mapNotNull { loads[it] }.takeIf { it.isNotEmpty() }?.average()
+    days.mapNotNull { loads[it]?.takeIf { value -> value > 0 } }.takeIf { it.isNotEmpty() }?.average()
 
 fun daysInTarget(points: List<PeriodPoint>): Int =
     points.count { point -> point.load != null && point.range != null && point.load in point.range }
@@ -98,19 +109,18 @@ fun monthRows(year: Int, loads: Map<LocalDate, Double>): List<PeriodRow> =
     }
 
 private const val UNDER_MONTH = 0.8
-private const val IMPROVE_MONTH = 1.15
+private const val IMPROVE_MONTH = 1.1
 private const val OVER_MONTH = 1.3
+private const val MIN_DAYS_FOR_MONTH_STATUS = 7
 
 /**
- * The Month tab's headline: the month's average daily load against the 28 days before it. Fitbit only names four
- * outcomes here (maintained, improved, overtrained, undertrained).
+ * The Month tab's headline: the month's average daily acute:chronic ratio in Fitbit's four monthly bands
+ * (undertrained < 0.8 <= maintained < 1.1 <= improved < 1.3 <= overtrained). Needs a week of data.
  */
 fun monthStatus(month: YearMonth, loads: Map<LocalDate, Double>, until: LocalDate): TrainingStatus? {
     val days = (1..month.lengthOfMonth()).map(month::atDay).filter { it <= until }
-    val average = averagePerDay(days, loads) ?: return null
-    val before = (1L..28L).map { month.atDay(1).minusDays(it) }
-    val baseline = averagePerDay(before, loads)?.takeIf { it > 0 } ?: return TrainingStatus.Maintaining
-    val ratio = average / baseline
+    if (days.count { loads[it] != null } < MIN_DAYS_FOR_MONTH_STATUS) return null
+    val ratio = days.mapNotNull { acuteChronicRatio(it, loads) }.takeIf { it.isNotEmpty() }?.average() ?: return null
     return when {
         ratio < UNDER_MONTH -> TrainingStatus.Undertraining
         ratio < IMPROVE_MONTH -> TrainingStatus.Maintaining

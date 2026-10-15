@@ -1,6 +1,7 @@
 package com.openfit.domain
 
 import java.time.LocalDate
+import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
@@ -28,13 +29,16 @@ private const val LOW_READINESS_SHIFT = -0.10
 private const val MIN_HIGH_SHARE = 0.05
 private const val RING_SCALE_SHARE = 0.45
 private const val RING_HEADROOM = 1.25
+// Fitbit 4.67's acute:chronic bands and bar segments (decompiled; the ratio itself is computed on Fitbit's server).
 private val TRAINING_THRESHOLDS = listOf(
-    0.6 to TrainingStatus.Undertraining,
+    0.4 to TrainingStatus.Undertraining,
     0.8 to TrainingStatus.RiskOfUndertraining,
     1.1 to TrainingStatus.Maintaining,
     1.3 to TrainingStatus.Improving,
     1.5 to TrainingStatus.RiskOfOvertraining,
 )
+private const val MAX_RATIO = 1.89
+private val BAR_SEGMENTS = listOf(0.0, 0.8, 0.945, 1.1, 1.195, 1.3, MAX_RATIO)
 
 /**
  * The four rolling 7-day blocks before [date] (oldest first), each scaled to a full week. Blocks with fewer than
@@ -96,17 +100,18 @@ fun acuteChronicRatio(date: LocalDate, daily: Map<LocalDate, Double>): Double? {
     val acute = lastWeek.sum() * 7 / lastWeek.size
     val weeks = rollingWeeks(date.plusDays(1), daily)
     if (weeks.size < MIN_WEEKS_FOR_STATUS) return null
-    return weeks.average().takeIf { it > 0 }?.let { acute / it }
+    // Fitbit clamps the ratio at 1.89 and truncates it to two decimals.
+    return weeks.average().takeIf { it > 0 }?.let { floor(min(acute / it, MAX_RATIO) * 100) / 100 }
 }
 
 fun trainingStatus(ratio: Double): TrainingStatus =
     TRAINING_THRESHOLDS.firstOrNull { (limit, _) -> ratio < limit }?.second ?: TrainingStatus.Overtraining
 
-/** Position of [ratio] on the six-segment Decreasing–Overreaching bar, 0..1. */
+/** Position of [ratio] on Fitbit's six equal bar segments (0–0.8, 0.8–0.945, …, 1.3–1.89), 0..1. */
 fun trainingBarPosition(ratio: Double): Double {
-    val limits = listOf(0.4) + TRAINING_THRESHOLDS.map { it.first } + 1.7
-    val segment = limits.zipWithNext().indexOfFirst { (from, to) -> ratio < to }.let { if (it < 0) limits.size - 2 else it }
-    val (from, to) = limits[segment] to limits[segment + 1]
-    val within = ((ratio - from) / (to - from)).coerceIn(0.0, 1.0)
-    return min(1.0, (segment + within) / (limits.size - 1))
+    val clamped = ratio.coerceIn(0.0, MAX_RATIO)
+    val segments = BAR_SEGMENTS.size - 1
+    val segment = BAR_SEGMENTS.zipWithNext().indexOfFirst { (_, to) -> clamped < to }.let { if (it < 0) segments - 1 else it }
+    val (from, to) = BAR_SEGMENTS[segment] to BAR_SEGMENTS[segment + 1]
+    return (segment + ((clamped - from) / (to - from)).coerceIn(0.0, 1.0)) / segments
 }

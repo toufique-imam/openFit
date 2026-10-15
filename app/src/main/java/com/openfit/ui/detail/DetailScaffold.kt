@@ -140,11 +140,7 @@ private fun PeriodTabs(selected: ChartPeriod, accent: Color, onSelect: (ChartPer
         containerColor = OpenFitColors.Background,
         contentColor = accent,
         indicator = {
-            TabRowDefaults.SecondaryIndicator(
-                Modifier.tabIndicatorOffset(selected.ordinal).clip(RoundedCornerShape(topStart = 3.dp, topEnd = 3.dp)),
-                height = 3.dp,
-                color = accent,
-            )
+            TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(selected.ordinal), height = 2.dp, color = accent)
         },
         divider = {},
     ) {
@@ -153,7 +149,7 @@ private fun PeriodTabs(selected: ChartPeriod, accent: Color, onSelect: (ChartPer
                 selected = period == selected,
                 onClick = { onSelect(period) },
                 selectedContentColor = accent,
-                unselectedContentColor = OpenFitColors.OnSurface,
+                unselectedContentColor = OpenFitColors.OnSurfaceVariant,
                 text = { Text(stringResource(label), style = MaterialTheme.typography.titleMedium) },
             )
         }
@@ -222,7 +218,7 @@ fun periodLabel(period: ChartPeriod, anchor: LocalDate, today: LocalDate): Strin
 /** Fitbit's grouped list: large corners at the ends of the group, small ones between rows. */
 @Composable
 fun GroupedCard(index: Int, count: Int, minHeight: Dp, modifier: Modifier = Modifier, onClick: (() -> Unit)? = null, content: @Composable () -> Unit) {
-    val outer = 20.dp
+    val outer = 16.dp
     val inner = 4.dp
     val shape = RoundedCornerShape(
         topStart = if (index == 0) outer else inner,
@@ -244,13 +240,13 @@ fun GroupedCard(index: Int, count: Int, minHeight: Dp, modifier: Modifier = Modi
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-    Text(text, style = SectionHeaderStyle, color = OpenFitColors.OnSurface, modifier = modifier.padding(horizontal = PagePadding))
+    Text(text, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface, modifier = modifier.padding(horizontal = PagePadding))
 }
 
 @Composable
 fun TitleWithAction(title: String, action: String, accent: Color, onAction: () -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(title, style = SectionHeaderStyle, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
+        Text(title, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
         Text(
             action,
             style = MaterialTheme.typography.titleMedium,
@@ -274,7 +270,7 @@ fun HeaderValue(value: String, label: String) {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(value, style = MaterialTheme.typography.displayMedium, color = OpenFitColors.OnSurface, modifier = Modifier.alignByBaseline())
         Spacer(Modifier.width(6.dp))
-        Text(label, style = MaterialTheme.typography.bodyLarge, color = OpenFitColors.OnSurface, modifier = Modifier.alignByBaseline())
+        Text(label, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurface, modifier = Modifier.alignByBaseline())
     }
 }
 

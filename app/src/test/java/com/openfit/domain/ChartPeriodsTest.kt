@@ -52,13 +52,21 @@ class ChartPeriodsTest {
     }
 
     @Test
-    fun monthStatusComparesWithTheMonthBefore() {
+    fun middleLabelFollowsFitbitsStepRule() {
+        assertEquals(70, axisWithMiddle(139.0).middle)
+        assertEquals(65, axisWithMiddle(123.0).middle)
+        assertEquals(55, axisWithMiddle(106.0).middle)
+        assertEquals(500, axisWithMiddle(1000.0).middle)
+    }
+
+    @Test
+    fun monthStatusAveragesTheDailyRatio() {
         val august = (1..31).associate { LocalDate.of(2026, 8, it) to 40.0 }
         // Fitbit called September (44 a day after August's 40) "Maintained fitness".
         val september = (1..30).associate { LocalDate.of(2026, 9, it) to 44.0 }
 
         assertEquals(TrainingStatus.Maintaining, monthStatus(YearMonth.of(2026, 9), august + september, LocalDate.of(2026, 9, 30)))
         val harder = (1..30).associate { LocalDate.of(2026, 9, it) to 60.0 }
-        assertEquals(TrainingStatus.Overtraining, monthStatus(YearMonth.of(2026, 9), august + harder, LocalDate.of(2026, 9, 30)))
+        assertEquals(TrainingStatus.Improving, monthStatus(YearMonth.of(2026, 9), august + harder, LocalDate.of(2026, 9, 30)))
     }
 }

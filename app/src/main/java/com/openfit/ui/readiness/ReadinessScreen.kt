@@ -32,6 +32,7 @@ import com.openfit.domain.FactorLevel
 import com.openfit.domain.ReadinessLevel
 import com.openfit.domain.ReadinessSummary
 import com.openfit.domain.SleepFactor
+import com.openfit.ui.detail.AxisLabel
 import com.openfit.ui.detail.BarChart
 import com.openfit.ui.detail.DayHeaderRow
 import com.openfit.ui.detail.DetailFailed
@@ -56,7 +57,7 @@ import com.openfit.ui.today.IconBadge
 import kotlin.math.abs
 
 private val ACCENT = OpenFitColors.Lavender.accent
-private val GUIDES = listOf(30, 65)
+private val GUIDES = listOf(30.0, 65.0)
 
 @Composable
 fun ReadinessRoute(viewModel: ReadinessViewModel, onBack: () -> Unit) {
@@ -227,7 +228,14 @@ private fun LazyListScope.periodContent(state: ReadinessUiState.Ready) {
     }
     item {
         Column(Modifier.padding(top = 24.dp)) {
-            BarChart(state.points, ACCENT, chartXLabels(state.period, state.anchor), GUIDES, axisMax = 100.0)
+            BarChart(
+                values = state.points.map { it.load },
+                color = ACCENT,
+                axisMax = 100.0,
+                axisLabels = listOf(0, 30, 65, 100).map { AxisLabel(it.toDouble(), it.toString()) },
+                xLabels = chartXLabels(state.period, state.anchor),
+                guides = GUIDES,
+            )
             GuideLegend(listOf(1 to stringResource(R.string.readiness_legend_moderate), 2 to stringResource(R.string.readiness_legend_high)))
         }
     }

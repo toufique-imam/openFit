@@ -229,4 +229,25 @@
     <string name="readiness_mixed_body">A mix of moderate and low readiness scores could be a sign that you’re challenging yourself. Your body needs time to recover and adapt.</string>
     <string name="readiness_legend_moderate">30 - 64 Moderate</string>
     <string name="readiness_legend_high">65–100 High</string>
+
+    <!-- Steps detail -->
+    <string name="steps_of_goal">of %s steps</string>
+    <string name="steps_away_today">You’re %s steps away from hitting your daily goal</string>
+    <string name="steps_away_past">You were %s steps away from hitting your daily goal</string>
+    <string name="steps_exceeded">You exceeded your daily goal by %s steps. Great job!</string>
+    <string name="steps_met">You hit your daily goal. Great job!</string>
+    <string name="steps_per_day_avg">steps per day (avg)</string>
+    <plurals name="steps_goal_days_current">
+        <item quantity="one">You’ve hit your goal on %1$d day so far, and took a total of %2$s steps</item>
+        <item quantity="other">You’ve hit your goal on %1$d days so far, and took a total of %2$s steps</item>
+    </plurals>
+    <plurals name="steps_goal_days_past">
+        <item quantity="one">You hit your goal on %1$d day, and took a total of %2$s steps</item>
+        <item quantity="other">You hit your goal on %1$d days, and took a total of %2$s steps</item>
+    </plurals>
+    <string name="steps_no_goal_week">You haven’t hit your goal yet this week. You took a total of %1$s steps so far.</string>
+    <string name="steps_no_goal_month">You haven’t hit your goal yet this month. You took a total of %1$s steps so far.</string>
+    <string name="steps_no_goal_past">You didn’t hit your goal. You took a total of %1$s steps.</string>
+    <string name="steps_year_current">You’ve taken a total of %1$s steps so far this year</string>
+    <string name="steps_year_past">You took a total of %1$s steps</string>
 </resources>

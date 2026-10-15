@@ -46,6 +46,9 @@ private val ONE_DECIMAL = DecimalFormat("#,##0.#")
 private val TWO_DECIMALS = DecimalFormat("#,##0.##")
 
 fun whole(value: Number): String = WHOLE.format(value)
+
+/** Fitbit truncates cardio load rather than rounding it (76.9 shows as 76). */
+fun truncated(value: Double): String = WHOLE.format(kotlin.math.floor(value))
 fun oneDecimal(value: Double): String = ONE_DECIMAL.format(value)
 fun twoDecimals(value: Double): String = TWO_DECIMALS.format(value)
 

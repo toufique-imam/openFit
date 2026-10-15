@@ -72,10 +72,14 @@ class CardioTargetsTest {
         assertEquals(1.0, ratio, 1e-9)
         assertEquals(TrainingStatus.Maintaining, trainingStatus(ratio))
 
-        assertEquals(TrainingStatus.Undertraining, trainingStatus(0.5))
+        // Fitbit's bands: < 0.4 undertraining, < 0.8 at risk, < 1.1 maintaining, < 1.3 improving, < 1.5 at risk, else over.
+        assertEquals(TrainingStatus.Undertraining, trainingStatus(0.39))
+        assertEquals(TrainingStatus.RiskOfUndertraining, trainingStatus(0.5))
         assertEquals(TrainingStatus.Improving, trainingStatus(1.2))
         assertEquals(TrainingStatus.Overtraining, trainingStatus(1.6))
-        assertEquals(0.0, trainingBarPosition(0.2), 1e-9)
+        // Six equal segments split at 0.8, 0.945, 1.1, 1.195 and 1.3.
+        assertEquals(0.0, trainingBarPosition(0.0), 1e-9)
+        assertEquals(2.0 / 6, trainingBarPosition(0.945), 1e-9)
         assertEquals(1.0, trainingBarPosition(2.0), 1e-9)
     }
 }

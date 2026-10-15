@@ -102,8 +102,8 @@ fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
                 value = AnnotatedString(
                     when {
                         load == null -> stringResource(if (profile.age == null) R.string.focus_needs_age else R.string.no_data)
-                        range == null -> stringResource(R.string.cardio_value_no_target, whole(load))
-                        else -> stringResource(R.string.cardio_value_range, whole(load), whole(range.low), whole(range.high))
+                        range == null -> stringResource(R.string.cardio_value_no_target, truncated(load))
+                        else -> stringResource(R.string.cardio_value_range, truncated(load), truncated(range.low), truncated(range.high))
                     },
                 ),
                 progress = range?.progress(load),
@@ -148,6 +148,7 @@ fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
             MiniMetric(
                 label = stringResource(R.string.tile_steps),
                 value = AnnotatedString(whole(metrics.steps ?: 0)),
+                onClick = { onOpen(MetricPage.Steps) },
             ) {
                 ArcGauge(
                     Icons.AutoMirrored.Outlined.DirectionsWalk,
@@ -160,8 +161,11 @@ fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
 }
 
 @Composable
-private fun RowScope.MiniMetric(label: String, value: AnnotatedString?, gauge: @Composable () -> Unit) {
-    Column(Modifier.weight(1f), horizontalAlignment = Alignment.CenterHorizontally) {
+private fun RowScope.MiniMetric(label: String, value: AnnotatedString?, onClick: (() -> Unit)? = null, gauge: @Composable () -> Unit) {
+    Column(
+        Modifier.weight(1f).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
         gauge()
         Box(Modifier.padding(top = 4.dp).height(34.dp), contentAlignment = Alignment.TopCenter) {
             if (value == null) {
@@ -219,12 +223,12 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         val range = state.cardioRange
         MetricTile(
             title = stringResource(R.string.cardio_load),
-            value = AnnotatedString(whole(metrics.cardioLoad ?: 0.0)),
+            value = AnnotatedString(truncated(metrics.cardioLoad ?: 0.0)),
             subtitle = listOfNotNull(
                 dayLabel(state),
                 when {
                     range == null -> stringResource(R.string.no_target)
-                    else -> stringResource(R.string.target_range, whole(range.low), whole(range.high))
+                    else -> stringResource(R.string.target_range, truncated(range.low), truncated(range.high))
                 },
             ).joinToString(" • "),
             onClick = { onOpen(MetricPage.CardioLoad) },
@@ -258,7 +262,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         }
     }
     item {
-        MetricTile(stringResource(R.string.tile_steps), AnnotatedString(whole(metrics.steps ?: 0)), dayLabel(state)) {
+        MetricTile(stringResource(R.string.tile_steps), AnnotatedString(whole(metrics.steps ?: 0)), dayLabel(state), onClick = { onOpen(MetricPage.Steps) }) {
             ArcGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toFloat() / profile.dailyStepGoal)
         }
     }

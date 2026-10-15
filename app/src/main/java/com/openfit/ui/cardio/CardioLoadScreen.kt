@@ -71,7 +71,7 @@ import com.openfit.ui.detail.periodRows
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.SectionHeaderStyle
 import com.openfit.ui.today.ArcGauge
-import com.openfit.ui.today.whole
+import com.openfit.ui.today.truncated
 import java.time.Instant
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -82,6 +82,7 @@ private val ACCENT = OpenFitColors.Mint.accent
 private val TEAL = Color(0xFF008773)
 private val TRAINING_COLORS = listOf(WorkoutYellow, ACCENT, ACCENT, TEAL, TEAL, WorkoutYellow)
 private val CLOCK = DateTimeFormatter.ofPattern("h:mm a")
+private val BREAKDOWN_TRACK = Color(0xFF292D2C)
 
 @Composable
 fun CardioLoadRoute(viewModel: CardioLoadViewModel, onBack: () -> Unit) {
@@ -167,14 +168,14 @@ private fun LazyListScope.dayContent(state: CardioLoadUiState.Ready, onAdjustTar
                 Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
                         workout.start.atZone(ZoneId.systemDefault()).toLocalTime().format(CLOCK).lowercase(Locale.getDefault()),
-                        style = MaterialTheme.typography.bodyLarge,
+                        style = MaterialTheme.typography.titleSmall,
                         color = OpenFitColors.OnSurface,
                     )
                     Column(Modifier.weight(1f), horizontalAlignment = Alignment.End) {
                         Text(workout.name, style = MaterialTheme.typography.headlineMedium, color = OpenFitColors.OnSurface, maxLines = 1)
                         Text(
-                            stringResource(R.string.cardio_workout_load, whole(workout.load)),
-                            style = MaterialTheme.typography.bodyLarge,
+                            stringResource(R.string.cardio_workout_load, truncated(workout.load)),
+                            style = MaterialTheme.typography.bodyMedium,
                             color = OpenFitColors.OnSurfaceVariant,
                         )
                     }
@@ -182,10 +183,11 @@ private fun LazyListScope.dayContent(state: CardioLoadUiState.Ready, onAdjustTar
             }
         }
     }
-    day.detail?.takeIf { it.total > 0 }?.let { detail ->
+    // Fitbit hides the breakdown when every bit of load came from logged workouts.
+    day.detail?.takeIf { it.total > 0 && (it.workoutShare == 0.0 || it.workoutShare < 1.0) }?.let { detail ->
         item {
             Column(Modifier.padding(start = PagePadding, end = PagePadding, top = SectionGap)) {
-                Text(stringResource(R.string.cardio_breakdown_title), style = SectionHeaderStyle, color = OpenFitColors.OnSurface)
+                Text(stringResource(R.string.cardio_breakdown_title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
                 Text(
                     stringResource(R.string.cardio_breakdown_subtitle),
                     style = MaterialTheme.typography.bodyMedium,
@@ -225,8 +227,8 @@ private fun LazyListScope.dayContent(state: CardioLoadUiState.Ready, onAdjustTar
 private fun DayHeader(day: CardioDayView, isToday: Boolean) {
     val range = day.range
     val load = day.load ?: 0.0
-    val low = range?.let { whole(it.low) }
-    val high = range?.let { whole(it.high) }
+    val low = range?.let { truncated(it.low) }
+    val high = range?.let { truncated(it.high) }
     val status = when {
         range == null -> stringResource(R.string.no_target)
         day.status == TargetStatus.InTarget -> stringResource(R.string.cardio_in_target)
@@ -244,7 +246,7 @@ private fun DayHeader(day: CardioDayView, isToday: Boolean) {
         load > 0 -> stringResource(R.string.cardio_day_below_today)
         else -> stringResource(R.string.cardio_day_below_today_zero)
     }
-    DayHeaderRow(whole(load), status, description) {
+    DayHeaderRow(truncated(load), status, description) {
         ArcGauge(
             Icons.Outlined.MonitorHeart,
             OpenFitColors.Mint,
@@ -259,10 +261,11 @@ private fun DayHeader(day: CardioDayView, isToday: Boolean) {
 private fun ShareBar(label: String, fraction: Float, modifier: Modifier = Modifier) {
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
-        Canvas(Modifier.fillMaxWidth().padding(top = 10.dp).height(8.dp)) {
-            val radius = CornerRadius(size.height / 2)
-            drawRoundRect(OpenFitColors.Mint.track, cornerRadius = radius)
-            if (fraction > 0f) drawRoundRect(ACCENT, size = Size(size.width * fraction.coerceIn(0.03f, 1f), size.height), cornerRadius = radius)
+        // A 4dp track with a 10dp pill on top, as Fitbit draws the breakdown.
+        Canvas(Modifier.fillMaxWidth().padding(top = 10.dp).height(10.dp)) {
+            val track = 4.dp.toPx()
+            drawRoundRect(BREAKDOWN_TRACK, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
+            if (fraction > 0f) drawRoundRect(ACCENT, size = Size(maxOf(size.width * fraction, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
         }
     }
 }
@@ -295,7 +298,7 @@ private fun TrainingSection(training: TrainingView, onLearnMore: () -> Unit) {
 @Composable
 private fun TrainingBar(position: Float, modifier: Modifier = Modifier) {
     Canvas(modifier.fillMaxWidth().height(14.dp)) {
-        val gap = 2.dp.toPx()
+        val gap = 1.dp.toPx()
         val barHeight = 10.dp.toPx()
         val top = (size.height - barHeight) / 2
         val segment = (size.width - gap * (TRAINING_COLORS.size - 1)) / TRAINING_COLORS.size
@@ -310,7 +313,7 @@ private fun TrainingBar(position: Float, modifier: Modifier = Modifier) {
             drawPath(path, color)
         }
         val center = Offset(position.coerceIn(0f, 1f) * size.width, size.height / 2)
-        drawCircle(OpenFitColors.Background, radius = 7.dp.toPx(), center = center)
+        drawCircle(OpenFitColors.Background, radius = 6.dp.toPx(), center = center)
         drawCircle(OpenFitColors.OnSurface, radius = 4.dp.toPx(), center = center)
     }
 }
@@ -324,7 +327,7 @@ private fun LazyListScope.periodContent(state: CardioLoadUiState.Ready) {
             ChartLegend(listOf(ACCENT to stringResource(R.string.cardio_legend_target_range)))
         }
     }
-    periodRows(state.period, state.anchor, state.today, chart.rows)
+    periodRows(state.period, state.anchor, state.today, chart.rows) { truncated(it.load) }
 }
 
 @Composable
@@ -335,21 +338,21 @@ private fun PeriodHeader(state: CardioLoadUiState.Ready, chart: CardioPeriodView
         if (state.period == ChartPeriod.Month && monthStatus != null && average != null) {
             Text(stringResource(monthTitle(monthStatus, state.isCurrent)), style = MaterialTheme.typography.headlineMedium, color = OpenFitColors.OnSurface)
             Text(
-                stringResource(monthBody(monthStatus, state.isCurrent), whole(average)),
+                stringResource(monthBody(monthStatus, state.isCurrent), truncated(average)),
                 style = MaterialTheme.typography.bodyMedium,
                 color = OpenFitColors.OnSurfaceVariant,
                 modifier = Modifier.padding(top = 8.dp),
             )
             return@Column
         }
-        HeaderValue(average?.let(::whole) ?: "0", stringResource(R.string.cardio_per_day_avg))
+        HeaderValue(average?.let(::truncated) ?: "0", stringResource(R.string.cardio_per_day_avg))
         val loads = chart.points.mapNotNull { it.load }
         val description = when {
-            state.period == ChartPeriod.Year -> chart.monthlyAverages?.let { stringResource(R.string.cardio_year_range, whole(it.start), whole(it.endInclusive)) }
+            state.period == ChartPeriod.Year -> chart.monthlyAverages?.let { stringResource(R.string.cardio_year_range, truncated(it.start), truncated(it.endInclusive)) }
                 ?: stringResource(R.string.cardio_year_empty)
             loads.size < 2 -> stringResource(if (state.period == ChartPeriod.Week) R.string.cardio_week_empty else R.string.cardio_month_empty)
             chart.points.any { it.range != null } -> pluralStringResource(R.plurals.cardio_week_in_target, chart.daysInTarget, chart.daysInTarget)
-            else -> stringResource(R.string.cardio_week_range, whole(loads.min()), whole(loads.max()))
+            else -> stringResource(R.string.cardio_week_range, truncated(loads.min()), truncated(loads.max()))
         }
         Text(description, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(top = 10.dp))
         if (state.backfilling) {
