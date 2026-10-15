@@ -9,7 +9,8 @@ import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
 
-enum class ChartPeriod { Day, Week, Month, Year }
+/** Fitbit's chart periods; only the Heart screen offers [ThreeMonths] (13 Sunday weeks, one point per week). */
+enum class ChartPeriod { Day, Week, Month, ThreeMonths, Year }
 
 /** One point on a Week/Month/Year chart: a day (or a month on the Year chart) with its load and target range. */
 data class PeriodPoint(val start: LocalDate, val load: Double?, val range: LoadRange?)
@@ -21,6 +22,7 @@ data class PeriodRow(val start: LocalDate, val end: LocalDate, val load: Double)
 data class ChartAxis(val max: Double, val middle: Int)
 
 private const val AXIS_HEADROOM = 1.2
+const val THREE_MONTH_WEEKS = 13L
 private const val AXIS_STEP = 5
 
 fun chartAxis(highest: Double): ChartAxis = axisWithMiddle((highest * AXIS_HEADROOM).coerceAtLeast(AXIS_STEP * 2.0))
@@ -50,6 +52,7 @@ fun periodDays(period: ChartPeriod, anchor: LocalDate): List<LocalDate> {
         ChartPeriod.Day -> anchor to anchor
         ChartPeriod.Week -> weekStart(anchor).let { it to it.plusDays(6) }
         ChartPeriod.Month -> YearMonth.from(anchor).let { it.atDay(1) to it.atEndOfMonth() }
+        ChartPeriod.ThreeMonths -> weekStart(anchor).let { it.minusWeeks(THREE_MONTH_WEEKS - 1) to it.plusDays(6) }
         ChartPeriod.Year -> anchor.withDayOfYear(1).let { it to it.plusYears(1).minusDays(1) }
     }
     return generateSequence(start) { it.plusDays(1) }.takeWhile { it <= end }.toList()
@@ -59,6 +62,7 @@ fun shiftPeriod(period: ChartPeriod, anchor: LocalDate, steps: Long): LocalDate 
     ChartPeriod.Day -> anchor.plusDays(steps)
     ChartPeriod.Week -> anchor.plusWeeks(steps)
     ChartPeriod.Month -> anchor.plusMonths(steps)
+    ChartPeriod.ThreeMonths -> anchor.plusWeeks(THREE_MONTH_WEEKS * steps)
     ChartPeriod.Year -> anchor.plusYears(steps)
 }
 
@@ -85,6 +89,14 @@ fun averagePerDay(days: List<LocalDate>, loads: Map<LocalDate, Double>): Double?
 
 fun daysInTarget(points: List<PeriodPoint>): Int =
     points.count { point -> point.load != null && point.range != null && point.load in point.range }
+
+/** 3-month chart: each Sunday week's average day (non-zero days only), oldest first. */
+fun weeklyAverages(days: List<LocalDate>, values: Map<LocalDate, Double>): List<Double?> =
+    days.chunked(7).map { week -> averagePerDay(week, values) }
+
+/** 3-month list: the weeks, newest first, as daily averages. */
+fun weekRowsOf(days: List<LocalDate>, values: Map<LocalDate, Double>): List<PeriodRow> =
+    days.chunked(7).mapNotNull { week -> averagePerDay(week, values)?.let { PeriodRow(week.first(), week.last(), it) } }.reversed()
 
 /** Week tab list: each tracked day, newest first. */
 fun dayRows(days: List<LocalDate>, loads: Map<LocalDate, Double>): List<PeriodRow> =

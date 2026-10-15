@@ -20,6 +20,8 @@ import com.openfit.profile.ProfileStore
 import com.openfit.ui.cardio.CardioLoadRoute
 import com.openfit.ui.cardio.CardioLoadViewModel
 import com.openfit.ui.MetricPage
+import com.openfit.ui.heart.HeartRoute
+import com.openfit.ui.heart.HeartViewModel
 import com.openfit.ui.goal.GoalMetric
 import com.openfit.ui.goal.GoalMetricRoute
 import com.openfit.ui.goal.GoalMetricViewModel
@@ -81,6 +83,11 @@ class MainActivity : ComponentActivity() {
                             val goalViewModel = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore) }
                             LaunchedEffect(screen) { goalViewModel.open(screen.date) }
                             GoalMetricRoute(viewModel = goalViewModel, onBack = pop)
+                        }
+                        MetricPage.Heart -> {
+                            val heartViewModel = viewModel { HeartViewModel(gateway, profileStore, dayLoadCache) }
+                            LaunchedEffect(screen) { heartViewModel.open(screen.date) }
+                            HeartRoute(viewModel = heartViewModel, onBack = pop)
                         }
                         MetricPage.Readiness -> {
                             val readinessViewModel = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache) }

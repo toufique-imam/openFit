@@ -1,6 +1,7 @@
 package com.openfit.domain
 
 import java.time.Instant
+import kotlin.math.ceil
 import kotlin.math.roundToInt
 
 data class HeartRateSample(val time: Instant, val bpm: Long)
@@ -14,7 +15,8 @@ data class ZoneMinutes(val fatBurn: Int, val cardio: Int, val peak: Int) {
 fun heartRateZones(age: Int, restingBpm: Int): HeartRateZones {
     val maxBpm = maxHeartRate(age)
     val reserve = maxBpm - restingBpm
-    fun atReserve(fraction: Double) = (restingBpm + reserve * fraction).roundToInt()
+    // Fitbit rounds zone thresholds up: rest 61, max 190 gives 113 / 139 / 171 (138.4 → 139).
+    fun atReserve(fraction: Double) = ceil(restingBpm + reserve * fraction).toInt()
     return HeartRateZones(
         fatBurnFrom = atReserve(0.40),
         cardioFrom = atReserve(0.60),

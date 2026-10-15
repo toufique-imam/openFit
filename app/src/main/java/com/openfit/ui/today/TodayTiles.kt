@@ -312,7 +312,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     val health = healthTiles(metrics, profile)
     val showHeart = metrics.latestHeartRate != null || metrics.heartRateRange != null || metrics.restingBpm != null
     if (health.isNotEmpty() || showHeart) section(R.string.section_health)
-    if (showHeart) item { HeartTile(state) }
+    if (showHeart) item { HeartTile(state, onClick = { onOpen(MetricPage.Heart) }) }
     health.forEach { tile ->
         item {
             MetricTile(
@@ -360,7 +360,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
 }
 
 @Composable
-private fun HeartTile(state: TodayUiState.Ready) {
+private fun HeartTile(state: TodayUiState.Ready, onClick: () -> Unit) {
     val metrics = state.metrics
     val range = metrics.heartRateRange
     val resting = metrics.restingBpm?.value
@@ -373,6 +373,7 @@ private fun HeartTile(state: TodayUiState.Ready) {
             stringResource(R.string.unit_bpm),
         ),
         subtitle = listOfNotNull(latest?.let { sinceLabel(it.time) } ?: dayLabel(state), restingText).joinToString(" · "),
+        onClick = onClick,
     ) {
         val span = HEART_RANGE_CEILING - HEART_RANGE_FLOOR
         val low = latest?.value ?: range?.first ?: resting ?: 0

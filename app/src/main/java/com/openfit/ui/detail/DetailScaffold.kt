@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -32,7 +33,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SecondaryScrollableTabRow
 import androidx.compose.material3.SecondaryTabRow
+import androidx.compose.material3.TabIndicatorScope
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
@@ -81,6 +84,7 @@ fun DetailScaffold(
     title: String,
     accent: Color,
     period: ChartPeriod,
+    periods: List<ChartPeriod> = DEFAULT_PERIODS,
     onPeriod: (ChartPeriod) -> Unit,
     onBack: () -> Unit,
     menu: List<MenuAction> = emptyList(),
@@ -121,39 +125,62 @@ fun DetailScaffold(
         },
     ) { padding ->
         Column(Modifier.padding(padding).fillMaxSize()) {
-            PeriodTabs(period, accent, onPeriod)
+            PeriodTabs(periods, period, accent, onPeriod)
             content()
         }
     }
 }
 
+private val DEFAULT_PERIODS = listOf(ChartPeriod.Day, ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.Year)
+
+/** Four fixed tabs, or Fitbit's scrolling row of 90dp tabs when a screen offers more (Heart). */
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PeriodTabs(selected: ChartPeriod, accent: Color, onSelect: (ChartPeriod) -> Unit) {
-    val tabs = listOf(
-        ChartPeriod.Day to R.string.cardio_tab_day,
-        ChartPeriod.Week to R.string.cardio_tab_week,
-        ChartPeriod.Month to R.string.cardio_tab_month,
-        ChartPeriod.Year to R.string.cardio_tab_year,
-    )
-    SecondaryTabRow(
-        selectedTabIndex = selected.ordinal,
-        containerColor = OpenFitColors.Background,
-        contentColor = accent,
-        indicator = {
-            TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(selected.ordinal), height = 2.dp, color = accent)
-        },
-        divider = {},
-    ) {
-        tabs.forEach { (period, label) ->
+private fun PeriodTabs(periods: List<ChartPeriod>, selected: ChartPeriod, accent: Color, onSelect: (ChartPeriod) -> Unit) {
+    val index = periods.indexOf(selected).coerceAtLeast(0)
+    val tabs: @Composable () -> Unit = {
+        periods.forEach { period ->
             Tab(
                 selected = period == selected,
                 onClick = { onSelect(period) },
                 selectedContentColor = accent,
                 unselectedContentColor = OpenFitColors.OnSurfaceVariant,
-                text = { Text(stringResource(label), style = MaterialTheme.typography.titleMedium) },
+                modifier = if (periods.size > DEFAULT_PERIODS.size) Modifier.widthIn(min = 90.dp) else Modifier,
+                text = { Text(stringResource(periodTabLabel(period)), style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false) },
             )
         }
     }
+    val indicator: @Composable TabIndicatorScope.() -> Unit = {
+        TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(index), height = 2.dp, color = accent)
+    }
+    if (periods.size > DEFAULT_PERIODS.size) {
+        SecondaryScrollableTabRow(
+            selectedTabIndex = index,
+            containerColor = OpenFitColors.Background,
+            contentColor = accent,
+            edgePadding = 0.dp,
+            indicator = { TabRowDefaults.SecondaryIndicator(Modifier.tabIndicatorOffset(index, matchContentSize = false), height = 2.dp, color = accent) },
+            divider = {},
+            tabs = tabs,
+        )
+    } else {
+        SecondaryTabRow(
+            selectedTabIndex = index,
+            containerColor = OpenFitColors.Background,
+            contentColor = accent,
+            indicator = indicator,
+            divider = {},
+            tabs = tabs,
+        )
+    }
+}
+
+private fun periodTabLabel(period: ChartPeriod): Int = when (period) {
+    ChartPeriod.Day -> R.string.cardio_tab_day
+    ChartPeriod.Week -> R.string.cardio_tab_week
+    ChartPeriod.Month -> R.string.cardio_tab_month
+    ChartPeriod.ThreeMonths -> R.string.tab_three_months
+    ChartPeriod.Year -> R.string.cardio_tab_year
 }
 
 @Composable
@@ -211,6 +238,7 @@ fun periodLabel(period: ChartPeriod, anchor: LocalDate, today: LocalDate): Strin
             anchor.year == today.year -> anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
             else -> "${anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())} ${anchor.year}"
         }
+        ChartPeriod.ThreeMonths -> weekRange(days.first(), days.last())
         ChartPeriod.Year -> if (current) stringResource(R.string.this_year) else anchor.year.toString()
     }
 }
@@ -317,7 +345,7 @@ fun LazyListScope.periodRows(
 private fun listTitle(period: ChartPeriod, anchor: LocalDate): String {
     val days = periodDays(period, anchor)
     return when (period) {
-        ChartPeriod.Week -> weekRange(days.first(), days.last())
+        ChartPeriod.Week, ChartPeriod.ThreeMonths -> weekRange(days.first(), days.last())
         ChartPeriod.Month -> anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
         else -> anchor.year.toString()
     }
@@ -326,7 +354,7 @@ private fun listTitle(period: ChartPeriod, anchor: LocalDate): String {
 @Composable
 private fun rowLabel(period: ChartPeriod, row: PeriodRow, today: LocalDate): String = when (period) {
     ChartPeriod.Week, ChartPeriod.Day -> row.start.weekdayDayMonth()
-    ChartPeriod.Month -> weekRange(row.start, row.end)
+    ChartPeriod.Month, ChartPeriod.ThreeMonths -> weekRange(row.start, row.end)
     ChartPeriod.Year -> if (YearMonth.from(row.start) == YearMonth.from(today)) {
         stringResource(R.string.this_month)
     } else {
@@ -342,6 +370,10 @@ fun chartXLabels(period: ChartPeriod, anchor: LocalDate): List<Pair<Int, String>
         (listOf(1) + (5..length step 5)).map { (it - 1) to it.toString() }
     }
     ChartPeriod.Year -> (1..12).map { month -> (month - 1) to java.time.Month.of(month).getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+    // 3 months: label the first week of each month with the month's short name.
+    ChartPeriod.ThreeMonths -> periodDays(period, anchor).chunked(7).mapIndexedNotNull { index, week ->
+        week.firstOrNull { it.dayOfMonth == 1 }?.let { index to it.month.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
+    }
     ChartPeriod.Day -> emptyList()
 }
 

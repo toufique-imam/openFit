@@ -28,6 +28,7 @@ import com.openfit.domain.shiftPeriod
 import com.openfit.domain.targetStatus
 import com.openfit.domain.trainingStatus
 import com.openfit.domain.weekRows
+import com.openfit.domain.weekRowsOf
 import com.openfit.health.DayLoadCache
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectSource
@@ -211,6 +212,7 @@ class CardioLoadViewModel(
             rows = when (period) {
                 ChartPeriod.Week -> dayRows(days, loads)
                 ChartPeriod.Month -> weekRows(YearMonth.from(anchor), loads.filterKeys { it <= end })
+                ChartPeriod.ThreeMonths -> weekRowsOf(days, loads)
                 ChartPeriod.Year -> monthRows(anchor.year, loads.filterKeys { it <= end })
                 ChartPeriod.Day -> emptyList()
             },

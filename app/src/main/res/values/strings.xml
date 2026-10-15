@@ -111,6 +111,7 @@
     <string name="cardio_tab_week">Week</string>
     <string name="cardio_tab_month">Month</string>
     <string name="cardio_tab_year">Year</string>
+    <string name="tab_three_months">3 months</string>
     <string name="this_month">This month</string>
     <string name="this_year">This year</string>
     <string name="back">Back</string>
@@ -257,4 +258,53 @@
     <string name="unit_steps">steps</string>
     <string name="unit_floors">floors</string>
     <string name="unit_calories">calories</string>
+
+    <!-- Heart detail -->
+    <string name="heart_title">Heart</string>
+    <string name="heart_high_in_zone">High of %1$s bpm in %2$s zone</string>
+    <string name="heart_high">High of %1$s bpm</string>
+    <string name="heart_no_data">Wear your device to track your heart rate</string>
+    <string name="zone_light">Light</string>
+    <string name="zone_moderate">Moderate</string>
+    <string name="zone_vigorous">Vigorous</string>
+    <string name="zone_peak">Peak</string>
+    <string name="zone_light_lower">light</string>
+    <string name="zone_moderate_lower">moderate</string>
+    <string name="zone_vigorous_lower">vigorous</string>
+    <string name="zone_peak_lower">peak</string>
+    <string name="heart_rhr_title">Resting heart rate</string>
+    <string name="heart_zones_title">Time in heart-rate zones</string>
+    <string name="heart_zones_subtitle">Your heart rate zones are personalised to your cardiovascular fitness and age</string>
+    <string name="heart_total_time">Total time</string>
+    <string name="heart_zone_share">%1$s · %2$d%% · %3$s</string>
+    <string name="heart_energy">Energy burned</string>
+    <string name="heart_about_title">About your heart</string>
+    <string name="heart_about_body">Being physically active is one way to keep your heart healthy. Heart health is an important part of your overall good health.</string>
+    <string name="heart_about_sheet">Your heart rate shows how hard your heart is working. A lower resting heart rate usually means a fitter heart, and regular time in the moderate zone and above strengthens it.\n\nopenFit reads the heart rate your device writes to Health Connect and places each minute in a zone based on your heart-rate reserve.</string>
+    <string name="heart_rhr_sheet">Resting heart rate is the number of times your heart beats per minute while you are still and well rested, usually measured while you sleep. For most adults it is between 60 and 100 bpm; fitter people tend to have lower rates. A rate well above your usual can be a sign of illness, stress or too little recovery.</string>
+    <string name="heart_zones_sheet">openFit sets your zones from your heart-rate reserve (max heart rate 220 − age, minus your resting rate): moderate from 40 %, vigorous from 60 % and peak from 85 %. Below moderate is the light zone.</string>
+    <string name="heart_chip_resting">Resting heart rate</string>
+    <string name="heart_chip_zones">Heart rate zones</string>
+    <string name="heart_bpm_avg">bpm (avg)</string>
+    <string name="heart_rhr_lower">%d bpm lower than the previous period</string>
+    <string name="heart_rhr_higher">%d bpm higher than the previous period</string>
+    <string name="heart_rhr_same">Same as the previous period</string>
+    <string name="heart_per_day_avg">per day (avg)</string>
+    <string name="heart_zones_total">Your heart rate was in the moderate zone or above for %s in total</string>
+    <string name="heart_list_rhr">Resting heart rate (avg)</string>
+    <plurals name="heart_zones_count">
+        <item quantity="one">%d zone</item>
+        <item quantity="other">%d zones</item>
+    </plurals>
+    <string name="yesterday">Yesterday</string>
+    <string name="this_week_label">This week</string>
+    <string name="value_bpm">%s bpm</string>
+    <plurals name="duration_hours">
+        <item quantity="one">%d hour</item>
+        <item quantity="other">%d hours</item>
+    </plurals>
+    <plurals name="duration_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
 </resources>

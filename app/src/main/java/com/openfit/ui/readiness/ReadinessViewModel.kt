@@ -19,6 +19,7 @@ import com.openfit.domain.readinessBreakdown
 import com.openfit.domain.readinessSummary
 import com.openfit.domain.shiftPeriod
 import com.openfit.domain.weekRows
+import com.openfit.domain.weekRowsOf
 import com.openfit.health.DayLoadCache
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectSource
@@ -115,6 +116,7 @@ class ReadinessViewModel(
                 ChartPeriod.Day -> emptyList()
                 ChartPeriod.Week -> dayRows(days, scores)
                 ChartPeriod.Month -> weekRows(YearMonth.from(anchor), scores.filterKeys { it <= end })
+                ChartPeriod.ThreeMonths -> weekRowsOf(days, scores)
                 ChartPeriod.Year -> monthRows(anchor.year, scores)
             },
             summary = readinessSummary(scores.values.map { it.toInt() }),

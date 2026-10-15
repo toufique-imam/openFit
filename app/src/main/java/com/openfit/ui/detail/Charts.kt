@@ -31,6 +31,7 @@ import androidx.compose.ui.text.drawText
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.openfit.domain.ChartAxis
+import com.openfit.domain.HeartRateZones
 import com.openfit.domain.LoadRange
 import com.openfit.domain.PeriodPoint
 import com.openfit.domain.WorkoutLoad
@@ -292,6 +293,129 @@ fun GuideLegend(items: List<Pair<Int, String>>, modifier: Modifier = Modifier) {
                 repeat(dots) { drawCircle(OpenFitColors.OnSurfaceVariant, 1.dp.toPx(), Offset(start + it * gap, size.height / 2)) }
             }
             Spacer(Modifier.width(8.dp))
+            Text(label, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+        }
+    }
+}
+
+/** Fitbit's heart-rate zone colors. */
+object ZoneColors {
+    val Light = Color(0xFF95D6FF)
+    val Moderate = Color(0xFFFCF485)
+    val Vigorous = Color(0xFFFCBA66)
+    val Peak = Color(0xFFFF8989)
+}
+
+/**
+ * The Heart day chart: per-minute heart rate over shaded zone bands with dotted thresholds. The line takes each
+ * zone's color while it is inside that zone; gaps of over five minutes break it.
+ */
+@Composable
+fun HeartDayChart(
+    byMinute: Map<Long, Double>,
+    dayStartMinute: Long,
+    zones: HeartRateZones?,
+    axisMin: Double,
+    axisMax: Double,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    val xLabels = listOf(0 to "12am", 4 to "4am", 8 to "8am", 12 to "12pm", 16 to "4pm", 20 to "8pm", 23 to "11pm")
+    Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
+        val left = PLOT_LEFT.toPx()
+        val width = PLOT_WIDTH.toPx()
+        val top = 0f
+        val bottom = PLOT_HEIGHT.toPx()
+        fun x(minute: Long): Float = left + ((minute - dayStartMinute) / (24f * 60f)).coerceIn(0f, 1f) * width
+        fun y(bpm: Double): Float = bottom - ((bpm - axisMin) / (axisMax - axisMin)).coerceIn(0.0, 1.0).toFloat() * (bottom - top)
+
+        val bands = zones?.let {
+            listOf(
+                Triple(it.fatBurnFrom.toDouble(), it.cardioFrom.toDouble(), ZoneColors.Moderate),
+                Triple(it.cardioFrom.toDouble(), it.peakFrom.toDouble(), ZoneColors.Vigorous),
+                Triple(it.peakFrom.toDouble(), axisMax, ZoneColors.Peak),
+            )
+        }.orEmpty().filter { (from, _, _) -> from < axisMax }
+        bands.forEach { (from, to, color) ->
+            val bandTop = y(minOf(to, axisMax))
+            val bandBottom = y(maxOf(from, axisMin))
+            drawRect(color.copy(alpha = FILL_ALPHA), Offset(left, bandTop), Size(width, bandBottom - bandTop))
+            if (from > axisMin) dotted(color, Offset(left, y(from)), Offset(left + width, y(from)))
+        }
+
+        val path = Path()
+        var previous: Long? = null
+        byMinute.toSortedMap().forEach { (minute, bpm) ->
+            if (previous == null || minute - previous!! > MAX_GAP_MINUTES) path.moveTo(x(minute), y(bpm)) else path.lineTo(x(minute), y(bpm))
+            previous = minute
+        }
+        val stroke = Stroke(LINE_WIDTH.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        drawPath(path, ZoneColors.Light, style = stroke)
+        bands.forEach { (from, to, color) ->
+            clipRect(top = y(minOf(to, axisMax)), bottom = y(maxOf(from, axisMin))) { drawPath(path, color, style = stroke) }
+        }
+
+        val labelX = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
+        val values = listOf(axisMin) + bands.map { it.first }.filter { it > axisMin } + axisMax
+        values.forEach { value ->
+            val layout = measurer.measure(value.toInt().toString(), labelStyle)
+            drawText(layout, topLeft = Offset(labelX, y(value) - layout.size.height / 2f))
+        }
+        xLabels(measurer, labelStyle, xLabels.map { (hour, label) -> left + hour / 24f * width to label }, bottom, centered = true)
+    }
+}
+
+private const val MAX_GAP_MINUTES = 5
+
+/** A line through one value per slot with a dot on each, on an axis that need not start at zero (resting heart rate). */
+@Composable
+fun LineDotsChart(
+    values: List<Double?>,
+    color: Color,
+    axisMin: Double,
+    axisMax: Double,
+    axisLabels: List<AxisLabel>,
+    xLabels: List<Pair<Int, String>>,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
+        val left = PLOT_LEFT.toPx()
+        val slot = PLOT_WIDTH.toPx() / values.size.coerceAtLeast(1)
+        val bottom = PLOT_HEIGHT.toPx()
+        fun x(index: Int): Float = left + index * slot
+        fun y(value: Double): Float = bottom - ((value - axisMin) / (axisMax - axisMin)).coerceIn(0.0, 1.0).toFloat() * bottom
+        val points = values.mapIndexedNotNull { index, value -> value?.let { Offset(x(index), y(it)) } }
+        if (points.size > 1) {
+            val path = Path().apply {
+                moveTo(points.first().x, points.first().y)
+                points.drop(1).forEach { lineTo(it.x, it.y) }
+            }
+            drawPath(path, color, style = Stroke(LINE_WIDTH.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+        }
+        points.forEach { drawCircle(color, DOT_RADIUS.toPx(), it) }
+        val labelX = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
+        axisLabels.forEach { label ->
+            val layout = measurer.measure(label.text, labelStyle)
+            drawText(layout, topLeft = Offset(labelX, y(label.value) - layout.size.height / 2f))
+        }
+        xLabels(measurer, labelStyle, xLabels.map { (index, label) -> x(index) to label }, bottom, centered = true)
+    }
+}
+
+/** Legend whose markers are dots in each item's color: one dot for the first item, two for the second, and so on. */
+@Composable
+fun DotLegend(items: List<Pair<Color, String>>, modifier: Modifier = Modifier) {
+    Row(modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+        items.forEachIndexed { index, (color, label) ->
+            if (index > 0) Spacer(Modifier.width(20.dp))
+            val dots = index + 1
+            Canvas(Modifier.size(width = (4 * dots + 2).dp, height = 10.dp)) {
+                repeat(dots) { drawCircle(color, 1.dp.toPx(), Offset((1 + 4 * it + 2).dp.toPx(), size.height / 2)) }
+            }
+            Spacer(Modifier.width(6.dp))
             Text(label, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
         }
     }

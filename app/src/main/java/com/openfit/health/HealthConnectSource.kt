@@ -33,7 +33,9 @@ import com.openfit.domain.CardioLoadDay
 import com.openfit.domain.cardioMaxHeartRate
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.Exercise
+import com.openfit.domain.HeartDay
 import com.openfit.domain.HeartRateSample
+import com.openfit.domain.averageBpmByMinute
 import com.openfit.domain.Reading
 import com.openfit.domain.SleepSummary
 import com.openfit.domain.estimateRestingBpm
@@ -137,6 +139,7 @@ class HealthConnectSource(
         return DailyHistory(
             zoneMinutes = loads.mapValues { it.value.zoneMinutes },
             cardioLoad = loads.mapValues { it.value.cardioLoad },
+            heartZoneMinutes = loads.mapValues { it.value.minutes },
             restingBpm = resting
                 .filter { it.time >= start }
                 .groupBy { localDate(it.time) }
@@ -161,6 +164,7 @@ class HealthConnectSource(
         return DailyHistory(
             zoneMinutes = loads.mapValues { it.value.zoneMinutes },
             cardioLoad = loads.mapValues { it.value.cardioLoad },
+            heartZoneMinutes = loads.mapValues { it.value.minutes },
             pendingDays = pending,
         )
     }
@@ -206,8 +210,10 @@ class HealthConnectSource(
         val restingBpm = resting.filter { it.time < dayEnd }.maxByOrNull { it.time }?.beatsPerMinute?.toInt()
             ?: estimateRestingBpm(samples)
             ?: return DayLoad.NONE
+        val minutes = zoneMinutes(samples, heartRateZones(age, restingBpm))
         return DayLoad(
-            zoneMinutes = zoneMinutes(samples, heartRateZones(age, restingBpm)).total,
+            zoneMinutes = minutes.total,
+            minutes = minutes,
             cardioLoad = cardioLoad(samples, restingBpm, cardioMaxHeartRate(age), profile.sex, movingMinutes(dayStart, dayEnd, granted)),
         )
     }
@@ -227,6 +233,27 @@ class HealthConnectSource(
         val byMinute = cardioLoadByMinute(samples, restingBpm, cardioMaxHeartRate(age), profile.sex, movingMinutes(start, end, granted))
         val exercises = window.records(ExerciseSessionRecord::class, start).map { it.toExercise() }
         return CardioLoadDay(date, byMinute, workoutLoads(byMinute, exercises))
+    }
+
+    /** Heart rate for one day: per-minute averages, the day's resting rate and minutes per zone. */
+    suspend fun heartDay(date: LocalDate, profile: Profile): HeartDay {
+        val granted = gateway.grantedPermissions()
+        val start = date.atStartOfDay(zone).toInstant()
+        val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
+        val window = Window(start, end, granted)
+        val samples = window.records(HeartRateRecord::class, start)
+            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val restingRecords = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
+        val restingToday = restingRecords.filter { it.time >= start }.maxByOrNull { it.time }?.beatsPerMinute?.toInt()
+        val restingForZones = restingToday ?: restingRecords.maxByOrNull { it.time }?.beatsPerMinute?.toInt() ?: estimateRestingBpm(samples)
+        val zones = profile.age?.let { age -> restingForZones?.let { heartRateZones(age, it) } }
+        return HeartDay(
+            date = date,
+            byMinute = averageBpmByMinute(samples),
+            restingBpm = restingToday,
+            zones = zones,
+            minutes = zones?.let { zoneMinutes(samples, it) }?.takeIf { samples.isNotEmpty() },
+        )
     }
 
     private suspend fun movingMinutes(start: Instant, end: Instant, granted: Set<String>): Set<Long>? {
@@ -301,7 +328,7 @@ class HealthConnectSource(
         const val DEFAULT_EXERCISE_NAME = "Workout"
 
         /** Bump when the day-load formula changes so cached days are recalculated. */
-        const val LOAD_FORMULA = "v2"
+        const val LOAD_FORMULA = "v4"
 
         val EXERCISE_NAMES: Map<Int, String> = mapOf(
             ExerciseSessionRecord.EXERCISE_TYPE_WALKING to "Walk",

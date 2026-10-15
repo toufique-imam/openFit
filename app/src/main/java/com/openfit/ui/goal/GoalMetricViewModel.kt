@@ -11,6 +11,7 @@ import com.openfit.domain.monthRows
 import com.openfit.domain.periodDays
 import com.openfit.domain.shiftPeriod
 import com.openfit.domain.weekRows
+import com.openfit.domain.weekRowsOf
 import com.openfit.health.DailyTotal
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectTotals
@@ -128,6 +129,7 @@ class GoalMetricViewModel(
                         ChartPeriod.Day -> emptyList()
                         ChartPeriod.Week -> dayRows(days, values)
                         ChartPeriod.Month -> weekRows(YearMonth.from(anchor), values)
+                        ChartPeriod.ThreeMonths -> weekRowsOf(days, values)
                         ChartPeriod.Year -> monthRows(anchor.year, values)
                     },
                 )
