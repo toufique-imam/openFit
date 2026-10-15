@@ -15,7 +15,14 @@ private const val MIN_RESERVE = 0.30
 private const val FULL_WEIGHT_RESERVE = 0.40
 private const val LOW_INTENSITY_WEIGHT = 0.5
 
+/** Max heart rate for heart-rate zones (Fitbit's documented 220 − age). */
 fun maxHeartRate(age: Int): Int = 220 - age
+
+/**
+ * Max heart rate for Cardio Load. Tanaka's 208 − 0.7 × age matched Fitbit's daily cardio load over 17 days far better
+ * than 220 − age (see docs/findings_algorithms.md, "Validation").
+ */
+fun cardioMaxHeartRate(age: Int): Double = 208 - 0.7 * age
 
 fun cardioLoadPerMinute(reserveFraction: Double, sex: Sex?): Double {
     if (reserveFraction < MIN_RESERVE) return 0.0
@@ -28,11 +35,11 @@ fun cardioLoadPerMinute(reserveFraction: Double, sex: Sex?): Double {
 fun cardioLoadByMinute(
     samples: List<HeartRateSample>,
     restingBpm: Int,
-    maxBpm: Int,
+    maxBpm: Double,
     sex: Sex?,
     movingMinutes: Set<Long>?,
 ): Map<Long, Double> {
-    val reserve = (maxBpm - restingBpm).coerceAtLeast(1)
+    val reserve = (maxBpm - restingBpm).coerceAtLeast(1.0)
     return averageBpmByMinute(samples)
         .filterKeys { minute -> movingMinutes == null || minute in movingMinutes }
         .mapValues { (_, bpm) -> cardioLoadPerMinute((bpm - restingBpm) / reserve, sex) }
@@ -42,7 +49,7 @@ fun cardioLoadByMinute(
 fun cardioLoad(
     samples: List<HeartRateSample>,
     restingBpm: Int,
-    maxBpm: Int,
+    maxBpm: Double,
     sex: Sex?,
     movingMinutes: Set<Long>?,
 ): Double = cardioLoadByMinute(samples, restingBpm, maxBpm, sex, movingMinutes).values.sum()

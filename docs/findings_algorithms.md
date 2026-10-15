@@ -104,14 +104,20 @@ Fitbit: "Every day, Fitbit looks at how much cardio load you've earned the past 
 - Month headline = the month's average day vs the 28 days before it: < 0.8 undertrained, < 1.15 maintained, < 1.3 improved, else overtrained. Fitbit called September (44/day after August's 40, ratio 1.10) "Maintained fitness", so the improve threshold is above 1.10.
 - Year points = monthly average day and the average of that month's ranges.
 
-### Validation against Fitbit (20–26 Sept)
+### Validation against Fitbit (Sept 2026)
 
-| | Sun | Mon | Tue | Wed | Thu | Fri | Sat |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| Fitbit | 18 | 103 | 49 | 14 | 77 | 6 | 11 |
-| openFit | 12 | 88 | 39 | 13 | 70 | 6 | 9 |
+Fitbit's daily loads (read off its Week and Month charts) against openFit's for the same days, with temporary logging of formula variants (17 days; Sept 8 excluded — Health Connect only had 93 minutes of heart rate). Sum of squared errors / total bias:
 
-openFit reads ~15 % low. Suspects, in order: sex unset in the profile (the neutral exponent gives ~8–10 % less at high intensity than k = 1.92), the step-based movement gate dropping minutes Fitbit's accelerometer counts, the 30–40 % HRR weighting (×0.5 is a guess), and max HR (220 − age).
+| Variant | SSE | Bias |
+| --- | --- | --- |
+| neutral exponent, max HR 220 − age (old default) | 1295 | −121 |
+| female k = 1.67 | 2483 | −167 |
+| male k = 1.92 | 462 | −70 |
+| male, no movement gate | 170 | −34 |
+| male, 30–40 % HRR weighted 0.70 (best weight) | 182 | −13 |
+| **male, max HR 208 − 0.7 × age (Tanaka)** | **117** | **−10** |
+
+openFit now uses Tanaka's max HR for Cardio Load only (`cardioMaxHeartRate`); AZM zones keep 220 − age as Fitbit documents. The sex exponent matters a lot, so the profile's sex must be set (this user's data fits k = 1.92). Week of 20–26 Sept after the change: Fitbit 18/103/49/14/77/6/11 vs openFit 14/102/44/15/79/6/10. Day loads are cached under a formula version (`LOAD_FORMULA`), bumped whenever the formula changes.
 
 ## Active Zone Minutes targets (`Targets.kt`)
 

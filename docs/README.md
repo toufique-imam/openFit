@@ -29,10 +29,9 @@ is left, so that work can resume without re-deriving it.
 
 Roughly in priority order. Details are in the linked files.
 
-1. **Cardio Load accuracy.** The target range, training status and detail screen
-   (Day/Week/Month/Year) are done. openFit's daily loads read ~15 % below Fitbit's. Set the
-   profile's sex, then compare again; next suspects are the step-based movement gate and the
-   30–40 % HRR weighting. See algorithms §Validation.
+1. **Cardio Load accuracy.** Target range, training status and the Day/Week/Month/Year screen are
+   done, and daily loads match Fitbit within a few points once the profile's sex is set (Tanaka
+   max HR). Still assumed: the Improve window, readiness shifts and training-status thresholds.
 2. **Missing Today tiles**:
    - Health Metrics ("3 of 3 · In personal range")
    - Stress and mindfulness (Mindful days, Stress Management Score)

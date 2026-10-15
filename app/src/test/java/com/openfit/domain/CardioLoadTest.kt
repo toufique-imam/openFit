@@ -27,8 +27,8 @@ class CardioLoadTest {
         val minutes = (0L until 3L).map { HeartRateSample(start.plusSeconds(it * 60), 140) }
         val firstMinute = start.epochSecond / 60
 
-        val all = cardioLoad(minutes, restingBpm = 60, maxBpm = 180, sex = Sex.Male, movingMinutes = null)
-        val moving = cardioLoad(minutes, restingBpm = 60, maxBpm = 180, sex = Sex.Male, movingMinutes = setOf(firstMinute))
+        val all = cardioLoad(minutes, restingBpm = 60, maxBpm = 180.0, sex = Sex.Male, movingMinutes = null)
+        val moving = cardioLoad(minutes, restingBpm = 60, maxBpm = 180.0, sex = Sex.Male, movingMinutes = setOf(firstMinute))
 
         assertEquals(3 * cardioLoadPerMinute(80.0 / 120, Sex.Male), all, 1e-9)
         assertEquals(all / 3, moving, 1e-9)
