@@ -126,6 +126,7 @@ fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
             MiniMetric(
                 label = stringResource(R.string.tile_exercise_days),
                 value = valueText { count(state.exerciseDays.size, profile.weeklyExerciseDaysGoal, smallTotal = true) },
+                onClick = { onOpen(MetricPage.Exercise) },
             ) {
                 SegmentedGauge(
                     Icons.Outlined.FitnessCenter,
@@ -242,6 +243,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             title = stringResource(R.string.tile_exercise_days),
             value = valueText { count(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
             subtitle = weekLabel(state),
+            onClick = { onOpen(MetricPage.Exercise) },
         ) {
             WeekBars(labels, state.week.map { it in state.exerciseDays }, OpenFitColors.Mint)
         }

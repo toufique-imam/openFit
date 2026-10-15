@@ -307,4 +307,28 @@
         <item quantity="one">%d minute</item>
         <item quantity="other">%d minutes</item>
     </plurals>
+
+    <!-- Exercise detail -->
+    <string name="exercise_title">Exercise</string>
+    <string name="exercise_days_unit">exercise days</string>
+    <plurals name="exercise_times">
+        <item quantity="one">You exercised a total of %d time</item>
+        <item quantity="other">You exercised a total of %d times</item>
+    </plurals>
+    <string name="exercise_duration_week">You exercised for a total of %1$s so far this week</string>
+    <string name="exercise_duration_month">You exercised for a total of %1$s so far this month</string>
+    <string name="exercise_duration_past">You exercised for a total of %1$s</string>
+    <string name="exercise_distance_week">You covered a total of %1$s so far this week</string>
+    <string name="exercise_distance_month">You covered a total of %1$s so far this month</string>
+    <string name="exercise_distance_past">You covered a total of %1$s</string>
+    <string name="exercise_chip_days">Exercise days</string>
+    <string name="exercise_chip_duration">Duration</string>
+    <string name="exercise_chip_distance">Distance</string>
+    <string name="exercise_list_header">Exercises</string>
+    <plurals name="exercise_types">
+        <item quantity="one">%d exercise type</item>
+        <item quantity="other">%d exercise types</item>
+    </plurals>
+    <string name="exercise_detail">%1$s · %2$s</string>
+    <string name="exercise_none">No exercise logged</string>
 </resources>

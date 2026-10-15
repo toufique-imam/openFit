@@ -2,6 +2,8 @@ package com.openfit.ui.heart
 
 import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -293,7 +295,7 @@ private fun LazyListScope.periodContent(state: HeartUiState.Ready, onMode: (Hear
                 )
             }
             Row(
-                Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 16.dp),
+                Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(start = 16.dp, end = 16.dp, top = 16.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 ModeChip(stringResource(R.string.heart_chip_resting), state.mode == HeartMode.Resting, Modifier) { onMode(HeartMode.Resting) }

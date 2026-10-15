@@ -52,6 +52,13 @@ fun truncated(value: Double): String = WHOLE.format(kotlin.math.floor(value))
 fun oneDecimal(value: Double): String = ONE_DECIMAL.format(value)
 fun twoDecimals(value: Double): String = TWO_DECIMALS.format(value)
 
+/** Fitbit's compact durations: "17 min", "1 h 13 m", "2 h". */
+fun minutesLabel(minutes: Long): String = when {
+    minutes < 60 -> "$minutes min"
+    minutes % 60 == 0L -> "${minutes / 60} h"
+    else -> "${minutes / 60} h ${minutes % 60} m"
+}
+
 fun shortDuration(minutes: Int): String = if (minutes % 60 == 0) "${minutes / 60}h" else "${minutes / 60}h ${minutes % 60}m"
 
 private val DAY_MONTH = DateTimeFormatter.ofPattern("d MMM")

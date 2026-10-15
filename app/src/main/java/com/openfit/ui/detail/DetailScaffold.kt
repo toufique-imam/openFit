@@ -53,6 +53,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -294,7 +295,10 @@ fun LinkSection(title: String, action: String, body: String, accent: Color, onAc
 
 /** The big number at the top of a period, with its unit or status beside it on the same baseline. */
 @Composable
-fun HeaderValue(value: String, label: String) {
+fun HeaderValue(value: String, label: String) = HeaderValue(AnnotatedString(value), label)
+
+@Composable
+fun HeaderValue(value: AnnotatedString, label: String) {
     Row(verticalAlignment = Alignment.Bottom) {
         Text(value, style = MaterialTheme.typography.displayMedium, color = OpenFitColors.OnSurface, modifier = Modifier.alignByBaseline())
         Spacer(Modifier.width(6.dp))
