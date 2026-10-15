@@ -1,0 +1,32 @@
+package com.openfit.domain
+
+import java.time.Duration
+import java.time.Instant
+
+data class Reading<T>(val value: T, val time: Instant)
+
+data class SleepSummary(val asleep: Duration, val end: Instant)
+
+data class Exercise(val name: String, val start: Instant, val end: Instant) {
+    val duration: Duration get() = Duration.between(start, end)
+}
+
+data class DailyMetrics(
+    val steps: Long? = null,
+    val distanceMeters: Double? = null,
+    val floors: Double? = null,
+    val caloriesOutKcal: Double? = null,
+    val caloriesInKcal: Double? = null,
+    val waterLiters: Double? = null,
+    val zoneMinutes: ZoneMinutes? = null,
+    val sleep: SleepSummary? = null,
+    val exercises: List<Exercise> = emptyList(),
+    val restingBpm: Reading<Int>? = null,
+    val hrvMs: Reading<Double>? = null,
+    val spo2Percent: Reading<Double>? = null,
+    val breathsPerMinute: Reading<Double>? = null,
+    val skinTempDeltaCelsius: Reading<Double>? = null,
+    val vo2Max: Reading<Double>? = null,
+    val weightKg: Reading<Double>? = null,
+    val bodyFatPercent: Reading<Double>? = null,
+)

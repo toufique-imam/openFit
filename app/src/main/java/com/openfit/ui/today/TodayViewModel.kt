@@ -2,10 +2,12 @@ package com.openfit.ui.today
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.openfit.domain.DailyMetrics
+import com.openfit.domain.mergeMetrics
+import com.openfit.health.DailyMetricsSource
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
-import com.openfit.health.TodayRepository
-import com.openfit.health.TodaySummary
+import com.openfit.health.HealthConnectSource
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -18,13 +20,13 @@ import java.time.LocalDate
 sealed interface TodayUiState {
     data object Loading : TodayUiState
     data class Unavailable(val updateRequired: Boolean) : TodayUiState
-    data object PermissionsRequired : TodayUiState
+    data class PermissionsRequired(val permissions: Set<String>) : TodayUiState
     data class Failed(val message: String) : TodayUiState
     data class Ready(
         val date: LocalDate,
-        val summary: TodaySummary,
+        val metrics: DailyMetrics,
         val profile: Profile,
-        val missingPermissions: Boolean,
+        val missingPermissions: Set<String>,
         val refreshing: Boolean = false,
     ) : TodayUiState
 }
@@ -33,6 +35,8 @@ class TodayViewModel(
     private val gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
 ) : ViewModel() {
+
+    private val sources: List<DailyMetricsSource> = listOf(HealthConnectSource(gateway))
 
     private val _state = MutableStateFlow<TodayUiState>(TodayUiState.Loading)
     val state: StateFlow<TodayUiState> = _state.asStateFlow()
@@ -56,16 +60,17 @@ class TodayViewModel(
             HealthConnectAvailability.UpdateRequired -> return TodayUiState.Unavailable(updateRequired = true)
             HealthConnectAvailability.Available -> Unit
         }
-        val granted = gateway.grantedPermissions().intersect(HealthConnectGateway.PERMISSIONS)
-        if (granted.isEmpty()) return TodayUiState.PermissionsRequired
+        val requestable = gateway.requestablePermissions()
+        val missing = requestable - gateway.grantedPermissions()
+        if (missing == requestable) return TodayUiState.PermissionsRequired(requestable)
 
         val date = LocalDate.now()
         val profile = profileStore.load()
         return TodayUiState.Ready(
             date = date,
-            summary = TodayRepository(gateway.client).load(date, granted, profile.age),
+            metrics = mergeMetrics(sources.map { it.load(date, profile) }),
             profile = profile,
-            missingPermissions = granted != HealthConnectGateway.PERMISSIONS,
+            missingPermissions = missing,
         )
     }
 }

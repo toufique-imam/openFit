@@ -1,6 +1,7 @@
 package com.openfit.ui.today
 
 import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.annotation.StringRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,6 +16,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -49,7 +51,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
-import com.openfit.health.HealthConnectGateway
+import com.openfit.domain.DailyMetrics
 import com.openfit.profile.Profile
 import com.openfit.ui.theme.MetricColors
 import java.time.Duration
@@ -62,7 +64,7 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) 
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { viewModel.refresh() }
-    val requestPermissions = { permissionLauncher.launch(HealthConnectGateway.PERMISSIONS) }
+    val requestPermissions = { permissions: Set<String> -> permissionLauncher.launch(permissions) }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
@@ -75,9 +77,9 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) 
             text = stringResource(if (current.updateRequired) R.string.hc_update_required else R.string.hc_unavailable),
             action = if (current.updateRequired) stringResource(R.string.hc_open_store) to onOpenHealthConnectStore else null,
         )
-        TodayUiState.PermissionsRequired -> CenteredMessage(
+        is TodayUiState.PermissionsRequired -> CenteredMessage(
             text = stringResource(R.string.permissions_rationale),
-            action = stringResource(R.string.permissions_grant) to requestPermissions,
+            action = stringResource(R.string.permissions_grant) to { requestPermissions(current.permissions) },
         )
         is TodayUiState.Failed -> CenteredMessage(
             text = current.message,
@@ -86,7 +88,7 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit) 
         is TodayUiState.Ready -> TodayScreen(
             state = current,
             onRefresh = viewModel::refresh,
-            onRequestPermissions = requestPermissions,
+            onRequestPermissions = { requestPermissions(current.missingPermissions) },
             onSaveProfile = viewModel::saveProfile,
         )
     }
@@ -101,7 +103,7 @@ private fun TodayScreen(
     onSaveProfile: (Profile) -> Unit,
 ) {
     var editingProfile by rememberSaveable { mutableStateOf(false) }
-    val summary = state.summary
+    val metrics = state.metrics
     val profile = state.profile
 
     Scaffold(
@@ -135,9 +137,9 @@ private fun TodayScreen(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 item(span = { GridItemSpan(maxLineSpan) }) {
-                    StepsHero(steps = summary.steps, goal = profile.dailyStepGoal)
+                    StepsHero(steps = metrics.steps, goal = profile.dailyStepGoal)
                 }
-                if (state.missingPermissions) {
+                if (state.missingPermissions.isNotEmpty()) {
                     item(span = { GridItemSpan(maxLineSpan) }) {
                         Card(Modifier.fillMaxWidth()) {
                             Column(Modifier.padding(16.dp)) {
@@ -150,54 +152,22 @@ private fun TodayScreen(
                 item {
                     RingTile(
                         label = stringResource(R.string.zone_minutes),
-                        value = summary.zoneMinutes?.total?.toString() ?: "—",
-                        caption = if (profile.age == null) {
+                        value = metrics.zoneMinutes?.total?.toString() ?: "—",
+                        caption = if (metrics.zoneMinutes == null && profile.age == null) {
                             stringResource(R.string.zone_minutes_needs_age)
                         } else {
                             stringResource(R.string.of_goal, profile.dailyZoneMinutesGoal)
                         },
-                        progress = (summary.zoneMinutes?.total ?: 0).toFloat() / profile.dailyZoneMinutesGoal,
+                        progress = (metrics.zoneMinutes?.total ?: 0).toFloat() / profile.dailyZoneMinutesGoal,
                         color = MetricColors.ZoneMinutes,
                     )
                 }
-                item {
+                items(statTiles(metrics)) { tile ->
                     StatTile(
-                        label = stringResource(R.string.resting_heart_rate),
-                        value = summary.restingBpm?.toString() ?: "—",
-                        unit = stringResource(R.string.unit_bpm),
-                        color = MetricColors.HeartRate,
-                    )
-                }
-                item {
-                    StatTile(
-                        label = stringResource(R.string.distance),
-                        value = summary.distanceMeters?.let { "%.2f".format(it / 1000) } ?: "—",
-                        unit = stringResource(R.string.unit_km),
-                        color = MetricColors.Steps,
-                    )
-                }
-                item {
-                    StatTile(
-                        label = stringResource(R.string.floors),
-                        value = summary.floors?.toInt()?.toString() ?: "—",
-                        unit = "",
-                        color = MetricColors.Steps,
-                    )
-                }
-                item {
-                    StatTile(
-                        label = stringResource(R.string.calories),
-                        value = summary.caloriesKcal?.let { "%,d".format(it.toInt()) } ?: "—",
-                        unit = stringResource(R.string.unit_kcal),
-                        color = MetricColors.ZoneMinutes,
-                    )
-                }
-                item {
-                    StatTile(
-                        label = stringResource(R.string.sleep),
-                        value = summary.asleep?.let(::formatDuration) ?: "—",
-                        unit = "",
-                        color = MetricColors.Sleep,
+                        label = stringResource(tile.label),
+                        value = tile.value ?: "—",
+                        unit = tile.unit?.let { stringResource(it) }.orEmpty(),
+                        color = tile.color,
                     )
                 }
             }
@@ -336,5 +306,30 @@ private fun CenteredMessage(
         }
     }
 }
+
+private class StatTileModel(@StringRes val label: Int, val value: String?, @StringRes val unit: Int?, val color: Color)
+
+private fun statTiles(metrics: DailyMetrics): List<StatTileModel> = listOf(
+    StatTileModel(R.string.resting_heart_rate, metrics.restingBpm?.value?.toString(), R.string.unit_bpm, MetricColors.HeartRate),
+    StatTileModel(R.string.sleep, metrics.sleep?.asleep?.let(::formatDuration), null, MetricColors.Sleep),
+    StatTileModel(R.string.distance, metrics.distanceMeters?.let { "%.2f".format(it / 1000) }, R.string.unit_km, MetricColors.Steps),
+    StatTileModel(R.string.floors, metrics.floors?.toInt()?.toString(), null, MetricColors.Steps),
+    StatTileModel(R.string.calories, metrics.caloriesOutKcal?.let { "%,d".format(it.toInt()) }, R.string.unit_kcal, MetricColors.ZoneMinutes),
+    StatTileModel(
+        R.string.exercise,
+        metrics.exercises.takeIf { it.isNotEmpty() }?.let { list -> formatDuration(list.fold(Duration.ZERO) { total, e -> total + e.duration }) },
+        null,
+        MetricColors.ZoneMinutes,
+    ),
+    StatTileModel(R.string.hrv, metrics.hrvMs?.value?.let { "%.0f".format(it) }, R.string.unit_ms, MetricColors.HeartRate),
+    StatTileModel(R.string.spo2, metrics.spo2Percent?.value?.let { "%.0f".format(it) }, R.string.unit_percent, MetricColors.HeartRate),
+    StatTileModel(R.string.breathing_rate, metrics.breathsPerMinute?.value?.let { "%.1f".format(it) }, R.string.unit_breaths, MetricColors.Sleep),
+    StatTileModel(R.string.skin_temperature, metrics.skinTempDeltaCelsius?.value?.let { "%+.1f".format(it) }, R.string.unit_celsius_delta, MetricColors.Sleep),
+    StatTileModel(R.string.cardio_fitness, metrics.vo2Max?.value?.let { "%.0f".format(it) }, R.string.unit_vo2, MetricColors.Steps),
+    StatTileModel(R.string.weight, metrics.weightKg?.value?.let { "%.1f".format(it) }, R.string.unit_kg, MetricColors.Steps),
+    StatTileModel(R.string.body_fat, metrics.bodyFatPercent?.value?.let { "%.1f".format(it) }, R.string.unit_percent, MetricColors.Steps),
+    StatTileModel(R.string.water, metrics.waterLiters?.let { "%.2f".format(it) }, R.string.unit_liters, MetricColors.Steps),
+    StatTileModel(R.string.food, metrics.caloriesInKcal?.let { "%,d".format(it.toInt()) }, R.string.unit_kcal, MetricColors.ZoneMinutes),
+)
 
 private fun formatDuration(duration: Duration): String = "${duration.toHours()}h ${duration.toMinutesPart()}m"
