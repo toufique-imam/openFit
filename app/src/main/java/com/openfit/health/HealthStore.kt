@@ -9,6 +9,7 @@ import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.FloorsClimbedRecord
+import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HydrationRecord
 import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.Record
@@ -83,15 +84,43 @@ class HealthStore(
     /** Records of [type] starting in [start, end), as Health Connect's readRecords would return them. */
     suspend fun <T : Record> read(type: KClass<T>, start: Instant, end: Instant): List<T> {
         if (end <= start) return emptyList()
-        val name = SAVED_TYPES[type] ?: error("Unsupported record ${type.simpleName}")
+        val days = days(start, end)
+        if (days.isEmpty()) return emptyList()
+        val rows = ensure(type, days)
+        val from = start.toEpochMilli()
+        val until = end.toEpochMilli()
+        return days.flatMap { day -> rows[day]?.let(::decode).orEmpty() }
+            .filter { it.start in from until until }
+            .map { it.toRecord(type) }
+    }
+
+    /**
+     * Saves [first]..[last] of [type] from Health Connect where nothing current is saved, without reading it back (the
+     * import); with [force], reads them again whatever is saved.
+     */
+    suspend fun <T : Record> save(type: KClass<T>, first: LocalDate, last: LocalDate, force: Boolean = false) {
+        val days = days(first.atStartOfDay(zone).toInstant(), last.plusDays(1).atStartOfDay(zone).toInstant())
+        if (days.isNotEmpty()) ensure(type, days, force)
+    }
+
+    /** Forgets saved aggregate answers covering [from] or later, so they are asked again. */
+    suspend fun forgetAggregatesFrom(from: LocalDate) = dao.forgetAggregatesFrom(from.toString())
+
+    /** Local days from [start] to the one before [end], stopping at today: later days hold nothing yet. */
+    private fun days(start: Instant, end: Instant): List<LocalDate> {
         val first = day(start)
-        // Days after today hold nothing yet.
         val last = minOf(day(end.minusMillis(1)), LocalDate.now(zone))
-        if (last < first) return emptyList()
-        val days = generateSequence(first) { it.plusDays(1) }.takeWhile { it <= last }.toList()
-        val rows: Map<LocalDate, RecordDayEntity> = lock("records:$name").withLock {
+        return generateSequence(first) { it.plusDays(1) }.takeWhile { it <= last }.toList()
+    }
+
+    /** The saved rows for [days], reading the stale ones from Health Connect first. */
+    private suspend fun <T : Record> ensure(type: KClass<T>, days: List<LocalDate>, force: Boolean = false): Map<LocalDate, RecordDayEntity> {
+        val name = SAVED_TYPES[type] ?: error("Unsupported record ${type.simpleName}")
+        val first = days.first()
+        val last = days.last()
+        return lock("records:$name").withLock {
             val saved = dao.days(name, first.toString(), last.toString()).associateBy { LocalDate.parse(it.day) }
-            val stale = days.filter { day -> saved[day]?.let { isFresh(it.fetchedAt, dayEnd(day)) } != true }
+            val stale = if (force) days else days.filter { day -> saved[day]?.let { isFresh(it.fetchedAt, dayEnd(day)) } != true }
             if (stale.isEmpty()) {
                 budget.savedRead()
                 saved
@@ -108,11 +137,6 @@ class HealthStore(
                 }
             }
         }
-        val from = start.toEpochMilli()
-        val until = end.toEpochMilli()
-        return days.flatMap { day -> rows[day]?.let(::decode).orEmpty() }
-            .filter { it.start in from until until }
-            .map { it.toRecord(type) }
     }
 
     suspend fun <T : Record> read(type: KClass<T>, range: TimeRangeFilter): List<T> =
@@ -219,8 +243,13 @@ class HealthStore(
 
     /** Reads [days] from Health Connect, one request per run of consecutive days, and saves them (empty days too). */
     private suspend fun <T : Record> fetchDays(type: KClass<T>, name: String, days: List<LocalDate>): Map<LocalDate, RecordDayEntity> {
+        // Runs of consecutive days, each at most [maxRun] long: a few days of heart rate already fill several pages.
+        val maxRun = if (type == HeartRateRecord::class) HEART_RATE_RUN_DAYS else RUN_DAYS
         val runs = mutableListOf<MutableList<LocalDate>>()
-        days.sorted().forEach { day -> if (runs.lastOrNull()?.last()?.plusDays(1) == day) runs.last() += day else runs += mutableListOf(day) }
+        days.sorted().forEach { day ->
+            val run = runs.lastOrNull()
+            if (run != null && run.last().plusDays(1) == day && run.size < maxRun) run += day else runs += mutableListOf(day)
+        }
         val result = mutableMapOf<LocalDate, RecordDayEntity>()
         runs.forEach { run ->
             val fetchedAt = System.currentTimeMillis()
@@ -327,6 +356,8 @@ class HealthStore(
         val CHANGES_EVERY: Duration = Duration.ofMinutes(5)
         /** Health Connect's largest page: fewer calls for a day of heart rate or a month of HRV. */
         private const val PAGE_SIZE = 5_000
+        private const val HEART_RATE_RUN_DAYS = 2
+        private const val RUN_DAYS = 31
         private const val MEMORY_DAYS = 64
         private const val MAX_CHANGE_PAGES = 20
         private const val RECENT_DAYS = 7L

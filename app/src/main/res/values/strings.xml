@@ -790,7 +790,7 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="onboarding_units_help">For distance and weight.</string>
     <string name="onboarding_save_continue">Save and continue</string>
     <string name="onboarding_reads_title">What openFit reads</string>
-    <string name="onboarding_reads_body">From Health Connect, kept on this phone. Nothing is uploaded.</string>
+    <string name="onboarding_reads_body">From Health Connect, kept on this phone. openFit copies the last 180 days once, then only what is new.</string>
     <string name="onboarding_reads_activity">Steps, distance, floors and workouts</string>
     <string name="onboarding_reads_heart">Heart rate, resting heart rate and HRV</string>
     <string name="onboarding_reads_sleep">Sleep and its stages</string>
@@ -801,7 +801,7 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="onboarding_connect">Connect Health Connect</string>
     <string name="onboarding_not_now">Not now</string>
     <string name="onboarding_import_title">Getting your data ready</string>
-    <string name="onboarding_import_body">Reading recent weeks from Health Connect and working out your scores. The first time takes a minute.</string>
+    <string name="onboarding_import_body">Copying up to 180 days from Health Connect and working out your scores. This takes a few minutes, once.</string>
     <string name="onboarding_import_reading">Reading Health Connect…</string>
     <string name="onboarding_import_scoring">Working out your scores…</string>
     <string name="onboarding_import_finishing">Almost done…</string>
@@ -835,4 +835,5 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="usage_count">%,d</string>
     <string name="usage_of">%1$,d of %2$,d</string>
     <string name="usage_limited_at">Health Connect limited openFit at %s. Saved data is shown until it allows reads again.</string>
+    <string name="onboarding_import_heart">Reading heart rate… (%1$d of %2$d)</string>
 </resources>

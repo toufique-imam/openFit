@@ -31,6 +31,7 @@ import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.BudgetUsage
 import com.openfit.health.HcPriority
+import com.openfit.health.HealthSync
 import com.openfit.health.HealthConnectSource
 import com.openfit.health.HealthConnectSleep
 import com.openfit.health.HealthConnectVitals
@@ -129,6 +130,7 @@ class TodayViewModel(
     dayLoadCache: DayLoadCache,
     slotCache: SlotCache,
     private val snapshots: SnapshotStore,
+    private val sync: HealthSync,
 ) : ViewModel() {
 
     private val healthConnect = HealthConnectSource(gateway, dayLoadCache)
@@ -268,6 +270,7 @@ class TodayViewModel(
             }
             missingPermissions = main.missingPermissions
             googleHealth = main.googleHealth
+            importIfNeeded()
             _state.update { current ->
                 // Until the new Energy Bank and Pulse Age arrive, the ones on screen for this date stay.
                 val previous = (current as? TodayUiState.Ready)?.takeIf { it.date == date && it.pendingDate == null }
@@ -288,6 +291,16 @@ class TodayViewModel(
             shownProfileKey = profileKey
             shownCurrent = true
             prefetch(date.minusDays(1), profile)
+        }
+    }
+
+    private var importing: Job? = null
+
+    /** The first time, reads the history into openFit's copy in the background, so every screen opens from it later. */
+    private fun importIfNeeded() {
+        if (importing?.isActive == true) return
+        importing = viewModelScope.launch(Dispatchers.Default + HcPriority.Background) {
+            if (sync.importNeeded()) sync.importHistory()
         }
     }
 
@@ -394,8 +407,9 @@ class TodayViewModel(
         val dataTypes = requestable - HealthConnectGateway.OPTIONAL_PERMISSIONS
         val granted = gateway.grantedPermissions()
         val missing = dataTypes - granted
-        // Saved days Health Connect has changed since are forgotten first, so this load reads them again.
-        gateway.store.syncChanges(granted)
+        // The last three days are read again (at most every 15 minutes) and saved days changed since are forgotten,
+        // so this load sees what the watch synced late.
+        sync.refresh(onlyIfDue = true)
         if (missing == dataTypes) return@coroutineScope TodayUiState.PermissionsRequired(requestable)
 
         val today = LocalDate.now()

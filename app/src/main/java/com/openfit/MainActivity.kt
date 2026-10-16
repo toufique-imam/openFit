@@ -45,6 +45,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openfit.googlehealth.GoogleHealthAuth
 import com.openfit.health.DayLoadCache
 import com.openfit.health.HealthConnectGateway
+import com.openfit.health.HealthSync
+import com.openfit.health.SyncWorker
 import com.openfit.profile.ProfileStore
 import com.openfit.ui.BottomBar
 import com.openfit.ui.MetricPage
@@ -94,7 +96,7 @@ import java.time.LocalDate
 
 /** Every preferences file openFit writes, for Delete everything. */
 // The quota model (hc_budget) stays: Health Connect's own count of openFit's reads does not reset with it.
-private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "onboarding", "hc_changes")
+private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "onboarding", "hc_changes", "hc_import")
 
 /** Tells this process apart from an earlier one whose saved state was restored. */
 private val PROCESS = UUID.randomUUID().toString()
@@ -137,6 +139,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var snapshotStore: SnapshotStore
     private lateinit var layoutStore: TodayLayoutStore
     private lateinit var onboardingStore: OnboardingStore
+    private lateinit var healthSync: HealthSync
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -149,6 +152,8 @@ class MainActivity : ComponentActivity() {
         snapshotStore = SnapshotStore(applicationContext)
         layoutStore = TodayLayoutStore(applicationContext)
         onboardingStore = OnboardingStore(applicationContext)
+        healthSync = HealthSync(applicationContext, gateway, dayLoadCache, slotCache, profileStore)
+        SyncWorker.schedule(applicationContext)
         setContent {
             OpenFitTheme {
                 val backStack = rememberSaveable(saver = BackStackSaver) { mutableStateListOf<Screen>(Screen.Tab(RootTab.Today)) }
@@ -156,14 +161,14 @@ class MainActivity : ComponentActivity() {
                 // Each screen keeps its saved state (scroll position, selected period) while it is on the back stack.
                 val screenStates = rememberSaveableStateHolder()
                 val todayViewModel = viewModel {
-                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore)
+                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore, healthSync)
                 }
                 LaunchedEffect(Unit) {
                     Notices.messages.collect { Toast.makeText(applicationContext, it, Toast.LENGTH_SHORT).show() }
                 }
                 var onboarded by remember { mutableStateOf(onboardingStore.done) }
                 if (!onboarded) {
-                    OnboardingRoute(todayViewModel, profileStore, gateway, onOpenHealthConnectStore = ::openHealthConnectStore) {
+                    OnboardingRoute(todayViewModel, healthSync, profileStore, gateway, onOpenHealthConnectStore = ::openHealthConnectStore) {
                         onboardingStore.done = true
                         onboarded = true
                     }

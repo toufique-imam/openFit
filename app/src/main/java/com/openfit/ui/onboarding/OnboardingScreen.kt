@@ -75,6 +75,10 @@ import com.openfit.R
 import com.openfit.domain.Sex
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
+import com.openfit.health.HealthSync
+import com.openfit.health.ImportProgress
+import com.openfit.health.ImportStage
+import androidx.compose.runtime.remember
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import com.openfit.profile.UnitSystem
@@ -107,6 +111,7 @@ private enum class Step { Welcome, Profile, Reads, Import }
 @Composable
 fun OnboardingRoute(
     todayViewModel: TodayViewModel,
+    sync: HealthSync,
     profileStore: ProfileStore,
     gateway: HealthConnectGateway,
     onOpenHealthConnectStore: () -> Unit,
@@ -137,7 +142,7 @@ fun OnboardingRoute(
                 },
                 onNotNow = onFinish,
             )
-            Step.Import -> ImportStep(todayViewModel, onFinish)
+            Step.Import -> ImportStep(sync, todayViewModel, onFinish)
         }
     }
 }
@@ -289,6 +294,8 @@ private fun ProfileStep(initial: Profile, onSave: (Profile) -> Unit) {
 }
 
 private const val MIN_AGE = 5L
+/** The share of the progress bar the history import takes. */
+private const val IMPORT_SHARE = 0.9f
 private const val DEFAULT_AGE = 30L
 
 private fun utcDate(millis: Long): LocalDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
@@ -342,17 +349,34 @@ private val READS = listOf(
 
 /** The first load: today, then Energy Bank, then Pulse Age; Today opens from the snapshot it leaves. */
 @Composable
-private fun ImportStep(todayViewModel: TodayViewModel, onFinish: () -> Unit) {
+private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinish: () -> Unit) {
+    var imported by remember { mutableStateOf<ImportProgress?>(null) }
+    var importDone by remember { mutableStateOf(false) }
     val state by todayViewModel.state.collectAsStateWithLifecycle()
-    LaunchedEffect(Unit) { todayViewModel.refresh() }
-    val ready = state as? TodayUiState.Ready
-    val (progress, stage) = when {
-        ready == null || ready.refreshing || ready.pendingDate != null -> 0.25f to R.string.onboarding_import_reading
-        ready.energyLoading -> 0.6f to R.string.onboarding_import_scoring
-        ready.pulseAgeLoading -> 0.85f to R.string.onboarding_import_finishing
-        else -> 1f to R.string.onboarding_import_finishing
+    LaunchedEffect(Unit) {
+        // The history first (it stops early if Health Connect's quota runs low), then Today from the saved copy.
+        sync.importHistory { imported = it }
+        importDone = true
+        todayViewModel.refresh()
     }
-    val stopped = state is TodayUiState.Failed || state is TodayUiState.PermissionsRequired || state is TodayUiState.Unavailable
+    val ready = (state as? TodayUiState.Ready)?.takeIf { importDone && !it.refreshing && it.pendingDate == null }
+    // The import is most of the work; Today's own load is the last tenth.
+    val importShare = imported?.let { it.done.toFloat() / it.total.coerceAtLeast(1) } ?: 0f
+    val progress = when {
+        !importDone -> IMPORT_SHARE * importShare
+        ready == null -> IMPORT_SHARE
+        ready.energyLoading || ready.pulseAgeLoading -> (1 + IMPORT_SHARE) / 2
+        else -> 1f
+    }
+    val stage = when {
+        !importDone -> when (imported?.stage) {
+            ImportStage.HeartRate -> stringResource(R.string.onboarding_import_heart, imported!!.done, imported!!.total)
+            ImportStage.Scoring -> stringResource(R.string.onboarding_import_scoring)
+            else -> stringResource(R.string.onboarding_import_reading)
+        }
+        else -> stringResource(R.string.onboarding_import_finishing)
+    }
+    val stopped = importDone && (state is TodayUiState.Failed || state is TodayUiState.PermissionsRequired || state is TodayUiState.Unavailable)
     LaunchedEffect(progress, stopped) {
         if (progress >= 1f || stopped) {
             delay(400)
@@ -378,7 +402,7 @@ private fun ImportStep(todayViewModel: TodayViewModel, onFinish: () -> Unit) {
             drawStopIndicator = {},
         )
         Spacer(Modifier.height(16.dp))
-        Text(stringResource(stage), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+        Text(stage, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
     }
 }
 
