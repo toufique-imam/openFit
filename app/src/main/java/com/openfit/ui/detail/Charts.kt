@@ -378,6 +378,7 @@ fun LineDotsChart(
     axisLabels: List<AxisLabel>,
     xLabels: List<Pair<Int, String>>,
     modifier: Modifier = Modifier,
+    goal: Double? = null,
 ) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
@@ -387,6 +388,7 @@ fun LineDotsChart(
         val bottom = PLOT_HEIGHT.toPx()
         fun x(index: Int): Float = left + index * slot
         fun y(value: Double): Float = bottom - ((value - axisMin) / (axisMax - axisMin)).coerceIn(0.0, 1.0).toFloat() * bottom
+        goal?.let { dotted(color, Offset(left, y(it)), Offset(left + PLOT_WIDTH.toPx(), y(it))) }
         val points = values.mapIndexedNotNull { index, value -> value?.let { Offset(x(index), y(it)) } }
         if (points.size > 1) {
             val path = Path().apply {

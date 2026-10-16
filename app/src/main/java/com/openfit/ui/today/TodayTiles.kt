@@ -57,6 +57,7 @@ import com.openfit.R
 import com.openfit.ui.MetricPage
 import com.openfit.domain.MetricReading
 import com.openfit.ui.vitals.abbreviation
+import com.openfit.ui.weight.goalText
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.LoadRange
 import com.openfit.domain.Reading
@@ -330,13 +331,16 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     if (showHeart) item { HeartTile(state, onClick = { onOpen(MetricPage.Heart) }) }
     health.forEach { tile ->
         item {
+            val weight = tile.title == R.string.tile_weight
             MetricTile(
                 title = stringResource(tile.title),
                 value = quantityText(tile.value, stringResource(tile.unit)),
                 subtitle = listOfNotNull(
                     readingDayLabel(state, tile.reading.time),
                     tile.bodyFat?.let { stringResource(R.string.body_fat_detail, it) },
+                    if (weight) metrics.weightKg?.let { goalText(it.value, profile) } else null,
                 ).joinToString(" · "),
+                onClick = if (weight) ({ onOpen(MetricPage.Weight) }) else null,
             ) {
                 IconBadge(tile.icon, OpenFitColors.Blue)
             }
@@ -466,13 +470,8 @@ private class HealthTile(
     val bodyFat: String? = null,
 )
 
+/** Health tiles besides Heart: Fitbit shows HRV, SpO2, breathing rate and skin temperature inside Health Metrics instead. */
 private fun healthTiles(metrics: DailyMetrics, profile: Profile): List<HealthTile> = listOfNotNull(
-    metrics.hrvMs?.let { HealthTile(R.string.tile_hrv, it, whole(it.value), R.string.unit_ms, Icons.Outlined.MonitorHeart) },
-    metrics.spo2Percent?.let { HealthTile(R.string.tile_spo2, it, oneDecimal(it.value), R.string.unit_percent, Icons.Outlined.WaterDrop) },
-    metrics.breathsPerMinute?.let { HealthTile(R.string.tile_breathing_rate, it, oneDecimal(it.value), R.string.unit_breaths, Icons.Outlined.Air) },
-    metrics.skinTempDeltaCelsius?.let {
-        HealthTile(R.string.tile_skin_temperature, it, "%+.1f".format(it.value), R.string.unit_celsius_delta, Icons.Outlined.Thermostat)
-    },
     metrics.vo2Max?.let { HealthTile(R.string.tile_cardio_fitness, it, whole(it.value), R.string.unit_vo2, Icons.AutoMirrored.Outlined.DirectionsRun) },
     metrics.weightKg?.let { weight ->
         val pounds = profile.weightUnit == WeightUnit.Pounds

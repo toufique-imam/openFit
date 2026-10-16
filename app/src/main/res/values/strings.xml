@@ -478,4 +478,15 @@
     <string name="phrase_food">logged a total of %1$s %2$s</string>
     <string name="phrase_water">drank a total of %1$s %2$s</string>
     <string name="sleep_score_subtitle">Sleep Score: %d</string>
+
+    <!-- Weight -->
+    <string name="weight_goal">Weight goal</string>
+    <string name="weight_left_to_lose">%s left to lose</string>
+    <string name="weight_left_to_gain">%s left to gain</string>
+    <string name="weight_goal_met">Weight goal met!</string>
+    <string name="weight_lost_over_period">%s lost over period</string>
+    <string name="weight_gained_over_period">%s gained over period</string>
+    <string name="weight_unchanged_over_period">No weight difference over period</string>
+    <string name="weight_no_data">No weight logged this period</string>
+    <string name="weight_list_header">Weight</string>
 </resources>

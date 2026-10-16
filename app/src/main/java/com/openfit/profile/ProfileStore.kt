@@ -24,6 +24,7 @@ data class Profile(
     val dailyCaloriesOutGoal: Int = 2_500,
     val dailyCaloriesInGoal: Int = 2_000,
     val dailyWaterGoalLiters: Double = 1.9,
+    val weightGoalKg: Double? = null,
 )
 
 class ProfileStore(context: Context) {
@@ -46,6 +47,7 @@ class ProfileStore(context: Context) {
             fitnessGoal = prefs.getString(KEY_FITNESS_GOAL, null)?.let(FitnessGoal::valueOf) ?: defaults.fitnessGoal,
             sleepGoalMinutes = prefs.getInt(KEY_SLEEP_GOAL, defaults.sleepGoalMinutes),
             weeklyExerciseDaysGoal = prefs.getInt(KEY_EXERCISE_DAYS_GOAL, defaults.weeklyExerciseDaysGoal),
+            weightGoalKg = prefs.getFloat(KEY_WEIGHT_GOAL, 0f).takeIf { it > 0f }?.toDouble(),
         )
     }
 
@@ -59,6 +61,7 @@ class ProfileStore(context: Context) {
         .putString(KEY_FITNESS_GOAL, profile.fitnessGoal.name)
         .putInt(KEY_SLEEP_GOAL, profile.sleepGoalMinutes)
         .putInt(KEY_EXERCISE_DAYS_GOAL, profile.weeklyExerciseDaysGoal)
+        .putFloat(KEY_WEIGHT_GOAL, profile.weightGoalKg?.toFloat() ?: 0f)
         .apply()
 
     private companion object {
@@ -71,6 +74,7 @@ class ProfileStore(context: Context) {
         const val KEY_FITNESS_GOAL = "fitness_goal"
         const val KEY_SLEEP_GOAL = "sleep_goal_minutes"
         const val KEY_EXERCISE_DAYS_GOAL = "weekly_exercise_days_goal"
+        const val KEY_WEIGHT_GOAL = "weight_goal_kg"
 
         val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")
     }

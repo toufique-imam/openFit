@@ -6,6 +6,7 @@ import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RespiratoryRateRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SkinTemperatureRecord
+import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.openfit.domain.HealthMetric
@@ -32,6 +33,21 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
                 }.filterValues { !it.isNaN() }
             }
         }
+    }
+
+    /** Weight in kilograms per day (the day's last reading). */
+    suspend fun weights(from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
+        val granted = gateway.grantedPermissions()
+        if (read(WeightRecord::class) !in granted) return emptyMap()
+        val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
+        val records = mutableListOf<WeightRecord>()
+        var pageToken: String? = null
+        do {
+            val response = gateway.client.readRecords(ReadRecordsRequest(WeightRecord::class, range, pageToken = pageToken))
+            records += response.records
+            pageToken = response.pageToken
+        } while (!pageToken.isNullOrEmpty())
+        return records.groupBy { it.time.atZone(zone).toLocalDate() }.mapValues { (_, day) -> day.maxBy { it.time }.weight.inKilograms }
     }
 
     private suspend fun <T : Record> byDay(

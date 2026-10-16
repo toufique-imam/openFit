@@ -311,6 +311,9 @@ internal fun ProfileDialog(
     var exerciseDaysGoal by remember { mutableStateOf(profile.weeklyExerciseDaysGoal.toString()) }
     var units by remember { mutableStateOf(profile.units) }
     var weightUnit by remember { mutableStateOf(profile.weightUnit) }
+    var weightGoal by remember {
+        mutableStateOf(profile.weightGoalKg?.let { oneDecimal(if (profile.weightUnit == WeightUnit.Pounds) it * POUNDS_PER_KG else it) }.orEmpty())
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -341,6 +344,7 @@ internal fun ProfileDialog(
                         units,
                     ) { units = it }
                 }
+                item { NumberField(stringResource(R.string.weight_goal), weightGoal, decimal = true) { weightGoal = it } }
                 item {
                     ChoiceRow(
                         stringResource(R.string.units_weight),
@@ -382,6 +386,7 @@ internal fun ProfileDialog(
                         sleepGoalMinutes = sleepGoalHours.toDoubleOrNull()?.takeIf { it in 1.0..16.0 }?.let { (it * 60).toInt() }
                             ?: profile.sleepGoalMinutes,
                         weeklyExerciseDaysGoal = exerciseDaysGoal.toIntOrNull()?.takeIf { it in 1..7 } ?: profile.weeklyExerciseDaysGoal,
+                        weightGoalKg = weightGoal.toDoubleOrNull()?.takeIf { it > 0 }?.let { if (weightUnit == WeightUnit.Pounds) it / POUNDS_PER_KG else it },
                     ),
                 )
             }) { Text(stringResource(R.string.save)) }
@@ -391,6 +396,7 @@ internal fun ProfileDialog(
 }
 
 private const val MAX_NAME_LENGTH = 40
+private const val POUNDS_PER_KG = 2.20462
 
 @Composable
 private fun <T> ChoiceRow(label: String, options: List<Pair<T, Int>>, selected: T, onSelect: (T) -> Unit) {
