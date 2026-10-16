@@ -194,6 +194,7 @@ class HealthConnectSource(
         if (age == null || read(HeartRateRecord::class) !in window.granted) return emptyMap<LocalDate, DayLoad>() to 0
         val profileKey = "$LOAD_FORMULA:$age:${profile.sex?.name ?: "-"}"
         val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
+        val generation = dayLoadCache.generation()
         val cached = days.associateWith { dayLoadCache.get(profileKey, it) }
         val uncached = days.filter { cached[it] == null }
         // A few days at a time: each reads a day of heart rate, and Health Connect throttles bursts.
@@ -207,7 +208,7 @@ class HealthConnectSource(
                 .toMap()
         }
         val settled = LocalDate.now(zone).minusDays(1)
-        dayLoadCache.putAll(profileKey, computed.filterKeys { it < settled })
+        dayLoadCache.putAll(profileKey, computed.filterKeys { it < settled }, generation)
         val loads = (cached + computed)
             .mapNotNull { (day, load) -> load?.takeIf { it != DayLoad.NONE }?.let { day to it } }
             .toMap()
@@ -346,8 +347,11 @@ class HealthConnectSource(
         val SLEEP_LOOKBACK: Duration = Duration.ofHours(18)
         val NIGHT: Duration = Duration.ofHours(12)
 
-        /** Bump when the day-load formula changes so cached days are recalculated. */
-        const val LOAD_FORMULA = "v4"
+        /**
+         * Bump when the day-load formula changes so cached days are recalculated. v5: v4 could keep days worked out while
+         * the import was still copying them (no heart rate yet, or no resting heart rate or steps).
+         */
+        const val LOAD_FORMULA = "v5"
         const val PARALLEL_DAYS = 4
 
 

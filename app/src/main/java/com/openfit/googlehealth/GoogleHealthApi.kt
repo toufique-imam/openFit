@@ -28,24 +28,51 @@ class GoogleHealthApi(private val accessToken: String) {
                 .put("dataSourceFamily", WEARABLES),
         )
 
-    suspend fun rollUp(dataType: String, start: Instant, end: Instant, window: Duration): JSONObject =
+    /** Totals over [window]s within [start, end), newest first, a page of windows at a time ([pageToken]). */
+    suspend fun rollUp(
+        dataType: String,
+        start: Instant,
+        end: Instant,
+        window: Duration,
+        pageToken: String? = null,
+        pageSize: Int? = null,
+        fields: String? = null,
+    ): JSONObject =
         request(
             "POST",
-            "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:rollUp",
+            "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:rollUp" + (fields?.let { "?fields=${URLEncoder.encode(it, "UTF-8")}" } ?: ""),
             JSONObject()
                 .put("range", JSONObject().put("startTime", start.toString()).put("endTime", end.toString()))
                 .put("windowSize", "${window.seconds}s")
-                .put("dataSourceFamily", WEARABLES),
+                .put("dataSourceFamily", WEARABLES)
+                .apply {
+                    if (pageToken != null) put("pageToken", pageToken)
+                    if (pageSize != null) put("pageSize", pageSize)
+                },
         )
 
-    suspend fun list(dataType: String, filter: String, pageToken: String? = null): JSONObject =
-        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints?${query(filter, pageToken)}")
+    /**
+     * Data points matching [filter], newest first. [family] limits the sources (null: the API's default, needed for
+     * sleep); [pageSize] up to 10,000 (25 for sleep and exercise).
+     */
+    suspend fun list(
+        dataType: String,
+        filter: String,
+        pageToken: String? = null,
+        family: String? = WEARABLES,
+        pageSize: Int? = null,
+        fields: String? = null,
+    ): JSONObject =
+        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints?${query(filter, pageToken, family, pageSize)}" +
+            (fields?.let { "&fields=${URLEncoder.encode(it, "UTF-8")}" } ?: ""))
 
-    suspend fun reconcile(dataType: String, filter: String, pageToken: String? = null): JSONObject =
-        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:reconcile?${query(filter, pageToken)}")
+    suspend fun reconcile(dataType: String, filter: String, pageToken: String? = null, family: String? = WEARABLES, pageSize: Int? = null): JSONObject =
+        request("GET", "$BASE_URL/users/me/dataTypes/$dataType/dataPoints:reconcile?${query(filter, pageToken, family, pageSize)}")
 
-    private fun query(filter: String, pageToken: String?) = buildString {
-        append("filter=${URLEncoder.encode(filter, "UTF-8")}&dataSourceFamily=${URLEncoder.encode(WEARABLES, "UTF-8")}")
+    private fun query(filter: String, pageToken: String?, family: String?, pageSize: Int?) = buildString {
+        append("filter=${URLEncoder.encode(filter, "UTF-8")}")
+        if (family != null) append("&dataSourceFamily=${URLEncoder.encode(family, "UTF-8")}")
+        if (pageSize != null) append("&pageSize=$pageSize")
         if (!pageToken.isNullOrEmpty()) append("&pageToken=${URLEncoder.encode(pageToken, "UTF-8")}")
     }
 
@@ -76,8 +103,11 @@ class GoogleHealthApi(private val accessToken: String) {
         }
     }
 
-    private companion object {
-        const val BASE_URL = "https://health.googleapis.com/v4"
+    companion object {
+        private const val BASE_URL = "https://health.googleapis.com/v4"
+        /** Fitbit and Pixel trackers' data. */
         const val WEARABLES = "users/me/dataSourceFamilies/google-wearables"
+        /** Every source, logs and Health Connect's included: workouts, food and weight are often logged. */
+        const val ALL_SOURCES = "users/me/dataSourceFamilies/all-sources"
     }
 }

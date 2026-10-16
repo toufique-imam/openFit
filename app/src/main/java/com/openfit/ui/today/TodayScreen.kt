@@ -56,6 +56,7 @@ import androidx.health.connect.client.PermissionController
 import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
+import com.openfit.health.SyncState
 import com.openfit.ui.MetricPage
 import com.openfit.profile.Profile
 import com.openfit.ui.theme.OpenFitColors
@@ -74,6 +75,7 @@ fun TodayRoute(
     section: TodaySection? = null,
 ) {
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val syncState by viewModel.syncState.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
     ) { viewModel.refresh() }
@@ -104,6 +106,7 @@ fun TodayRoute(
                 )
                 is TodayUiState.Ready -> TodayScreen(
                     state = current,
+                    syncState = syncState,
                     layout = layout,
                     section = section,
                     onRefresh = viewModel::refresh,
@@ -120,6 +123,7 @@ fun TodayRoute(
 @Composable
 private fun TodayScreen(
     state: TodayUiState.Ready,
+    syncState: SyncState,
     layout: TodayLayout,
     section: TodaySection?,
     onRefresh: () -> Unit,
@@ -131,6 +135,7 @@ private fun TodayScreen(
 
     // While a date with no snapshot loads, the bar already names it and the old day's cards fade.
     val shownDate = state.pendingDate ?: state.date
+    val copy = copyStatus(syncState)
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
@@ -150,6 +155,9 @@ private fun TodayScreen(
                     )
                     UpdatingLine(state.updating || state.pendingDate != null)
                 }
+            }
+            copy?.let { status ->
+                item(key = "copy") { Notice(status, null, null) }
             }
             if (state.missingPermissions.isNotEmpty()) {
                 item(key = "permissions") { Notice(stringResource(R.string.permissions_partial), stringResource(R.string.permissions_grant), onRequestPermissions) }
@@ -273,13 +281,28 @@ private fun DatePickerSheet(selected: LocalDate, onDismiss: () -> Unit, onPick: 
 private fun utcDate(millis: Long): LocalDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
 
 @Composable
-private fun Notice(message: String, action: String, onAction: () -> Unit) {
+private fun Notice(message: String, action: String?, onAction: (() -> Unit)?) {
     Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.CardHigh, modifier = Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp)) {
+        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = if (action == null) 16.dp else 8.dp)) {
             Text(message, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurface)
-            TextButton(onClick = onAction, modifier = Modifier.align(Alignment.End)) { Text(action) }
+            if (action != null && onAction != null) TextButton(onClick = onAction, modifier = Modifier.align(Alignment.End)) { Text(action) }
         }
     }
+}
+
+/**
+ * While openFit's copy of Health Connect is incomplete, what Today says about it: pages read only the copy, so a day
+ * not copied yet shows as no data. Null once the copy is complete.
+ */
+@Composable
+private fun copyStatus(state: SyncState): String? = when (state) {
+    is SyncState.Importing -> stringResource(R.string.copy_importing, state.progress.percent)
+    is SyncState.Waiting -> stringResource(
+        R.string.copy_waiting,
+        state.resumeAt.atZone(java.time.ZoneId.systemDefault()).format(java.time.format.DateTimeFormatter.ofLocalizedTime(java.time.format.FormatStyle.SHORT)),
+    )
+    is SyncState.Idle -> if (state.imported) null else stringResource(R.string.copy_not_done)
+    SyncState.Syncing -> null
 }
 
 internal class NoticeText(@StringRes val messageRes: Int, val message: String? = null)

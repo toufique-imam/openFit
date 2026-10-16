@@ -14,6 +14,7 @@ import com.openfit.health.HealthConnectGateway.Companion.read
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.math.roundToInt
 import kotlin.reflect.KClass
 
@@ -27,6 +28,7 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
         val granted = gateway.grantedPermissions()
         if (read(HeartRateRecord::class) !in granted) return emptyList()
         val settled = LocalDate.now().minusDays(1)
+        val generation = cache.generation()
         val dates = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
         val fresh = mutableMapOf<LocalDate, List<Slot>>()
         val result = dates.map { date ->
@@ -34,7 +36,7 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
             // failing the whole range.
             date to (cache.get(date) ?: readable(date, granted)?.also { if (date < settled) fresh[date] = it } ?: EMPTY_DAY)
         }
-        cache.putAll(fresh)
+        cache.putAll(fresh, generation)
         return result
     }
 
@@ -113,8 +115,11 @@ class SlotCache(context: Context) {
         )
     }
 
-    fun putAll(days: Map<LocalDate, List<Slot>>) {
-        if (days.isEmpty()) return
+    /** Taken before working days out and passed to [putAll]: slots worked out before a [forget] or [clear] are not saved. */
+    fun generation(): Int = GENERATION.get()
+
+    fun putAll(days: Map<LocalDate, List<Slot>>, generation: Int) = synchronized(LOCK) {
+        if (days.isEmpty() || generation != GENERATION.get()) return
         val editor = prefs.edit()
         days.forEach { (date, slots) ->
             editor.putString(key(date), slots.joinToString(",") { "${it.bpm ?: ""}${if (it.asleep) "s" else if (it.exercise) "x" else ""}" })
@@ -123,16 +128,27 @@ class SlotCache(context: Context) {
     }
 
     /** Forgets [dates]: their heart rate, sleep or workouts were read again. */
-    fun forget(dates: Collection<LocalDate>) {
+    fun forget(dates: Collection<LocalDate>) = synchronized(LOCK) {
         if (dates.isEmpty()) return
+        GENERATION.incrementAndGet()
         val editor = prefs.edit()
         dates.forEach { editor.remove(key(it)) }
         editor.apply()
     }
 
+    /** Forgets every day: the import copied them, maybe after a page had worked them out from a partial copy. */
+    fun clear() = synchronized(LOCK) {
+        GENERATION.incrementAndGet()
+        prefs.edit().clear().apply()
+    }
+
     private fun key(date: LocalDate) = "$VERSION:$date"
 
     private companion object {
-        const val VERSION = "v1"
+        /** v2: v1 could keep days worked out while the import was still copying them. */
+        const val VERSION = "v2"
+        /** Shared by every instance: they all write the same preferences. */
+        val GENERATION = AtomicInteger()
+        val LOCK = Any()
     }
 }

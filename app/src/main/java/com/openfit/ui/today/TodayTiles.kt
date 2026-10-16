@@ -19,7 +19,6 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
-import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.SelfImprovement
 import androidx.compose.material.icons.outlined.Spa
@@ -34,9 +33,7 @@ import com.openfit.ui.age.fixed
 import com.openfit.domain.EnergyBand
 import com.openfit.domain.energyBand
 import kotlin.math.roundToInt
-import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.outlined.LocalDrink
 import androidx.compose.material.icons.outlined.LocalFireDepartment
@@ -80,6 +77,7 @@ import com.openfit.profile.UnitSystem
 import com.openfit.profile.WeightUnit
 import com.openfit.ui.theme.MetricColor
 import com.openfit.ui.theme.OpenFitColors
+import com.openfit.ui.theme.OpenFitIcons
 import com.openfit.ui.theme.SectionHeaderStyle
 import java.time.Duration
 import java.time.Instant
@@ -98,6 +96,7 @@ private const val HEART_RANGE_FLOOR = 40f
 private const val HEART_RANGE_CEILING = 200f
 private val TILE_GAUGE: Dp = 66.dp
 private val MINI_GAUGE: Dp = 66.dp
+private val MINI_STROKE: Dp = 7.dp
 private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
 
 /**
@@ -198,7 +197,7 @@ private fun MiniMetric(focus: FocusValue, modifier: Modifier, onClick: (() -> Un
         modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        focus.gauge(MINI_GAUGE, 6.dp, 24.dp)
+        focus.gauge(MINI_GAUGE, MINI_STROKE, 27.dp)
         Box(Modifier.padding(top = 4.dp).height(34.dp), contentAlignment = Alignment.TopCenter) {
             if (focus.value == null) {
                 Text(
@@ -215,14 +214,18 @@ private fun MiniMetric(focus: FocusValue, modifier: Modifier, onClick: (() -> Un
     }
 }
 
-/** A goal's ring, or the icon alone without a goal, at any size. */
-private fun goalGauge(icon: ImageVector, color: MetricColor, value: Double?, goal: Number?): @Composable (Dp, Dp, Dp) -> Unit = { size, stroke, iconSize ->
-    if (value == null || goal == null) {
-        IconBadge(icon, color, size)
-    } else {
-        ArcGauge(icon, color, (value / goal.toDouble()).toFloat(), size = size, stroke = stroke, iconSize = iconSize)
+/** A goal's ring (empty before there is data), or the icon alone without a goal, at any size. */
+private fun goalGauge(icon: ImageVector, color: MetricColor, value: Double?, goal: Number?, iconRotation: Float = 0f): @Composable (Dp, Dp, Dp) -> Unit =
+    { size, stroke, iconSize ->
+        if (goal == null) {
+            IconBadge(icon, color, size)
+        } else {
+            ArcGauge(
+                icon, color, ((value ?: 0.0) / goal.toDouble()).toFloat(),
+                background = OpenFitColors.Background, size = size, stroke = stroke, iconSize = iconSize, iconRotation = iconRotation,
+            )
+        }
     }
-}
 
 private fun arcGauge(icon: ImageVector, color: MetricColor, progress: Float?, from: Float = 0f, range: ClosedFloatingPointRange<Float>? = null): @Composable (Dp, Dp, Dp) -> Unit =
     { size, stroke, iconSize ->
@@ -247,7 +250,7 @@ fun focusValue(tile: TodayTile, state: TodayUiState.Ready): FocusValue {
     return when (tile) {
         TodayTile.SleepDuration -> {
             val asleep = metrics.sleep?.asleep
-            FocusValue(asleep?.let { valueText { duration(it) } }, label, goalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes))
+            FocusValue(asleep?.let { valueText { duration(it) } }, label, goalGauge(OpenFitIcons.MoonSparkle, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes))
         }
         TodayTile.Readiness -> {
             val readiness = state.readiness
@@ -268,7 +271,7 @@ fun focusValue(tile: TodayTile, state: TodayUiState.Ready): FocusValue {
         TodayTile.ExerciseDays -> FocusValue(
             valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal, smallTotal = true) },
             label,
-            segmentGauge(Icons.Outlined.FitnessCenter, OpenFitColors.Mint, profile.weeklyExerciseDaysGoal, state.exerciseDays.size, iconRotation = 90f),
+            segmentGauge(OpenFitIcons.Dumbbell, OpenFitColors.Mint, profile.weeklyExerciseDaysGoal, state.exerciseDays.size, iconRotation = -45f),
         )
         TodayTile.ZoneMinutes -> {
             val zone = metrics.zoneMinutes?.total
@@ -281,7 +284,7 @@ fun focusValue(tile: TodayTile, state: TodayUiState.Ready): FocusValue {
         TodayTile.Steps -> FocusValue(
             AnnotatedString(whole(metrics.steps ?: 0)),
             label,
-            goalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal),
+            goalGauge(OpenFitIcons.Sneaker, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal, iconRotation = 40f),
         )
         TodayTile.HourlyActivity -> {
             val hourly = profile.activeHours?.let { hourlyActivity(metrics.hourlySteps, currentHour = if (state.isToday) LocalTime.now().hour else null, window = it) }
@@ -432,7 +435,7 @@ private fun TileCard(tile: TodayTile, state: TodayUiState.Ready, onOpen: (Metric
                 subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" • "),
                 onClick = open,
             ) {
-                GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
+                GoalGauge(OpenFitIcons.MoonSparkle, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
             }
         }
         TodayTile.Readiness -> {
@@ -512,7 +515,7 @@ private fun TileCard(tile: TodayTile, state: TodayUiState.Ready, onOpen: (Metric
             }
         }
         TodayTile.Steps -> MetricTile(stringResource(R.string.tile_steps), AnnotatedString(whole(metrics.steps ?: 0)), dayLabel(state), onClick = open) {
-            GoalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal)
+            GoalGauge(OpenFitIcons.Sneaker, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal, iconRotation = 40f)
         }
         TodayTile.HourlyActivity -> {
             val window = profile.activeHours
@@ -901,8 +904,8 @@ private fun energyBandText(band: EnergyBand): Int = when (band) {
 
 /** A goal's progress ring, or just its icon while the user has not set the goal (or there is nothing to measure). */
 @Composable
-private fun GoalGauge(icon: ImageVector, color: MetricColor, value: Double?, goal: Number?) {
-    if (value == null || goal == null) IconBadge(icon, color) else ArcGauge(icon, color, (value / goal.toDouble()).toFloat())
+private fun GoalGauge(icon: ImageVector, color: MetricColor, value: Double?, goal: Number?, iconRotation: Float = 0f) {
+    if (goal == null) IconBadge(icon, color) else ArcGauge(icon, color, ((value ?: 0.0) / goal.toDouble()).toFloat(), iconRotation = iconRotation)
 }
 
 /** "3 of 5" exercise days, or just "3" without a weekly goal. */

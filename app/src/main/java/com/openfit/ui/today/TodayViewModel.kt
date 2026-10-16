@@ -21,17 +21,16 @@ import com.openfit.domain.dailyCardioRange
 import com.openfit.domain.dailyTarget
 import com.openfit.domain.readiness
 import com.openfit.domain.weeklyZoneTarget
-import com.openfit.googlehealth.GoogleHealthApi
 import com.openfit.googlehealth.GoogleHealthAuth
 import com.openfit.googlehealth.GoogleHealthAuthorization
-import com.openfit.googlehealth.GoogleHealthException
-import com.openfit.googlehealth.GoogleHealthSource
+import com.openfit.googlehealth.GoogleHealthHistory
 import com.openfit.health.DailyMetricsSource
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.BudgetUsage
 import com.openfit.health.HcPriority
 import com.openfit.health.HealthSync
+import com.openfit.health.SyncState
 import com.openfit.health.HealthConnectSource
 import com.openfit.health.HealthConnectSleep
 import com.openfit.health.HealthConnectVitals
@@ -131,6 +130,7 @@ class TodayViewModel(
     slotCache: SlotCache,
     private val snapshots: SnapshotStore,
     private val sync: HealthSync,
+    private val cloud: GoogleHealthHistory,
 ) : ViewModel() {
 
     private val healthConnect = HealthConnectSource(gateway, dayLoadCache)
@@ -161,6 +161,11 @@ class TodayViewModel(
 
     init {
         viewModelScope.launch(Dispatchers.Default) { snapshots.prune(LocalDate.now().minusDays(SNAPSHOT_DAYS)) }
+        // Whenever a sync finishes (opening the app, the import, the background work), Today reloads from the copy if
+        // the sync read anything new: Today itself never reads Health Connect.
+        viewModelScope.launch { sync.state.collect { if (it is SyncState.Idle) refreshIfStale() } }
+        // The cloud history's top-up (opening the app, pulling) read new days into the copy.
+        viewModelScope.launch { cloud.updated.collect { refreshIfStale() } }
     }
 
     private fun currentDate(): LocalDate = selectedDate ?: LocalDate.now()
@@ -172,24 +177,18 @@ class TodayViewModel(
         show(date, Reload.IfStale)
     }
 
-    /**
-     * Opening the app: Today shows what is saved at once, then the last days are read from Health Connect (at most
-     * every few minutes) and Today reloads from the copy if anything was read.
-     */
-    fun onResume() {
-        refreshIfStale()
-        viewModelScope.launch {
-            sync.startRecent().join()
-            refreshIfStale()
-        }
-    }
+    /** Today coming back on screen: reloads from the copy only if a sync read something since. */
+    fun onResume() = refreshIfStale()
 
     /** Pull to refresh (or permissions or data sources changed): reads the last days now, then reloads. */
     fun refresh() {
         gateway.invalidatePermissions()
         _state.update { if (it is TodayUiState.Ready) it.copy(refreshing = true) else it }
         viewModelScope.launch {
-            sync.syncRecent()
+            // Health Connect's recent days and the cloud history's, side by side.
+            val topUp = launch { cloud.topUp(GoogleHealthHistory.PULL_TOP_UP) }
+            sync.syncRecent(HealthSync.PULL_SYNC)
+            topUp.join()
             show(currentDate(), Reload.Pull)
         }
     }
@@ -199,6 +198,9 @@ class TodayViewModel(
         selectedDate = date.takeIf { it < today }
         show(currentDate(), Reload.IfStale)
     }
+
+    /** The copy of Health Connect being filled: Today shows how far along it is until it is complete. */
+    val syncState: StateFlow<SyncState> get() = sync.state
 
     /** How much of Health Connect's read quota openFit has used, for the profile page. */
     fun healthConnectUsage(): BudgetUsage = gateway.budget.usage()
@@ -322,6 +324,7 @@ class TodayViewModel(
         val at = shownAt ?: return false
         // A sync since read new data into the copy.
         if (sync.lastSync?.isAfter(at) == true) return false
+        if (cloud.updated.value > at.toEpochMilli()) return false
         if (!shownCurrent || shownProfileKey != profileKey || shown.energyLoading || shown.pulseAgeLoading) return false
         val now = Instant.now()
         if (shown.date >= LocalDate.now()) return Duration.between(at, now) < TODAY_FRESH
@@ -434,13 +437,8 @@ class TodayViewModel(
         val healthMetrics = async {
             runCatching { metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date)) }.getOrDefault(emptyList())
         }
-        var (googleHealth, remote) = googleHealthSource()
-        val loaded = try {
-            load(listOfNotNull(remote, healthConnect), date, week, profile)
-        } catch (error: GoogleHealthException) {
-            googleHealth = GoogleHealthStatus.Failed(error.message.orEmpty())
-            load(listOf(healthConnect), date, week, profile)
-        }
+        val googleHealth = googleHealthStatus()
+        val loaded = load(listOf(healthConnect), date, week, profile)
         val metrics = loaded.metrics
         val history = loaded.history.withToday(date, metrics)
         val readiness = readiness(date, history)
@@ -507,18 +505,21 @@ class TodayViewModel(
 
     private class Loaded(val metrics: DailyMetrics, val exerciseDays: Set<LocalDate>, val history: DailyHistory)
 
-    private suspend fun googleHealthSource(): Pair<GoogleHealthStatus, DailyMetricsSource?> {
-        if (!googleHealthAuth.enabled) return GoogleHealthStatus.Off to null
+    /**
+     * Whether Google Health is connected, for the history copy (Profile) that pages read offline: Today never calls the
+     * API. Asking for the token makes no request when it is still valid.
+     */
+    private suspend fun googleHealthStatus(): GoogleHealthStatus {
+        if (!googleHealthAuth.enabled) return GoogleHealthStatus.Off
         return try {
             when (val authorization = googleHealthAuth.authorize()) {
-                is GoogleHealthAuthorization.NeedsConsent -> GoogleHealthStatus.NeedsConsent(authorization.consent) to null
-                is GoogleHealthAuthorization.Authorized ->
-                    GoogleHealthStatus.Connected to GoogleHealthSource(GoogleHealthApi(authorization.accessToken))
+                is GoogleHealthAuthorization.NeedsConsent -> GoogleHealthStatus.NeedsConsent(authorization.consent)
+                is GoogleHealthAuthorization.Authorized -> GoogleHealthStatus.Connected
             }
         } catch (error: CancellationException) {
             throw error
         } catch (error: Exception) {
-            GoogleHealthStatus.Failed(error.message ?: error.javaClass.simpleName) to null
+            GoogleHealthStatus.Failed(error.message ?: error.javaClass.simpleName)
         }
     }
 

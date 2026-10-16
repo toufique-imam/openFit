@@ -43,6 +43,7 @@ import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.openfit.googlehealth.GoogleHealthAuth
+import com.openfit.googlehealth.GoogleHealthHistory
 import com.openfit.health.DayLoadCache
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthSync
@@ -161,7 +162,7 @@ class MainActivity : ComponentActivity() {
                 // Each screen keeps its saved state (scroll position, selected period) while it is on the back stack.
                 val screenStates = rememberSaveableStateHolder()
                 val todayViewModel = viewModel {
-                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore, healthSync)
+                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore, healthSync, GoogleHealthHistory.get(applicationContext))
                 }
                 LaunchedEffect(Unit) {
                     Notices.messages.collect { Toast.makeText(applicationContext, it, Toast.LENGTH_SHORT).show() }
@@ -222,6 +223,14 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    /** Opening the app (or coming back to it): reads the last days from Health Connect, at most every few minutes. */
+    override fun onStart() {
+        super.onStart()
+        healthSync.startRecent()
+        // The cloud history's last days too, once it is copied (the app is in front: the API needs the network).
+        GoogleHealthHistory.get(applicationContext).startTopUp()
     }
 
     /** Back-stack entries are unique by position, so the same page opened twice keeps two states. */

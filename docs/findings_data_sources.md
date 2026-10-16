@@ -35,20 +35,32 @@ Both implement `health/DailyMetricsSource` (`load`, `exerciseDays`, `history`).
 
 ## Google Health API (`googlehealth/`)
 
-- **Base URL:** `https://health.googleapis.com/v4`. Endpoints used: `dailyRollUp` (over a date range),
-  `rollUp`, `list` and `reconcile`, each with page tokens. At most 10 pages per request
-  (`MAX_PAGES`).
-- **Data family:** `dataSourceFamily = google-wearables` restricts results to Fitbit and Pixel
-  devices.
-- **AZM:** rollups return *points*, so cardio and peak are halved to get minutes.
-- **Parsing helpers** (`GoogleHealthParsing.kt`): `parseHourly`, `parseHeartRateRange`,
-  `parseDailyRollups`, `dailyValues`, `sleepMinutesByEndDate`.
-- **Sign-in:** Identity `AuthorizationClient` (`GoogleHealthAuth`). **Not working yet.** It needs an
-  OAuth client in Google Cloud: Android type, package `com.openfit`, the debug and release SHA-1,
-  and the Health API scopes on the consent screen. Status and Connect/Disconnect are in the
-  Profile dialog.
-- **Why it matters:** this is the only way to get Fitbit's *own* AZM, and possibly its
-  Readiness and Sleep Score, instead of recomputing them.
+Used only to copy Fitbit's own history into the local copy (`GoogleHealthHistory`); pages never call it.
+
+- **Why:** Health Connect holds only what was written to it on this phone. On the test phone it was reinstalled on
+  6 Oct 2026, which deleted two years of data; Fitbit's servers still had every day from 7 Aug 2025.
+- **Sign-in:** Identity `AuthorizationClient` (`GoogleHealthAuth`), four read-only scopes (activity and fitness,
+  health metrics, sleep, nutrition). Needs an OAuth client in Google Cloud: Android type, the app's package
+  (`com.openfit.debug` for debug builds) and signing SHA-1, the scopes on the consent screen, and the account as a test
+  user while the app is in Testing. Working since 17 Oct 2026.
+- **Measured limits (17 Oct 2026):**
+  - 300 requests a minute per user; each call takes 0.5–4 s, which sets the pace.
+  - `rollUp` returns up to 10,000 windows a call when asked (`pageSize`, default 1,440), leaves out empty windows,
+    and pages with a `pageToken` in the body. Heart rate and total calories allow 14 days a call, steps, distance and
+    floors 90. A `fields` mask on the average alone halves heart rate's bytes.
+  - `list` stops at about 1,760 points a page whatever `pageSize` asks; sleep and exercise at 25.
+  - The heart-rate rollUp's average is `beatsPerMinuteAvg`. Values can be `"NaN"` (skin temperature).
+  - VO2 max is empty in all three types (`vo2-max`, `run-vo2-max`, `daily-vo2-max`) for a Charge 6 user.
+- **The copy:** each type newest first in chunks within those limits; minute totals (steps, distance) by rollUp, not
+  list (8 calls a year, not 120). 14 months took 173 calls and 8 minutes. Heart rate is kept as one-minute averages:
+  identical, minute by minute, to Health Connect's readings averaged the same way, which is what cardio load and zone
+  minutes use. Steps and distance match Health Connect's to the step.
+- **Storage:** beside Health Connect's rows (`cloud:<type>`), never over them. Per day, the amounts take both and
+  count each moment once; other types take Health Connect's records when it has any, else the cloud's.
+- **Top-up:** on opening the app (at most every 10 minutes) and pulling to refresh (every 30 s), the last 3 days of each
+  type: 14 calls, as types the copy has never held (floors, body fat, VO2 max here) are asked about only weekly.
+- **Network:** an app started in the background (a broadcast) cannot reach the API on Samsung; WorkManager jobs need a
+  network constraint.
 
 ## Merging (`domain/MergeMetrics.kt`, `domain/DailyHistory.kt`)
 

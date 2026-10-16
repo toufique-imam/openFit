@@ -66,13 +66,13 @@ class ProfileStore(context: Context) {
             units = prefs.getString(KEY_UNITS, null)?.let(UnitSystem::valueOf) ?: if (imperial) UnitSystem.Imperial else UnitSystem.Metric,
             weightUnit = prefs.getString(KEY_WEIGHT_UNIT, null)?.let(WeightUnit::valueOf) ?: if (imperial) WeightUnit.Pounds else WeightUnit.Kilograms,
             fitnessGoal = prefs.getString(KEY_FITNESS_GOAL, null)?.let(FitnessGoal::valueOf) ?: FitnessGoal.Maintain,
-            dailyStepGoal = int(KEY_STEP_GOAL),
-            dailyDistanceGoalMeters = double(KEY_DISTANCE_GOAL),
-            dailyFloorsGoal = int(KEY_FLOORS_GOAL),
+            dailyStepGoal = int(KEY_STEP_GOAL) ?: DEFAULT_STEPS,
+            dailyDistanceGoalMeters = double(KEY_DISTANCE_GOAL) ?: DEFAULT_DISTANCE_METERS,
+            dailyFloorsGoal = int(KEY_FLOORS_GOAL) ?: DEFAULT_FLOORS,
             dailyCaloriesOutGoal = int(KEY_ENERGY_GOAL),
-            weeklyExerciseDaysGoal = int(KEY_EXERCISE_DAYS_GOAL),
-            activeHours = activeHours(),
-            sleepGoalMinutes = int(KEY_SLEEP_GOAL),
+            weeklyExerciseDaysGoal = int(KEY_EXERCISE_DAYS_GOAL) ?: DEFAULT_EXERCISE_DAYS,
+            activeHours = activeHours() ?: DEFAULT_ACTIVE_HOURS,
+            sleepGoalMinutes = int(KEY_SLEEP_GOAL) ?: DEFAULT_SLEEP_MINUTES,
             bedtime = time(KEY_BEDTIME),
             wakeTime = time(KEY_WAKE_TIME),
             weeklyMindfulDaysGoal = int(KEY_MINDFUL_DAYS_GOAL),
@@ -128,6 +128,16 @@ class ProfileStore(context: Context) {
     private fun time(key: String): LocalTime? = int(key)?.let { LocalTime.ofSecondOfDay((it - 1) * 60L) }
 
     private companion object {
+        // Fitbit's goals for a new account, used until the user sets their own (Fitbit has no "no goal" for these).
+        const val DEFAULT_STEPS = 10_000
+        /** 5 miles. */
+        const val DEFAULT_DISTANCE_METERS = 8_046.72
+        const val DEFAULT_FLOORS = 10
+        const val DEFAULT_EXERCISE_DAYS = 5
+        const val DEFAULT_SLEEP_MINUTES = 8 * 60
+        /** 9am–6pm. */
+        val DEFAULT_ACTIVE_HOURS = 9..17
+
         const val KEY_NAME = "name"
         const val KEY_AGE = "age"
         const val KEY_BIRTH_DATE = "birth_date_epoch_day"

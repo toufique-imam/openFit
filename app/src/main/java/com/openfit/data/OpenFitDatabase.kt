@@ -69,6 +69,10 @@ interface HealthCacheDao {
     @Query("SELECT * FROM record_days WHERE type = :type AND day BETWEEN :from AND :until")
     suspend fun days(type: String, from: String, until: String): List<RecordDayEntity>
 
+    /** Which of [from]..[until] are saved for [type], without loading their records. */
+    @Query("SELECT day FROM record_days WHERE type = :type AND day BETWEEN :from AND :until")
+    suspend fun savedDays(type: String, from: String, until: String): List<String>
+
     @Upsert
     suspend fun putDays(days: List<RecordDayEntity>)
 
@@ -99,6 +103,14 @@ interface HealthCacheDao {
 
     @Query("DELETE FROM record_days")
     suspend fun clearDays()
+
+    /** Whether any saved day of [type] holds a record (an empty day is saved as "[]"). */
+    @Query("SELECT EXISTS(SELECT 1 FROM record_days WHERE type = :type AND json != '[]')")
+    suspend fun hasRecords(type: String): Boolean
+
+    /** Rows whose type starts with [prefix] ("cloud:"). */
+    @Query("DELETE FROM record_days WHERE type LIKE :prefix || '%'")
+    suspend fun clearDaysOf(prefix: String)
 
     @Query("DELETE FROM aggregates")
     suspend fun clearAggregates()

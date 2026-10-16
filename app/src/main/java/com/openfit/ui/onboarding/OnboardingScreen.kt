@@ -376,7 +376,6 @@ private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinis
             waiting.resumeAt.atZone(java.time.ZoneId.systemDefault()).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)),
         )
         !importDone -> when (imported?.stage) {
-            ImportStage.HeartRate -> stringResource(R.string.onboarding_import_heart, imported.done, imported.total)
             ImportStage.Scoring -> stringResource(R.string.onboarding_import_scoring)
             else -> stringResource(R.string.onboarding_import_reading)
         }

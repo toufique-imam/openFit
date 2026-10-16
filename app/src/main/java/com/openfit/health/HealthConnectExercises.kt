@@ -9,11 +9,7 @@ import com.openfit.domain.InstantSerializer
 import com.openfit.domain.IntRangeSerializer
 import com.openfit.domain.LocalDateSerializer
 import com.openfit.domain.LocalTimeSerializer
-import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
-import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
-import androidx.health.connect.client.request.AggregateRequest
-import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.openfit.health.HealthConnectGateway.Companion.read
 import java.time.Duration
@@ -41,12 +37,8 @@ class HealthConnectExercises(private val gateway: HealthConnectGateway, private 
         if (read(ExerciseSessionRecord::class) !in granted) return emptyList()
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
         val records = gateway.store.read(ExerciseSessionRecord::class, range)
-        val metrics = buildSet {
-            if (read(DistanceRecord::class) in granted) add(TotalMetric.DistanceMeters)
-            if (read(TotalCaloriesBurnedRecord::class) in granted) add(TotalMetric.CaloriesOutKcal)
-        }
         return records.sortedBy { it.startTime }.map { record ->
-            val totals = gateway.store.sessionTotals(record.startTime, record.endTime, metrics)
+            val totals = gateway.store.sessionTotals(record.startTime, record.endTime)
             ExerciseSession(
                 name = record.toExercise().name,
                 type = record.exerciseType,

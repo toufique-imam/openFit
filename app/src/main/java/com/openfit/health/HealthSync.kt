@@ -2,7 +2,6 @@ package com.openfit.health
 
 import android.content.Context
 import android.util.Log
-import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.Record
 import com.openfit.health.HealthConnectGateway.Companion.read
@@ -12,14 +11,13 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.cancelChildren
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.delay
 import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.sync.Mutex
@@ -28,12 +26,15 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import java.time.Instant
 import java.time.LocalDate
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.reflect.KClass
 
-/** Where an import has got to: [done] of [total] steps, now on [stage]. */
-data class ImportProgress(val stage: ImportStage, val done: Int, val total: Int)
+/** Where an import has got to: [done] of [total] days (of every type), now on [stage]. */
+data class ImportProgress(val stage: ImportStage, val done: Int, val total: Int) {
+    val percent: Int get() = (done * 100L / total.coerceAtLeast(1)).toInt().coerceIn(0, 100)
+}
 
-enum class ImportStage { Finding, Reading, HeartRate, Scoring }
+enum class ImportStage { Finding, Reading, Scoring }
 
 sealed interface SyncState {
     /** Nothing running; [lastSync] is when Health Connect was last read, [firstDay] how far back the copy goes. */
@@ -47,7 +48,8 @@ sealed interface SyncState {
 /**
  * Fills openFit's copy of Health Connect ([HealthStore]), which every page and calculation reads instead of Health
  * Connect itself. Health Connect is read only here:
- *  - [importAll]: everything available, from each type's first record (onboarding, and Sync in the profile page);
+ *  - [importAll]: the last [WINDOW_DAYS] days (onboarding, and Sync in the profile page), then [startOlder]: the
+ *    history before them, up to [MAX_YEARS], in the background;
  *  - [syncRecent]: the last [RECENT_DAYS] days again, plus the older days the changes feed reports (opening the app,
  *    pulling to refresh, and the hourly background work).
  * One sync runs at a time (a quick one skips while the import runs) in a scope of its own, so leaving a screen does not
@@ -69,7 +71,8 @@ class HealthSync private constructor(
     /** When Health Connect was last read for recent days (or imported). */
     val lastSync: Instant? get() = prefs.getLong(KEY_LAST_SYNC, 0).takeIf { it > 0 }?.let(Instant::ofEpochMilli)
 
-    val imported: Boolean get() = prefs.getBoolean(KEY_IMPORTED, false)
+    /** Whether the import ran under the current way of copying (an older one copied totals, not raw records). */
+    val imported: Boolean get() = prefs.getBoolean(KEY_IMPORTED, false) && prefs.getInt(KEY_VERSION, 0) >= IMPORT_VERSION
 
     /** Stops what is running (Delete everything). */
     fun stop() = scope.coroutineContext.cancelChildren()
@@ -91,8 +94,29 @@ class HealthSync private constructor(
             .also { importJob = it }
     }
 
-    /** Starts a recent sync in the background unless one ran within [due] minutes. */
-    fun startRecent(dueMinutes: Long = OPEN_SYNC_MINUTES): Job = scope.launch { syncRecent(dueMinutes) }
+    /** Starts a recent sync in the background unless one ran within [due] minutes, then carries on with [startOlder]. */
+    fun startRecent(due: java.time.Duration = OPEN_SYNC): Job = scope.launch {
+        syncRecent(due)
+        // A type granted since the import has only its recent days: import its window (the rest is saved, so only it
+        // is read), which then carries on with its older history.
+        if (imported && newlyGranted().isNotEmpty()) startImport(background = true) else startOlder()
+    }
+
+    /** The granted types the import has not copied yet. */
+    private suspend fun newlyGranted(): Set<String> {
+        val granted = gateway.grantedPermissions()
+        val copied = prefs.getStringSet(KEY_TYPES, null).orEmpty()
+        return SAVED_TYPES.filterKeys { read(it) in granted }.values.toSet() - copied
+    }
+
+    private var olderJob: Job? = null
+    private val older = Mutex()
+
+    /** Starts copying the history before the import's window, unless it is done or going; screens need not wait. */
+    fun startOlder(): Job? = synchronized(this) {
+        if (!imported || prefs.getBoolean(KEY_OLDER_DONE, false)) return null
+        olderJob?.takeIf { it.isActive } ?: scope.launch(HcPriority.Background) { importOlder() }.also { olderJob = it }
+    }
 
     /**
      * Reads everything Health Connect has into the copy, then works out the scores from it. Days already saved are not
@@ -103,8 +127,8 @@ class HealthSync private constructor(
         while (true) {
             val error = running.withLock {
                 try {
-                    import()
-                    prefs.edit().putBoolean(KEY_IMPORTED, true).putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
+                    withContext(HcSource("import")) { import() }
+                    prefs.edit().putBoolean(KEY_IMPORTED, true).putInt(KEY_VERSION, IMPORT_VERSION).putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
                     null
                 } catch (error: CancellationException) {
                     throw error
@@ -114,6 +138,7 @@ class HealthSync private constructor(
             }
             if (error == null) {
                 _state.value = idle()
+                startOlder()
                 return true
             }
             if (!waitForQuota || !isQuota(error)) {
@@ -138,15 +163,17 @@ class HealthSync private constructor(
 
     /**
      * Reads the last [RECENT_DAYS] days again and the older days Health Connect reports changed, then forgets the
-     * scores worked out from them. Skips when it ran within [dueMinutes] (0: always) or while the import runs.
+     * scores worked out from them. Skips when it ran (or was tried) within [due], or while the import runs.
      */
-    suspend fun syncRecent(dueMinutes: Long = 0): Boolean {
-        val since = System.currentTimeMillis() - prefs.getLong(KEY_LAST_SYNC, 0)
-        if (dueMinutes > 0 && since < dueMinutes * 60_000) return true
+    suspend fun syncRecent(due: java.time.Duration = java.time.Duration.ZERO): Boolean {
+        // Counted from the last attempt too: while Health Connect is limiting, a retry every visit would only spend it.
+        val since = System.currentTimeMillis() - maxOf(prefs.getLong(KEY_LAST_SYNC, 0), prefs.getLong(KEY_LAST_ATTEMPT, 0))
+        if (since < due.toMillis()) return true
         if (!running.tryLock()) return false
+        prefs.edit().putLong(KEY_LAST_ATTEMPT, System.currentTimeMillis()).apply()
         return try {
             _state.value = SyncState.Syncing
-            recent()
+            withContext(HcSource("recent")) { recent() }
             prefs.edit().putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
             true
         } catch (error: CancellationException) {
@@ -160,53 +187,111 @@ class HealthSync private constructor(
         }
     }
 
+    /**
+     * The last [WINDOW_DAYS] days of every type, and the evening before them (a night, or an interval running past
+     * midnight, that began then): newest first, a few types at a time, heart rate first since it takes the most pages.
+     */
     private suspend fun import() {
         val granted = gateway.grantedPermissions()
         val store = gateway.store
         val today = LocalDate.now()
         val types = SAVED_TYPES.keys.filter { read(it) in granted }
-        val metrics = TotalMetric.entries.filter { read(it.record) in granted }
-        progress(ImportStage.Finding, 0, 1)
-
-        // The changes feed starts before the reading, so what is written meanwhile is reported to the next sync.
-        store.changedDays(granted)
-        // How far back to read: the earliest first record of any type, found one record (or one yearly total) each.
-        val firsts = coroutineScope {
-            types.map { async { reads.withPermit { store.earliestDay(it) } } } + metrics.map { async { reads.withPermit { store.earliestDay(it) } } }
-        }.awaitAll()
-        val firstDay = maxOf(firsts.filterNotNull().minOrNull() ?: today, today.minusYears(MAX_YEARS))
-        store.firstDay = firstDay
-
-        val weeks = ((today.toEpochDay() - firstDay.toEpochDay()) / WEEK + 1).toInt()
-        val others = types - HeartRateRecord::class
-        val total = others.size + metrics.size + 1 + (if (HeartRateRecord::class in types) weeks else 0) + SCORING_STEPS
-        var done = 0
-        val step = Mutex()
-        suspend fun advance(stage: ImportStage) = step.withLock { progress(stage, ++done, total) }
-
-        // Records and totals, a few requests at a time.
-        coroutineScope {
-            others.forEach { type -> launch { reads.withPermit { store.syncRecords(type, firstDay, today, force = false) }; advance(ImportStage.Reading) } }
-            metrics.forEach { metric -> launch { reads.withPermit { store.syncTotals(metric, firstDay, today, force = false) }; advance(ImportStage.Reading) } }
-            if (TotalMetric.Steps in metrics) launch { reads.withPermit { store.syncMinutes(firstDay, today, force = false) }; advance(ImportStage.Reading) } else advance(ImportStage.Reading)
+        gateway.budget.note {
+            val history = androidx.health.connect.client.permission.HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY in granted
+            "import: ${types.size} types granted, past data (history) ${if (history) "granted" else "NOT granted: only 30 days before the first grant"}"
         }
-        // Heart rate is most of the data: a week at a time, newest first, so recent screens fill first.
-        if (HeartRateRecord::class in types) {
-            repeat(weeks) { week ->
-                val last = today.minusDays(week * WEEK)
-                store.syncRecords(HeartRateRecord::class, maxOf(firstDay, last.minusDays(WEEK - 1)), last, force = false)
-                advance(ImportStage.HeartRate)
+        progress(ImportStage.Finding, 0, 1)
+        // A copy from before raw records holds Health Connect's own totals: they are added up again from the records.
+        if (prefs.getInt(KEY_TOTALS_VERSION, 0) < IMPORT_VERSION) {
+            store.clearTotals()
+            prefs.edit().putInt(KEY_TOTALS_VERSION, IMPORT_VERSION).apply()
+        }
+        // The older history follows again: for a type new since, it is still to copy (the rest costs no call).
+        prefs.edit().remove(KEY_OLDER_DONE).apply()
+
+        // The changes feed starts before the reading, so what is written meanwhile is reported to the next sync. What it
+        // reports now is read again below: a saved day it names is out of date (an import run again, from Sync).
+        val changed = store.changedDays(granted).orEmpty()
+        val from = today.minusDays(WINDOW_DAYS)
+        val total = types.size * (WINDOW_DAYS.toInt() + 1)
+        val done = AtomicInteger()
+        progress(ImportStage.Reading, 0, total)
+        coroutineScope {
+            types.sortedByDescending { it == HeartRateRecord::class }.forEach { type ->
+                launch {
+                    reads.withPermit {
+                        store.syncRecords(type, from, today, force = false) { days -> progress(ImportStage.Reading, done.addAndGet(days), total) }
+                        changed[type]?.filter { it >= today.minusYears(MAX_YEARS) }?.let { days -> store.syncDays(type, days, force = true) }
+                    }
+                }
             }
         }
-        // Each workout's distance and energy.
-        if (ExerciseSessionRecord::class in types) {
-            val sessionMetrics = metrics.filter { it == TotalMetric.DistanceMeters || it == TotalMetric.CaloriesOutKcal }.toSet()
-            val sessions = store.read(ExerciseSessionRecord::class, firstDay.atStartOfDay(java.time.ZoneId.systemDefault()).toInstant(), Instant.now())
-            coroutineScope { sessions.forEach { session -> launch { reads.withPermit { store.sessionTotals(session.startTime, session.endTime, sessionMetrics) } } } }
+        val earliestChanged = changed.values.flatten().filter { it >= today.minusYears(MAX_YEARS) }.minOrNull() ?: from
+        store.firstDay = minOf(store.firstDay, from, earliestChanged)
+        prefs.edit().putString(KEY_WINDOW_FROM, from.toString()).putStringSet(KEY_TYPES, types.mapNotNull { SAVED_TYPES[it] }.toSet()).apply()
+        progress(ImportStage.Scoring, total, total)
+        // Heart rate was read beside the amounts: add them up again now that the wearables' apps are known.
+        store.addUpAgain(from, today)
+        // Pages may have worked days out while their heart rate, resting heart rate or steps were still being copied.
+        // Every day the copy holds is worked out again, not just the window: the cache was cleared for all of them,
+        // and the cloud history can reach far before it.
+        dayLoadCache.clear()
+        slotCache.clear()
+        score(store.firstDay, today)
+    }
+
+    /**
+     * The history before the import's window, up to [MAX_YEARS]: each type from its first record (one call to find),
+     * one type at a time at background priority, so pages and recent syncs keep the quota they need. Stops at the
+     * quota and carries on next time from what it saved. Returns whether it is done.
+     */
+    suspend fun importOlder(): Boolean {
+        if (!imported || prefs.getBoolean(KEY_OLDER_DONE, false)) return true
+        if (!older.tryLock()) return false
+        return try {
+            withContext(HcSource("older")) { copyOlder() }
+            // The profile page shows how far back the copy goes.
+            if (_state.value is SyncState.Idle) _state.value = idle()
+            true
+        } catch (error: CancellationException) {
+            throw error
+        } catch (error: Exception) {
+            Log.w(TAG, "Older history stopped", error)
+            false
+        } finally {
+            older.unlock()
         }
-        score(firstDay, today)
-        advance(ImportStage.Scoring)
-        advance(ImportStage.Scoring)
+    }
+
+    private suspend fun copyOlder() {
+        val granted = gateway.grantedPermissions()
+        val store = gateway.store
+        val today = LocalDate.now()
+        val windowFrom = prefs.getString(KEY_WINDOW_FROM, null)?.let(LocalDate::parse) ?: return
+        val limit = today.minusYears(MAX_YEARS)
+        var first = windowFrom
+        SAVED_TYPES.filterKeys { read(it) in granted }.forEach { (type, name) ->
+            // Found once: a resumed copy does not ask again.
+            val key = KEY_FIRST_PREFIX + name
+            val earliest = if (prefs.contains(key)) {
+                prefs.getString(key, null)?.let(LocalDate::parse)
+            } else {
+                store.earliestDay(type).also { prefs.edit().putString(key, it?.toString()).apply() }
+            }
+            if (earliest != null && earliest < windowFrom) {
+                val start = maxOf(earliest, limit)
+                store.syncRecords(type, start, windowFrom.minusDays(1), force = false)
+                first = minOf(first, start)
+            }
+        }
+        store.firstDay = minOf(store.firstDay, first)
+        prefs.edit().putBoolean(KEY_OLDER_DONE, true).apply()
+        if (first < windowFrom) {
+            val days = first..windowFrom.minusDays(1)
+            dayLoadCache.forget(days)
+            slotCache.forget(days)
+            score(first, today)
+        }
     }
 
     private suspend fun recent() {
@@ -215,38 +300,21 @@ class HealthSync private constructor(
         val today = LocalDate.now()
         val from = today.minusDays(RECENT_DAYS - 1)
         val types = SAVED_TYPES.keys.filter { read(it) in granted }
-        val metrics = TotalMetric.entries.filter { read(it.record) in granted }
 
         // Older days the feed reports changed (a watch syncing late, history backfilled); a new or expired feed
         // re-reads the last week instead.
         val changed: Map<KClass<out Record>, Set<LocalDate>> = store.changedDays(granted)
-            ?: types.plus(metrics.map { it.record }).associateWith { (0 until FALLBACK_DAYS).map { today.minusDays(it) }.toSet() }
-        val older = changed.mapValues { (_, days) -> days.filter { it < from && it >= store.firstDay } }
+            ?: types.associateWith { (0 until FALLBACK_DAYS).map { today.minusDays(it) }.toSet() }
+        // Days before the copy's first day count too (an app reconnected to Health Connect writing its history back),
+        // within [MAX_YEARS]; the copy then reaches back to them.
+        val limit = today.minusYears(MAX_YEARS)
+        val older = changed.mapValues { (_, days) -> days.filter { it < from && it >= limit } }
+        older.values.flatten().minOrNull()?.let { earliest -> store.firstDay = minOf(store.firstDay, earliest) }
 
+        // One range per type for the recent days (a page each, mostly), and one per run of older changed days.
         coroutineScope {
             types.forEach { type ->
-                launch {
-                    reads.withPermit {
-                        store.syncRecords(type, from, today, force = true)
-                        older[type]?.forEach { day -> store.syncRecords(type, day, day, force = true) }
-                    }
-                }
-            }
-            metrics.forEach { metric ->
-                launch {
-                    reads.withPermit {
-                        store.syncTotals(metric, from, today, force = true)
-                        older[metric.record]?.forEach { day -> store.syncTotals(metric, day, day, force = true) }
-                    }
-                }
-            }
-            if (TotalMetric.Steps in metrics) {
-                launch {
-                    reads.withPermit {
-                        store.syncMinutes(from, today, force = true)
-                        older[TotalMetric.Steps.record]?.forEach { day -> store.syncMinutes(day, day, force = true) }
-                    }
-                }
+                launch { reads.withPermit { store.syncDays(type, (from..today) + older[type].orEmpty(), force = true) } }
             }
         }
         // Scores worked out from days read again are worked out again.
@@ -254,6 +322,25 @@ class HealthSync private constructor(
         dayLoadCache.forget(reread)
         slotCache.forget(reread)
         score(minOf(from, reread.minOrNull() ?: from), today)
+    }
+
+    /**
+     * Works the scores out again from [from] on, after days were added before the copy's (Fitbit's history from the
+     * Google Health API): no Health Connect call.
+     */
+    suspend fun rescore(from: LocalDate) {
+        dayLoadCache.clear()
+        slotCache.clear()
+        score(from, LocalDate.now())
+        if (_state.value is SyncState.Idle) _state.value = idle()
+    }
+
+    /** Works the scores of [from]..today out again (the cloud history's last days were read again). */
+    suspend fun rescoreRecent(from: LocalDate) {
+        val days = from..LocalDate.now()
+        dayLoadCache.forget(days)
+        slotCache.forget(days)
+        score(from, LocalDate.now())
     }
 
     /** Cardio load and zone minutes per day, and Energy Bank's slots, from the copy (no Health Connect calls). */
@@ -282,14 +369,24 @@ class HealthSync private constructor(
         generateSequence(this) { it.plusDays(1) }.takeWhile { it <= other }.toList()
 
     companion object {
+        /**
+         * 2: every type copied raw, totals added up from the records (1 copied Health Connect's totals). A copy from an
+         * older version imports again: the amounts' raw records are new, the rest are saved already.
+         */
+        private const val IMPORT_VERSION = 2
+        /**
+         * The import's window: a year, so every Year view is complete from the start. About 130 Health Connect calls
+         * with a watch's full data (a sixth of the quota), well under a minute; older history follows in the background.
+         */
+        private const val WINDOW_DAYS = 365L
         /** Read again on every sync: a watch often syncs a day or two late. */
         private const val RECENT_DAYS = 3L
         /** Opening the app reads recent days at most this often. */
-        const val OPEN_SYNC_MINUTES = 2L
+        val OPEN_SYNC: java.time.Duration = java.time.Duration.ofMinutes(2)
+        /** Pulls to refresh closer together than this just reload from the copy. */
+        val PULL_SYNC: java.time.Duration = java.time.Duration.ofSeconds(30)
         private const val FALLBACK_DAYS = 7L
         private const val MAX_YEARS = 2L
-        private const val WEEK = 7L
-        private const val SCORING_STEPS = 2
         /** Reads in flight at once (Pulse's figure): enough to overlap, not enough to burst through the quota. */
         private val reads = Semaphore(4)
         private const val TAG = "openFit.sync"
@@ -299,6 +396,13 @@ class HealthSync private constructor(
         private const val MAX_CAUSES = 8
         private const val KEY_IMPORTED = "imported"
         private const val KEY_LAST_SYNC = "last_sync"
+        private const val KEY_LAST_ATTEMPT = "last_attempt"
+        private const val KEY_VERSION = "version"
+        private const val KEY_TOTALS_VERSION = "totals_version"
+        private const val KEY_WINDOW_FROM = "window_from"
+        private const val KEY_OLDER_DONE = "older_done"
+        private const val KEY_TYPES = "types"
+        private const val KEY_FIRST_PREFIX = "first:"
 
         @Volatile private var instance: HealthSync? = null
 

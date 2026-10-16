@@ -135,7 +135,9 @@ private fun DrawScope.gauge(
         val end = progress.coerceIn(start, 1f)
         if (end > start) {
             arc(color.accent, frame, start, end, width)
-        } else {
+        } else if (start > 0f || range != null) {
+            // A reading at one point of a range (heart rate now), or nothing yet against a target: a dot. Plain zero
+            // progress shows just the track, as Fitbit's rings do.
             drawCircle(color.accent, radius = width / 2, center = pointOnArc(frame.angle(start), frame.inset))
         }
     }
@@ -176,22 +178,27 @@ fun ArcGauge(
     size: Dp = 66.dp,
     stroke: Dp = 6.dp,
     iconSize: Dp = GAUGE_ICON,
+    iconRotation: Float = 0f,
 ) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val band = Band(outline = 1.dp.toPx(), halo = 1.dp.toPx(), background = background)
             gauge(color, ArcFrame(GAUGE_START, GAUGE_SWEEP, inset = 0f), stroke.toPx(), progress, range, band, from)
         }
-        Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(iconSize))
-        if (from == 0f && progress >= 1f) {
-            Icon(
-                Icons.Filled.Check,
-                contentDescription = null,
-                tint = color.accent,
-                modifier = Modifier.align(Alignment.BottomCenter).padding(bottom = 2.dp).size(12.dp),
-            )
-        }
+        Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(iconSize).rotate(iconRotation))
+        if (from == 0f && range == null && progress >= 1f) GoalMet(color)
     }
+}
+
+/** Fitbit's tick in the ring's opening once the goal is met. */
+@Composable
+private fun androidx.compose.foundation.layout.BoxScope.GoalMet(color: MetricColor) {
+    Icon(
+        Icons.Filled.Check,
+        contentDescription = null,
+        tint = color.accent,
+        modifier = Modifier.align(Alignment.BottomCenter).size(12.dp),
+    )
 }
 
 @Composable
@@ -223,6 +230,7 @@ fun SegmentedGauge(
             }
         }
         Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(iconSize).rotate(iconRotation))
+        if (filled >= segments && segments > 0) GoalMet(color)
     }
 }
 

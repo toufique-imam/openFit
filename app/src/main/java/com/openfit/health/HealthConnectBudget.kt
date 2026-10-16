@@ -1,6 +1,8 @@
 package com.openfit.health
 
 import android.content.Context
+import android.content.pm.ApplicationInfo
+import android.util.Log
 import java.time.LocalDate
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -14,6 +16,11 @@ class HcPriority private constructor(val background: Boolean) : AbstractCoroutin
     companion object Key : CoroutineContext.Key<HcPriority> {
         val Background = HcPriority(background = true)
     }
+}
+
+/** Names the sync a Health Connect call belongs to ("import", "recent"): every call should carry one. */
+class HcSource(val name: String) : AbstractCoroutineContextElement(Key) {
+    companion object Key : CoroutineContext.Key<HcSource>
 }
 
 /** Thrown before a call that the budget would not cover; its message mentions the quota, as Health Connect's does. */
@@ -43,17 +50,22 @@ data class BudgetUsage(
  */
 class HealthConnectBudget(context: Context, private val clock: () -> Long = System::currentTimeMillis) {
 
+    private val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
+
     private val prefs = context.getSharedPreferences("hc_budget", Context.MODE_PRIVATE)
 
     private class Bucket(val name: String, val capacity: Int, val windowMs: Long)
 
     suspend fun <T> call(kind: String, block: suspend () -> T): T {
         val background = coroutineContext[HcPriority]?.background == true
+        // Who asked: the sync's tag, or (a bug: pages must not read Health Connect) the first openFit frame.
+        val source = if (debuggable) coroutineContext[HcSource]?.name ?: "UNTAGGED ${caller()}" else ""
         synchronized(this) {
             val now = clock()
             val levels = BUCKETS.map { it to level(it, now) }
             val short = levels.firstOrNull { (bucket, level) -> level < 1 + if (background) bucket.capacity * RESERVE else 0.0 }
             if (short != null) {
+                if (debuggable) Log.d(TAG, "$kind <- $source held back (${short.first.name})")
                 count(KEY_DENIED)
                 throw QuotaGuardException("Health Connect read quota nearly used (${short.first.name}); waiting for it to refill")
             }
@@ -69,12 +81,18 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
             editor.putLong("$slot:at", minute).putInt(slot, if (stale) 1 else prefs.getInt(slot, 0) + 1)
             editor.apply()
         }
+        if (debuggable) Log.d(TAG, "$kind <- $source${if (background) " (background)" else ""}")
         return try {
             block()
         } catch (error: Exception) {
             if (error !is QuotaGuardException && error.message?.contains("quota", ignoreCase = true) == true) limited()
             throw error
         }
+    }
+
+    /** Debug builds: what a call asked and got, logged after it (`adb logcat -s openFit.hc`). */
+    fun note(message: () -> String) {
+        if (debuggable) Log.d(TAG, "    ${message()}")
     }
 
     /** A read served from what openFit saved, without calling Health Connect. */
@@ -138,6 +156,11 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
         return minOf(bucket.capacity.toDouble(), left + refilled)
     }
 
+    /** The first openFit frame outside the store and the budget: who caused this call. */
+    private fun caller(): String = Throwable().stackTrace
+        .firstOrNull { frame -> frame.className.startsWith("com.openfit") && INTERNAL.none { frame.className.startsWith(it) } }
+        ?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "?"
+
     private fun count(key: String) {
         prefs.edit().putInt(dayKey(key), prefs.getInt(dayKey(key), 0) + 1).apply()
     }
@@ -145,12 +168,19 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
     private fun dayKey(key: String) = "$key:${LocalDate.now()}"
 
     private companion object {
+        /**
+         * Health Connect's background buckets: openFit is not always in the foreground when it reads (the import goes
+         * on when the user switches app), and Health Connect then counts against the smaller ones. Seen on Android 13,
+         * 17 Oct 2026: limited after 1,044 reads in a few minutes.
+         */
         val BUCKETS = listOf(
-            Bucket("15 min", capacity = 2_000, windowMs = 15 * 60_000L),
-            Bucket("24 h", capacity = 16_000, windowMs = 24 * 3_600_000L),
+            Bucket("15 min", capacity = 1_000, windowMs = 15 * 60_000L),
+            Bucket("24 h", capacity = 8_000, windowMs = 24 * 3_600_000L),
         )
         /** The share of each bucket that background reads leave for the user. */
         const val RESERVE = 0.25
+        const val TAG = "openFit.hc"
+        val INTERNAL = listOf("com.openfit.health.HealthStore", "com.openfit.health.HealthConnectBudget")
         const val RECENT_MINUTES = 15
         const val KEY_CALLS = "calls"
         const val KEY_SAVED = "saved"

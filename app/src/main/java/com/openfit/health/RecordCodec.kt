@@ -52,22 +52,15 @@ data class SavedRecord(
     val kinds: IntArray? = null,
 )
 
-/**
- * When the record starts: its time, or the start of its interval. Health Connect files a record by this. The changes
- * feed also reports the types openFit only adds up, so those are covered too.
- */
+/** When the record starts: its time, or the start of its interval. Health Connect files a record by this. */
 val Record.filedAt: Instant
-    get() = when (this) {
-        is StepsRecord -> startTime
-        is DistanceRecord -> startTime
-        is FloorsClimbedRecord -> startTime
-        is TotalCaloriesBurnedRecord -> startTime
-        is NutritionRecord -> startTime
-        is HydrationRecord -> startTime
-        else -> Instant.ofEpochMilli(toSaved().start)
-    }
+    get() = Instant.ofEpochMilli(toSaved().start)
 
-/** The record types openFit reads one by one (the rest come from aggregates), by a stable name for the cache. */
+/**
+ * The record types openFit copies, by a stable name for the cache. The ones [TotalMetric] adds up (steps, distance,
+ * energy, floors, food, water) are copied raw too: a page of 5,000 holds about three weeks of a day's minute records,
+ * where Health Connect's per-minute totals take a call per three days, and a workout's totals come from them for free.
+ */
 val SAVED_TYPES: Map<KClass<out Record>, String> = @OptIn(ExperimentalMindfulnessSessionApi::class) mapOf(
     HeartRateRecord::class to "heart_rate",
     RestingHeartRateRecord::class to "resting_heart_rate",
@@ -81,7 +74,7 @@ val SAVED_TYPES: Map<KClass<out Record>, String> = @OptIn(ExperimentalMindfulnes
     SleepSessionRecord::class to "sleep",
     ExerciseSessionRecord::class to "exercise",
     MindfulnessSessionRecord::class to "mindfulness",
-)
+) + TotalMetric.entries.associate { it.record to it.key }
 
 @OptIn(ExperimentalMindfulnessSessionApi::class)
 fun Record.toSaved(): SavedRecord {
@@ -122,6 +115,13 @@ fun Record.toSaved(): SavedRecord {
         )
         is ExerciseSessionRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(kind = exerciseType, title = title)
         is MindfulnessSessionRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(kind = mindfulnessSessionType, title = title)
+        // Only what is added up: the amount over the interval.
+        is StepsRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(value = count.toDouble())
+        is DistanceRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(value = distance.inMeters)
+        is FloorsClimbedRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(value = floors)
+        is TotalCaloriesBurnedRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(value = energy.inKilocalories)
+        is NutritionRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(value = energy?.inKilocalories)
+        is HydrationRecord -> base(startTime, startZoneOffset, endTime, endZoneOffset).copy(value = volume.inLiters)
         else -> error("Unsupported record ${this::class.simpleName}")
     }
 }

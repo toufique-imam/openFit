@@ -20,6 +20,11 @@ android {
     }
 
     buildTypes {
+        // A separate app for testing, beside the one in daily use: its own Health Connect permissions, quota and data.
+        debug {
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
+        }
         release {
             isMinifyEnabled = false
         }

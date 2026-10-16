@@ -31,17 +31,14 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
-import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.KeyboardArrowDown
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.BatteryChargingFull
-import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material.icons.outlined.FavoriteBorder
-import androidx.compose.material.icons.outlined.FitnessCenter
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.outlined.LocalDrink
 import androidx.compose.material.icons.outlined.LocalFireDepartment
@@ -82,6 +79,7 @@ import com.openfit.R
 import com.openfit.ui.RootTab
 import com.openfit.ui.theme.MetricColor
 import com.openfit.ui.theme.OpenFitColors
+import com.openfit.ui.theme.OpenFitIcons
 import com.openfit.ui.theme.SectionHeaderStyle
 
 private sealed interface CustomizePage {
@@ -473,13 +471,13 @@ private fun PickRow(label: String, selected: Boolean, onClick: () -> Unit) {
 /** Each card's icon and colour, as on its Today card. */
 val TodayTile.icon: ImageVector
     get() = when (this) {
-        TodayTile.SleepDuration -> Icons.Outlined.Bedtime
+        TodayTile.SleepDuration -> OpenFitIcons.MoonSparkle
         TodayTile.Readiness -> Icons.AutoMirrored.Outlined.DirectionsRun
         TodayTile.EnergyBank -> Icons.Outlined.BatteryChargingFull
         TodayTile.CardioLoad -> Icons.Outlined.MonitorHeart
-        TodayTile.ExerciseDays -> Icons.Outlined.FitnessCenter
+        TodayTile.ExerciseDays -> OpenFitIcons.Dumbbell
         TodayTile.ZoneMinutes -> Icons.Outlined.KeyboardDoubleArrowUp
-        TodayTile.Steps -> Icons.AutoMirrored.Outlined.DirectionsWalk
+        TodayTile.Steps -> OpenFitIcons.Sneaker
         TodayTile.HourlyActivity -> Icons.Outlined.AccessTime
         TodayTile.Distance -> Icons.Outlined.LocationOn
         TodayTile.EnergyBurned -> Icons.Outlined.LocalFireDepartment

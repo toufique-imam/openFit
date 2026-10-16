@@ -32,6 +32,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -45,6 +46,10 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.ui.platform.LocalContext
+import com.openfit.googlehealth.CloudHistoryState
+import com.openfit.googlehealth.GoogleHealthHistory
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -90,6 +95,9 @@ private enum class Editing { None, Name, BirthDate, Sex, Units, WeightUnit, Dele
 fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit, onDeleteEverything: () -> Unit) {
     val syncState by sync.state.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+    val history = remember { GoogleHealthHistory.get(context) }
+    val historyState by history.state.collectAsStateWithLifecycle()
     val ready = state as? TodayUiState.Ready
     val profile = ready?.profile ?: viewModel.profile()
     var editing by rememberSaveable { mutableStateOf(Editing.None) }
@@ -148,8 +156,10 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
                 Spacer(Modifier.height(16.dp))
                 GoogleHealthCard(
                     status = current.googleHealth,
+                    history = historyState,
                     onConnect = { scope.launch { viewModel.connectGoogleHealth()?.let { consentLauncher.launch(IntentSenderRequest.Builder(it).build()) } } },
                     onDisconnect = viewModel::disconnectGoogleHealth,
+                    onCopyHistory = { history.start() },
                 )
             }
 
@@ -255,8 +265,15 @@ private fun Divider() {
 }
 
 @Composable
-private fun GoogleHealthCard(status: GoogleHealthStatus, onConnect: () -> Unit, onDisconnect: () -> Unit) {
+private fun GoogleHealthCard(
+    status: GoogleHealthStatus,
+    history: CloudHistoryState,
+    onConnect: () -> Unit,
+    onDisconnect: () -> Unit,
+    onCopyHistory: () -> Unit,
+) {
     val problem = googleHealthNotice(status)?.let { it.message ?: stringResource(it.messageRes) }
+    val connected = status == GoogleHealthStatus.Connected
     Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.profile_google_health), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
@@ -265,7 +282,32 @@ private fun GoogleHealthCard(status: GoogleHealthStatus, onConnect: () -> Unit, 
                 style = MaterialTheme.typography.bodyMedium,
                 color = OpenFitColors.OnSurfaceVariant,
             )
+            // Fitbit's history, copied into openFit once: how far it goes, or how far the copy has got.
+            when (history) {
+                is CloudHistoryState.Copying -> {
+                    Text(stringResource(R.string.google_health_copying, history.percent), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurface)
+                    LinearProgressIndicator(
+                        progress = { history.percent / 100f },
+                        modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                        color = OpenFitColors.Mint.accent,
+                        trackColor = OpenFitColors.Mint.track,
+                    )
+                }
+                is CloudHistoryState.Idle -> {
+                    val line = when {
+                        history.failed != null -> stringResource(R.string.google_health_copy_failed, history.failed)
+                        history.from != null -> stringResource(R.string.google_health_copied, history.from.format(DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)))
+                        else -> null
+                    }
+                    line?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurface) }
+                }
+            }
             Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                if (connected && history is CloudHistoryState.Idle) {
+                    TextButton(onClick = onCopyHistory) {
+                        Text(stringResource(if (history.from == null) R.string.google_health_copy else R.string.google_health_copy_again), color = OpenFitColors.Mint.accent)
+                    }
+                }
                 if (status == GoogleHealthStatus.Off || problem != null) {
                     TextButton(onClick = onConnect) { Text(stringResource(R.string.google_health_connect), color = OpenFitColors.Mint.accent) }
                 }
@@ -291,7 +333,7 @@ private fun SyncCard(state: SyncState, onSync: () -> Unit) {
             when (state) {
                 is SyncState.Importing -> {
                     val progress = state.progress
-                    Text(stringResource(R.string.sync_importing, progress.done, progress.total), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                    Text(stringResource(R.string.sync_importing, progress.percent), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
                     LinearProgressIndicator(
                         progress = { progress.done.toFloat() / progress.total.coerceAtLeast(1) },
                         modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
@@ -367,8 +409,8 @@ private fun HealthConnectUsageCard(usage: BudgetUsage) {
     }
 }
 
-private const val QUOTA_15M = 2_000
-private const val QUOTA_24H = 16_000
+private const val QUOTA_15M = 1_000
+private const val QUOTA_24H = 8_000
 private const val DAY_MS = 24 * 3_600_000L
 
 @Composable

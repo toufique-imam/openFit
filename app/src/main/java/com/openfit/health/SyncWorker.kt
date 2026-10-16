@@ -13,7 +13,8 @@ import java.util.concurrent.TimeUnit
 
 /**
  * Keeps openFit's copy of Health Connect current while the app is closed, so it opens on today's data: finishes the
- * history import if it stopped, else follows the changes feed and re-reads the last days. Needs Health Connect's
+ * history import if it stopped, else follows the changes feed and re-reads the last days, then carries on copying
+ * the older history. Needs Health Connect's
  * background read permission; without it the work does nothing and the app syncs when opened.
  */
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
@@ -28,6 +29,7 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
             // No waiting for the quota here: Android stops background work after ten minutes.
             if (!sync.imported) sync.importAll(waitForQuota = false)
             sync.syncRecent()
+            sync.importOlder()
         }
         return Result.success()
     }
