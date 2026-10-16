@@ -25,28 +25,39 @@ is left, so that work can resume without re-deriving it.
 - **Cardio Load paper**: [arXiv 2508.11613](https://arxiv.org/html/2508.11613v2) (Google, 2025). A local copy
   may sit at `docs/2508.11613v2.pdf`; it is gitignored (all rights reserved).
 
+## Status
+
+**Built** (Fitbit 4.67 layout, with real data from Health Connect):
+- Today: focus ring, mini gauges and tiles.
+- Bottom tabs: Today, Coach, You.
+- Detail screens:
+  - Cardio Load
+  - Daily Readiness
+  - Steps, Distance, Floors and Energy burned
+  - Heart (with 3 months)
+  - Exercise
+  - Hourly activity
+  - Sleep
+
+**Calibrated against Fitbit's own numbers:**
+
+| Measure | How close |
+| --- | --- |
+| Cardio Load | within a few points (needs the profile's sex) |
+| Readiness | about 9 points RMS |
+| Sleep Score | about 2 points |
+| Zone thresholds | exact |
+| Exercise and hourly counts | exact |
+
 ## Roadmap
 
-Roughly in priority order. Details are in the linked files.
-
-1. **Cardio Load accuracy.** Target range, training status and the Day/Week/Month/Year screen are
-   done, and daily loads match Fitbit within a few points once the profile's sex is set (Tanaka
-   max HR). Still assumed: the Improve window, readiness shifts and training-status thresholds.
-2. **Missing Today tiles**:
-   - Health Metrics ("3 of 3 · In personal range")
-   - Stress and mindfulness (Mindful days, Stress Management Score)
-   - Richer subtitles (Sleep Score, "9 kg left to lose", "2,000 cal below target")
-3. **App chrome**:
-   - Bottom navigation (Today / Coach / You)
-   - The + FAB
-   - Fitbit-style header (battery chip, messages, avatar)
-   - Sticky compact date header while scrolling
-4. **Icons.** Fitbit uses Material Symbols that the bundled icon set lacks: a heart-with-ECG for
-   Cardio Load, a dumbbell, a sneaker for Steps, and a moon with a sparkle for Sleep. Add them as
-   vector drawables; Material Symbols are Apache-2.0.
-5. **Calibration against Fitbit.** Compare our Active Zone Minutes, Cardio Load and Readiness with
-   the live app over a few weeks and tune the constants. Our AZM currently reads higher than
-   Fitbit's.
-6. **Google Health sign-in.** The code is in place, but the OAuth client still has to be created in
-   Google Cloud (Android client, package + SHA-1, Health API scopes).
-7. **Detail screens.** Tapping a tile opens a detail page in Fitbit; openFit has none yet.
+1. **Health Metrics** tile and screen: breathing rate, RHR, HRV, SpO2 and skin temperature against a personal range.
+2. **Active Zone Minutes** screen.
+3. **Nutrition and body:** Food, Water and Weight screens.
+4. **Stress and mindfulness:** mindful days from Health Connect. Fitbit's Stress Management Score needs EDA data Health Connect doesn't carry.
+5. **Profile settings:**
+   - A sleep schedule (bedtime and wake targets) for "Your current sleep schedule" and "days on schedule".
+   - Distance, floors, energy and water goals.
+6. **Hourly activity glance:** Fitbit's stationary-time definition (see algorithms).
+7. **Today chrome:** the header's battery chip and messages, the + FAB, and a sticky date header.
+8. **Calibration:** more Readiness and Sleep Score data once a full month of baseline exists. The Cardio Load Improve window and readiness shifts are still assumed.

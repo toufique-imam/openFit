@@ -148,3 +148,44 @@ For Thu 15 Oct:
 | Longest inactive period | 23 min | 3 h 34 m |
 
 The hours-with-250-steps counts match Fitbit exactly (2 of 9 that day; 15 hours that week). A better proxy needs a motion signal: heart-rate variability while awake, or exercise and step density over 5-minute windows. Until then the glance is approximate.
+
+## Sleep Score (`Sleep.kt`)
+
+Fitbit's Sleep Score is computed on its servers. openFit keeps Fitbit's published shape and fits the constants to Fitbit's own scores:
+
+- **Duration (up to 50):** time asleep ÷ 7 h 45 m, capped at 1.
+- **Quality (up to 25):** deep + REM minutes ÷ 130, capped at 1. Nights without stage data get half.
+- **Restoration (up to 25):** 18 − 0.6 × the night's awake percentage.
+- **Ratings:** 90+ excellent, 80–89 good, 60–79 fair, below 60 poor.
+- **No score:** a main sleep under 3 hours.
+
+Fitted to the five nights with stages that Fitbit scored:
+
+| Night | Asleep | Deep + REM | Awake | Fitbit | openFit |
+| --- | --- | --- | --- | --- | --- |
+| 24 Sept | 298 m | 122 m | 23 % | 58 | 59 |
+| 12 Oct | 381 m | 171 m | 10 % | 78 | 79 |
+| 13 Oct | 308 m | 131 m | 21 % | 65 | 63 |
+| 14 Oct | 316 m | 140 m | 16 % | 68 | 68 |
+| 15 Oct | 472 m | 196 m | 10 % | 85 | 85 |
+
+Several parameter sets fit within about 1 point, so treat the split between the three parts as unconfirmed.
+
+Health Connect's stage minutes agree with Fitbit's timeline:
+- 24 Sept: REM 53 vs 54, Deep 69 vs 70, with the same 2:21–9:09 am window.
+- Total sleep reads 1–2 % lower than Fitbit's.
+
+**"Current sleep schedule":** in Fitbit this is the user's own bedtime target. openFit shows the 30-night median instead, until a schedule setting exists.
+
+## Heart-rate zones (`ZoneMinutes.kt`)
+
+Thresholds sit at 40 %, 60 % and 85 % of heart-rate reserve, with max HR 220 − age. Fitbit rounds each threshold **up**: rest 61, max 190 gives 113 / 139 / 171, matching its Heart chart.
+
+Fitbit's "N zones" on a day counts only moderate, vigorous and peak. For Thu 15 Oct openFit's minutes in zones were:
+
+| Zone | Fitbit | openFit |
+| --- | --- | --- |
+| Moderate | 39 | 40 |
+| Vigorous | 7 | 8 |
+| Peak | 6 | 6 |
+
