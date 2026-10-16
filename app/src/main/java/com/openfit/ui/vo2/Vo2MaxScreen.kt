@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.vo2
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -74,6 +86,7 @@ sealed interface Vo2MaxUiState {
     data object Loading : Vo2MaxUiState
     data object NeedsProfile : Vo2MaxUiState
     data class Failed(val message: String) : Vo2MaxUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -89,12 +102,25 @@ sealed interface Vo2MaxUiState {
     }
 }
 
-class Vo2MaxViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
+class Vo2MaxViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, snapshots: SnapshotStore) : ViewModel() {
 
     private val vitals = HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<Vo2MaxUiState>(Vo2MaxUiState.Loading)
     val state: StateFlow<Vo2MaxUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "vo2", Vo2MaxUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is Vo2MaxUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now())
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Month
     private var anchor: LocalDate = LocalDate.now()
@@ -121,6 +147,9 @@ class Vo2MaxViewModel(gateway: HealthConnectGateway, private val profileStore: P
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val profile = profileStore.load()
                 val age = profile.age
@@ -137,7 +166,13 @@ class Vo2MaxViewModel(gateway: HealthConnectGateway, private val profileStore: P
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                Vo2MaxUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is Vo2MaxUiState.Ready && shownName == name)
+                if (kept) current else Vo2MaxUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? Vo2MaxUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

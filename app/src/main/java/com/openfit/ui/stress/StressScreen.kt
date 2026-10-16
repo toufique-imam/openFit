@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.stress
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -83,17 +95,31 @@ fun stressBandName(band: StressBand): Int = when (band) {
 sealed interface StressUiState {
     data object Loading : StressUiState
     data class Failed(val message: String) : StressUiState
+    @Serializable
     data class Ready(val period: ChartPeriod, val anchor: LocalDate, val today: LocalDate, val days: Map<LocalDate, StressDay>) : StressUiState {
         val day: StressDay? get() = days[anchor]
     }
 }
 
-class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache) : ViewModel() {
+class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snapshots: SnapshotStore) : ViewModel() {
 
     private val source = EnergySource(gateway, slotCache)
 
     private val _state = MutableStateFlow<StressUiState>(StressUiState.Loading)
     val state: StateFlow<StressUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "stress", StressUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is StressUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now())
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
@@ -120,6 +146,9 @@ class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache) : Vie
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
@@ -127,7 +156,13 @@ class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache) : Vie
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                StressUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is StressUiState.Ready && shownName == name)
+                if (kept) current else StressUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? StressUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

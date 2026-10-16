@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.weight
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -69,6 +81,7 @@ private val PERIODS = listOf(ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.Th
 sealed interface WeightUiState {
     data object Loading : WeightUiState
     data class Failed(val message: String) : WeightUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -81,12 +94,25 @@ sealed interface WeightUiState {
     ) : WeightUiState
 }
 
-class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
+class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, snapshots: SnapshotStore) : ViewModel() {
 
     private val vitals = HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<WeightUiState>(WeightUiState.Loading)
     val state: StateFlow<WeightUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "weight", WeightUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is WeightUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now(), profile = profileStore.load())
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Month
     private var anchor: LocalDate = LocalDate.now()
@@ -118,6 +144,9 @@ class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: P
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
@@ -134,7 +163,13 @@ class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: P
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                WeightUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is WeightUiState.Ready && shownName == name)
+                if (kept) current else WeightUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? WeightUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

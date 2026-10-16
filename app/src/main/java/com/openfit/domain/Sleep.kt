@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
@@ -8,6 +12,7 @@ import kotlin.math.roundToInt
 
 enum class SleepStage { Awake, Rem, Light, Deep }
 
+@Serializable
 data class StageSegment(val stage: SleepStage, val start: Instant, val end: Instant) {
     val seconds: Long get() = Duration.between(start, end).seconds
     val minutes: Long get() = Duration.between(start, end).toMinutes()
@@ -20,6 +25,7 @@ data class StageSegment(val stage: SleepStage, val start: Instant, val end: Inst
 fun minutesOf(segments: List<StageSegment>): Long = segments.sumOf { it.seconds } / 60
 
 /** A night of sleep, filed under the day it ended: the main sleep's stages and all the day's sleep combined. */
+@Serializable
 data class SleepNight(
     val date: LocalDate,
     val start: Instant,

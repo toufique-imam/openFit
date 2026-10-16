@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.roundToInt
 
@@ -14,6 +18,7 @@ fun HeartRateZones.zoneOf(bpm: Double): HeartZone = when {
 }
 
 /** One day of heart rate: the per-minute average, the day's resting rate and time in each zone. */
+@Serializable
 data class HeartDay(
     val date: LocalDate,
     val byMinute: Map<Long, Double>,

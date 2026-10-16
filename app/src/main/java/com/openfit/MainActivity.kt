@@ -1,6 +1,14 @@
 package com.openfit
 
 import android.content.Intent
+import android.widget.Toast
+import com.openfit.ui.Notices
+import androidx.lifecycle.lifecycleScope
+import com.openfit.data.OpenFitDatabase
+import com.openfit.ui.profile.ProfileRoute
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
@@ -84,6 +92,9 @@ import com.openfit.ui.today.TodayViewModel
 import com.openfit.ui.you.YouRoute
 import java.time.LocalDate
 
+/** Every preferences file openFit writes, for Delete everything. */
+private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "onboarding")
+
 /** Tells this process apart from an earlier one whose saved state was restored. */
 private val PROCESS = UUID.randomUUID().toString()
 
@@ -146,6 +157,9 @@ class MainActivity : ComponentActivity() {
                 val todayViewModel = viewModel {
                     TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore)
                 }
+                LaunchedEffect(Unit) {
+                    Notices.messages.collect { Toast.makeText(applicationContext, it, Toast.LENGTH_SHORT).show() }
+                }
                 var onboarded by remember { mutableStateOf(onboardingStore.done) }
                 if (!onboarded) {
                     OnboardingRoute(todayViewModel, profileStore, gateway, onOpenHealthConnectStore = ::openHealthConnectStore) {
@@ -186,6 +200,7 @@ class MainActivity : ComponentActivity() {
                                 is Screen.Tab -> TabScreen(top.tab, todayViewModel, layout, open)
                                 is Screen.Metric -> MetricScreen(
                                     screen = top,
+                                    todayViewModel = todayViewModel,
                                     onBack = pop,
                                     onOpen = open,
                                     layout = layout,
@@ -219,6 +234,7 @@ class MainActivity : ComponentActivity() {
                 onOpenGoals = { onOpen(MetricPage.Goals, LocalDate.now()) },
                 onOpenCustomize = { onOpen(MetricPage.CustomizeToday, LocalDate.now()) },
                 onOpenJournal = { onOpen(MetricPage.Journal, LocalDate.now()) },
+                onOpenProfile = { onOpen(MetricPage.Profile, LocalDate.now()) },
             )
             // Today, and the section tabs: one section of Today on its own.
             else -> TodayRoute(
@@ -234,85 +250,87 @@ class MainActivity : ComponentActivity() {
     @Composable
     private fun MetricScreen(
         screen: Screen.Metric,
+        todayViewModel: TodayViewModel,
         onBack: () -> Unit,
         onOpen: (MetricPage, LocalDate) -> Unit,
         layout: TodayLayout,
         onSaveLayout: (TodayLayout) -> Unit,
     ) {
         when (screen.page) {
+            MetricPage.Profile -> ProfileRoute(todayViewModel, onBack, onDeleteEverything = ::deleteEverything)
             MetricPage.CustomizeToday -> CustomizeTodayRoute(layout, onSave = onSaveLayout, onClose = onBack, onOpenHealthConnect = ::openHealthConnectSettings)
             MetricPage.CardioLoad -> {
-                val model = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache) }
+                val model = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 CardioLoadRoute(model, onBack)
             }
             MetricPage.Readiness -> {
-                val model = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache) }
+                val model = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 ReadinessRoute(model, onBack)
             }
             MetricPage.Steps, MetricPage.Distance, MetricPage.Floors, MetricPage.Energy, MetricPage.ZoneMinutes, MetricPage.Food, MetricPage.Water -> {
                 val metric = GoalMetric.valueOf(screen.page.name)
-                val model = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore, dayLoadCache) }
+                val model = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore, dayLoadCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 GoalMetricRoute(model, onBack)
             }
             MetricPage.Heart -> {
-                val model = viewModel { HeartViewModel(gateway, profileStore, dayLoadCache) }
+                val model = viewModel { HeartViewModel(gateway, profileStore, dayLoadCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 HeartRoute(model, onBack)
             }
             MetricPage.Exercise -> {
-                val model = viewModel { ExerciseViewModel(gateway, profileStore) }
+                val model = viewModel { ExerciseViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 ExerciseRoute(model, onBack)
             }
             MetricPage.Hourly -> {
-                val model = viewModel { HourlyViewModel(gateway, profileStore) }
+                val model = viewModel { HourlyViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 HourlyRoute(model, onBack)
             }
             MetricPage.HealthMetrics -> {
-                val model = viewModel { HealthMetricsViewModel(gateway, profileStore) }
+                val model = viewModel { HealthMetricsViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 HealthMetricsRoute(model, onBack, onOpenMetric = { metric -> onOpen(page(metric), screen.date) })
             }
             MetricPage.MetricBreathingRate, MetricPage.MetricRestingHeartRate, MetricPage.MetricHrv, MetricPage.MetricBloodOxygen,
             MetricPage.MetricSkinTemperature -> {
                 val metric = metricOf(screen.page) ?: return
-                val model = viewModel(key = metric.name) { MetricDetailViewModel(metric, gateway, profileStore) }
+                val model = viewModel(key = metric.name) { MetricDetailViewModel(metric, gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 MetricDetailRoute(model, metric, onBack)
             }
             MetricPage.Weight -> {
-                val model = viewModel { WeightViewModel(gateway, profileStore) }
+                val model = viewModel { WeightViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 WeightRoute(model, onBack)
             }
             MetricPage.Sleep -> {
-                val model = viewModel { SleepViewModel(gateway, profileStore) }
+                val model = viewModel { SleepViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 SleepRoute(model, onBack)
             }
             MetricPage.JournalBehaviours -> BehavioursRoute(journalViewModel(), onBack)
             MetricPage.Journal -> JournalRoute(journalViewModel(), onEditBehaviours = { onOpen(MetricPage.JournalBehaviours, LocalDate.now()) }, onBack = onBack)
             MetricPage.Vo2Max -> {
-                val model = viewModel { Vo2MaxViewModel(gateway, profileStore) }
+                val model = viewModel { Vo2MaxViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 Vo2MaxRoute(model, onBack)
             }
             MetricPage.PulseAge -> {
-                val model = viewModel { PulseAgeViewModel(gateway, profileStore, dayLoadCache) }
+                val model = viewModel { PulseAgeViewModel(gateway, profileStore, dayLoadCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 PulseAgeRoute(model, onBack)
             }
             MetricPage.Stress -> {
-                val model = viewModel { StressViewModel(gateway, slotCache) }
+                val model = viewModel { StressViewModel(gateway, slotCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 StressRoute(model, onBack)
             }
             MetricPage.EnergyBank -> {
-                val model = viewModel { EnergyViewModel(gateway, slotCache) }
+                val model = viewModel { EnergyViewModel(gateway, slotCache, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
                 EnergyRoute(model, onBack)
             }
@@ -342,6 +360,19 @@ class MainActivity : ComponentActivity() {
     /** One journal model for the tab and its Behaviours page, so a change on one shows on the other. */
     @Composable
     private fun journalViewModel(): JournalViewModel = viewModel { JournalViewModel(gateway, profileStore, dayLoadCache, journalStore) }
+
+    /**
+     * Deletes everything openFit keeps on this phone (profile, goals, layout, journal, caches and saved screens) and
+     * starts again from onboarding. Health Connect's data is not openFit's to delete.
+     */
+    private fun deleteEverything() {
+        lifecycleScope.launch {
+            withContext(Dispatchers.IO) { OpenFitDatabase.get(applicationContext).clearAllTables() }
+            LOCAL_PREFS.forEach { getSharedPreferences(it, MODE_PRIVATE).edit().clear().commit() }
+            finish()
+            startActivity(Intent(this@MainActivity, MainActivity::class.java))
+        }
+    }
 
     private fun openHealthConnectSettings() {
         runCatching { startActivity(Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS")) }

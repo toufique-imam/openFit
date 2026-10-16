@@ -5,9 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.R
 import com.openfit.data.SnapshotStore
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import com.openfit.ui.Notices
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.DailyHistory
 import com.openfit.domain.LoadRange
@@ -51,6 +49,7 @@ import com.openfit.health.DayLoadCache
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -149,10 +148,6 @@ class TodayViewModel(
     private var shownCurrent = false
     /** After Health Connect rate-limits a read, quiet reloads and prefetches wait until then. */
     private var backoffUntil: Instant = Instant.EPOCH
-
-    private val _messages = MutableSharedFlow<Int>(extraBufferCapacity = 1)
-    /** One-off notices for a toast: a reload failed and saved data stays on screen. */
-    val messages: SharedFlow<Int> = _messages.asSharedFlow()
     /** Loads in flight by date; touched on the main thread only. */
     private val fetches = mutableMapOf<LocalDate, Fetch>()
     private var missingPermissions: Set<String> = emptySet()
@@ -184,6 +179,9 @@ class TodayViewModel(
         selectedDate = date.takeIf { it < today }
         show(currentDate(), Reload.IfStale)
     }
+
+    /** The saved profile, for screens opened before Today has loaded. */
+    fun profile(): Profile = profileStore.load()
 
     fun saveProfile(profile: Profile) {
         profileStore.save(profile)
@@ -241,7 +239,11 @@ class TodayViewModel(
                     else -> it
                 }
             }
-            val fetch = fetches[date]?.takeIf { reload != Reload.Pull && it.profileKey == profileKey } ?: startFetch(date, profile)
+            // Pulse Age covers the 28 days before the date, so a reload of the same day keeps the one on screen.
+            val keptAge = (_state.value as? TodayUiState.Ready)
+                ?.takeIf { it.date == date && it.pendingDate == null && !it.pulseAgeLoading && shownCurrent && shownProfileKey == profileKey }
+                ?.let { Kept(it.pulseAge) }
+            val fetch = fetches[date]?.takeIf { reload != Reload.Pull && it.profileKey == profileKey } ?: startFetch(date, profile, keptAge)
             val main = fetch.main.await()
             if (main !is TodayUiState.Ready) {
                 val failed = main as? TodayUiState.Failed
@@ -253,7 +255,7 @@ class TodayViewModel(
                     // losing access to Health Connect does not.
                     if (kept.pendingDate != null) selectedDate = kept.date.takeIf { it < LocalDate.now() }
                     _state.value = kept.copy(refreshing = false, updating = false, pendingDate = null)
-                    _messages.tryEmit(if (rateLimited) R.string.hc_busy_saved else R.string.hc_failed_saved)
+                    Notices.post(if (rateLimited) R.string.hc_busy_saved else R.string.hc_failed_saved)
                 } else {
                     _state.value = main
                 }
@@ -304,12 +306,16 @@ class TodayViewModel(
     }
 
     /** One load of a date: the day itself, then Energy Bank and Pulse Age beside it; saved as a snapshot when all three are in. */
-    private inner class Fetch(val date: LocalDate, profile: Profile) {
+    /** A value already worked out for the date, to reuse instead of reading it again. */
+    private class Kept<T>(val value: T)
+
+    private inner class Fetch(val date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null) {
         val profileKey = profile.snapshotKey()
         val startedAt: Instant = Instant.now()
         val main: Deferred<TodayUiState> = viewModelScope.async(Dispatchers.Default) { loadMain(date, profile) }
         val energy: Deferred<Pair<EnergyDay?, StressDay?>> = viewModelScope.async(Dispatchers.Default) { loadEnergy(date) }
-        val pulseAge: Deferred<PulseAge?> = viewModelScope.async(Dispatchers.Default) { loadPulseAge(date, profile) }
+        val pulseAge: Deferred<PulseAge?> = keptAge?.let { CompletableDeferred(it.value) }
+            ?: viewModelScope.async(Dispatchers.Default) { loadPulseAge(date, profile) }
         private val save: Job = viewModelScope.launch(Dispatchers.Default) {
             val ready = main.await() as? TodayUiState.Ready
             if (ready == null) {
@@ -331,9 +337,9 @@ class TodayViewModel(
         }
     }
 
-    private fun startFetch(date: LocalDate, profile: Profile): Fetch {
+    private fun startFetch(date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null): Fetch {
         fetches.remove(date)?.cancel()
-        return Fetch(date, profile).also { fetches[date] = it }
+        return Fetch(date, profile, keptAge).also { fetches[date] = it }
     }
 
     private suspend fun loadEnergy(date: LocalDate): Pair<EnergyDay?, StressDay?> {
@@ -485,7 +491,8 @@ class TodayViewModel(
     }
 
     private companion object {
-        val TODAY_FRESH: Duration = Duration.ofMinutes(1)
+        /** Today reloads by itself at most this often; pull to refresh reloads at once. */
+        val TODAY_FRESH: Duration = Duration.ofMinutes(5)
         val BACKOFF: Duration = Duration.ofMinutes(5)
         val PAST_FRESH: Duration = Duration.ofMinutes(10)
         /** A past day's snapshot taken this long after the day ended is final. */

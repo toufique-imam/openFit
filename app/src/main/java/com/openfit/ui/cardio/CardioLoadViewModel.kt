@@ -1,5 +1,15 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.cardio
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
+import com.openfit.domain.DoubleRangeSerializer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.CardioLoadDay
@@ -29,7 +39,10 @@ import com.openfit.domain.targetStatus
 import com.openfit.domain.trainingStatus
 import com.openfit.domain.weekRows
 import com.openfit.domain.weekRowsOf
+import com.openfit.data.SnapshotStore
 import com.openfit.health.DayLoadCache
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.ui.detail.keepAfterFailure
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectSource
 import com.openfit.profile.Profile
@@ -44,6 +57,7 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.YearMonth
 
+@Serializable
 data class CardioDayView(
     val load: Double?,
     val range: LoadRange?,
@@ -51,6 +65,7 @@ data class CardioDayView(
     val detail: CardioLoadDay?,
 )
 
+@Serializable
 data class CardioPeriodView(
     val points: List<PeriodPoint>,
     val axis: ChartAxis,
@@ -58,10 +73,11 @@ data class CardioPeriodView(
     val daysInTarget: Int,
     val rows: List<PeriodRow>,
     val monthStatus: TrainingStatus?,
-    val monthlyAverages: ClosedFloatingPointRange<Double>?,
+    @Serializable(with = DoubleRangeSerializer::class) val monthlyAverages: ClosedFloatingPointRange<Double>?,
 )
 
 /** "Your past seven days of training": null [ratio] until there is enough history. */
+@Serializable
 data class TrainingView(val ratio: Double?) {
     val status: TrainingStatus? get() = ratio?.let(::trainingStatus)
 }
@@ -69,6 +85,7 @@ data class TrainingView(val ratio: Double?) {
 sealed interface CardioLoadUiState {
     data object Loading : CardioLoadUiState
     data class Failed(val message: String) : CardioLoadUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -88,12 +105,26 @@ class CardioLoadViewModel(
     gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
     dayLoadCache: DayLoadCache,
+    snapshots: SnapshotStore,
 ) : ViewModel() {
 
     private val source = HealthConnectSource(gateway, dayLoadCache)
 
     private val _state = MutableStateFlow<CardioLoadUiState>(CardioLoadUiState.Loading)
     val state: StateFlow<CardioLoadUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "cardio_load", CardioLoadUiState.Ready.serializer())
+    /** Which period the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is CardioLoadUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now(), profile = profileStore.load(), backfilling = false)
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
@@ -126,6 +157,8 @@ class CardioLoadViewModel(
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
             try {
                 val profile = profileStore.load()
                 val today = LocalDate.now()
@@ -157,7 +190,10 @@ class CardioLoadViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                _state.value = CardioLoadUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                if (!keepAfterFailure(error, current is CardioLoadUiState.Ready && shownName == name)) {
+                    _state.value = CardioLoadUiState.Failed(error.message ?: error.javaClass.simpleName)
+                }
             }
         }
     }
@@ -178,7 +214,7 @@ class CardioLoadViewModel(
             days.mapNotNull { day -> dailyCardioRange(day, profile.fitnessGoal, loads, readiness(day, history))?.let { day to it } }.toMap()
         }
         val end = days.last()
-        _state.value = CardioLoadUiState.Ready(
+        val ready = CardioLoadUiState.Ready(
             period = period,
             anchor = anchor,
             today = today,
@@ -194,6 +230,11 @@ class CardioLoadViewModel(
             training = TrainingView(acuteChronicRatio(end, loads)),
             backfilling = backfilling,
         )
+        _state.value = ready
+        val name = "$period:$anchor"
+        shownName = name
+        // Saved once the back-filled days are in, so a saved period opens complete.
+        if (!backfilling) viewModelScope.launch { saved.save(name, anchor, ready) }
     }
 
     private fun periodView(days: List<LocalDate>, loads: Map<LocalDate, Double>, ranges: Map<LocalDate, LoadRange>, end: LocalDate): CardioPeriodView {

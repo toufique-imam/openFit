@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.age
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -82,19 +94,36 @@ sealed interface PulseAgeUiState {
 
     /** The profile has no age or sex, which every reference depends on. */
     data object NeedsProfile : PulseAgeUiState
+    @Serializable
     data class Ready(val profile: Profile, val result: PulseAge?, val inputs: Map<AgeFactor, Double>) : PulseAgeUiState
 }
 
-class PulseAgeViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, dayLoadCache: DayLoadCache) : ViewModel() {
+class PulseAgeViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, dayLoadCache: DayLoadCache, snapshots: SnapshotStore) : ViewModel() {
 
     private val source = PulseAgeSource(gateway, dayLoadCache)
 
     private val _state = MutableStateFlow<PulseAgeUiState>(PulseAgeUiState.Loading)
     val state: StateFlow<PulseAgeUiState> = _state.asStateFlow()
 
+    private val saved = SavedScreen(snapshots, "pulse_age", PulseAgeUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is PulseAgeUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(profile = profileStore.load())
+            shownName = name
+        }
+    }
+
     fun open(date: LocalDate) {
         _state.value = PulseAgeUiState.Loading
         viewModelScope.launch {
+            val name = "$date"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val profile = profileStore.load()
                 val age = profile.age
@@ -108,7 +137,13 @@ class PulseAgeViewModel(gateway: HealthConnectGateway, private val profileStore:
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                PulseAgeUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is PulseAgeUiState.Ready && shownName == name)
+                if (kept) current else PulseAgeUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? PulseAgeUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, date, ready)
             }
         }
     }

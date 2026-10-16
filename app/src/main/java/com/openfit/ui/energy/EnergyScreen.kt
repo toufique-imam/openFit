@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.energy
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -80,6 +92,7 @@ private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
 sealed interface EnergyUiState {
     data object Loading : EnergyUiState
     data class Failed(val message: String) : EnergyUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -92,13 +105,26 @@ sealed interface EnergyUiState {
     }
 }
 
-class EnergyViewModel(gateway: HealthConnectGateway, slotCache: SlotCache) : ViewModel() {
+class EnergyViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snapshots: SnapshotStore) : ViewModel() {
 
     private val energy = EnergySource(gateway, slotCache)
     private val exercises = HealthConnectExercises(gateway)
 
     private val _state = MutableStateFlow<EnergyUiState>(EnergyUiState.Loading)
     val state: StateFlow<EnergyUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "energy", EnergyUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is EnergyUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now())
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
@@ -125,6 +151,9 @@ class EnergyViewModel(gateway: HealthConnectGateway, slotCache: SlotCache) : Vie
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
@@ -138,7 +167,13 @@ class EnergyViewModel(gateway: HealthConnectGateway, slotCache: SlotCache) : Vie
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                EnergyUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is EnergyUiState.Ready && shownName == name)
+                if (kept) current else EnergyUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? EnergyUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

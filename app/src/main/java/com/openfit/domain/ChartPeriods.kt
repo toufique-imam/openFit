@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
@@ -13,12 +17,15 @@ import kotlin.math.pow
 enum class ChartPeriod { Day, Week, Month, ThreeMonths, Year }
 
 /** One point on a Week/Month/Year chart: a day (or a month on the Year chart) with its load and target range. */
+@Serializable
 data class PeriodPoint(val start: LocalDate, val load: Double?, val range: LoadRange?)
 
 /** A row in the list under a chart: a day, week or month and its load (a daily average for weeks and months). */
+@Serializable
 data class PeriodRow(val start: LocalDate, val end: LocalDate, val load: Double)
 
 /** Chart y-axis: Fitbit labels 0, a rounded middle and a top 20 % above the highest value or band. */
+@Serializable
 data class ChartAxis(val max: Double, val middle: Int)
 
 private const val AXIS_HEADROOM = 1.2

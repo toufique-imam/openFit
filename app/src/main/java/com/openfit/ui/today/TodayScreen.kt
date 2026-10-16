@@ -1,12 +1,6 @@
 package com.openfit.ui.today
 
-import android.app.PendingIntent
-import android.widget.Toast
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.ui.text.style.TextOverflow
@@ -23,7 +17,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -33,17 +26,14 @@ import androidx.compose.material.icons.outlined.Edit
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.foundation.layout.Box
 import androidx.compose.ui.draw.alpha
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SelectableDates
 import androidx.compose.material3.Surface
@@ -53,15 +43,12 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -70,10 +57,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.ui.MetricPage
-import com.openfit.domain.Sex
 import com.openfit.profile.Profile
-import com.openfit.profile.UnitSystem
-import com.openfit.profile.WeightUnit
 import com.openfit.ui.theme.OpenFitColors
 import kotlinx.coroutines.launch
 import java.time.Instant
@@ -94,23 +78,12 @@ fun TodayRoute(
         PermissionController.createRequestPermissionResultContract(),
     ) { viewModel.refresh() }
     val requestPermissions = { permissions: Set<String> -> permissionLauncher.launch(permissions) }
-    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
-        viewModel.refresh()
-    }
-    val scope = rememberCoroutineScope()
-    val launchConsent = { consent: PendingIntent -> consentLauncher.launch(IntentSenderRequest.Builder(consent).build()) }
-    val connectGoogleHealth: () -> Unit = {
-        scope.launch { viewModel.connectGoogleHealth()?.let(launchConsent) }
-    }
 
     LifecycleResumeEffect(Unit) {
         viewModel.refreshIfStale()
         onPauseOrDispose { }
     }
-    val context = LocalContext.current
-    LaunchedEffect(viewModel) {
-        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
-    }
+
 
     Scaffold(containerColor = OpenFitColors.Background) { padding ->
         Column(Modifier.padding(padding)) {
@@ -136,9 +109,6 @@ fun TodayRoute(
                     onRefresh = viewModel::refresh,
                     onShowDate = viewModel::showDate,
                     onRequestPermissions = { requestPermissions(current.missingPermissions) },
-                    onSaveProfile = viewModel::saveProfile,
-                    onConnectGoogleHealth = connectGoogleHealth,
-                    onDisconnectGoogleHealth = viewModel::disconnectGoogleHealth,
                     onOpen = { page -> onOpen(page, current.date) },
                 )
             }
@@ -155,12 +125,8 @@ private fun TodayScreen(
     onRefresh: () -> Unit,
     onShowDate: (LocalDate) -> Unit,
     onRequestPermissions: () -> Unit,
-    onSaveProfile: (Profile) -> Unit,
-    onConnectGoogleHealth: () -> Unit,
-    onDisconnectGoogleHealth: () -> Unit,
     onOpen: (MetricPage) -> Unit,
 ) {
-    var editingProfile by rememberSaveable { mutableStateOf(false) }
     var pickingDate by rememberSaveable { mutableStateOf(false) }
 
     // While a date with no snapshot loads, the bar already names it and the old day's cards fade.
@@ -171,7 +137,7 @@ private fun TodayScreen(
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item(key = "header") { Header(title = section?.let { stringResource(it.title) }, onOpenProfile = { editingProfile = true }) }
+            item(key = "header") { Header(title = section?.let { stringResource(it.title) }, onOpenProfile = { onOpen(MetricPage.Profile) }) }
             item(key = "date") {
                 Column {
                     DateBar(
@@ -205,27 +171,6 @@ private fun TodayScreen(
             onPick = {
                 pickingDate = false
                 onShowDate(it)
-            },
-        )
-    }
-
-    if (editingProfile) {
-        ProfileDialog(
-            profile = state.profile,
-            googleHealthConnected = state.googleHealth != GoogleHealthStatus.Off,
-            googleHealthProblem = googleHealthNotice(state.googleHealth)?.let { it.message ?: stringResource(it.messageRes) },
-            onConnectGoogleHealth = {
-                editingProfile = false
-                onConnectGoogleHealth()
-            },
-            onDisconnectGoogleHealth = {
-                editingProfile = false
-                onDisconnectGoogleHealth()
-            },
-            onDismiss = { editingProfile = false },
-            onSave = {
-                editingProfile = false
-                onSaveProfile(it)
             },
         )
     }
@@ -344,110 +289,6 @@ internal fun googleHealthNotice(status: GoogleHealthStatus): NoticeText? = when 
     GoogleHealthStatus.Off -> null
     is GoogleHealthStatus.NeedsConsent -> NoticeText(R.string.google_health_reconnect)
     is GoogleHealthStatus.Failed -> NoticeText(R.string.google_health_reconnect, status.message)
-}
-
-@Composable
-internal fun ProfileDialog(
-    profile: Profile,
-    googleHealthConnected: Boolean,
-    googleHealthProblem: String?,
-    onConnectGoogleHealth: () -> Unit,
-    onDisconnectGoogleHealth: () -> Unit,
-    onDismiss: () -> Unit,
-    onSave: (Profile) -> Unit,
-) {
-    var name by remember { mutableStateOf(profile.name) }
-    var age by remember { mutableStateOf(profile.age?.toString().orEmpty()) }
-    var sex by remember { mutableStateOf(profile.sex) }
-    var units by remember { mutableStateOf(profile.units) }
-    var weightUnit by remember { mutableStateOf(profile.weightUnit) }
-
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(stringResource(R.string.profile)) },
-        text = {
-            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                item {
-                    OutlinedTextField(value = name, onValueChange = { name = it.take(MAX_NAME_LENGTH) }, label = { Text(stringResource(R.string.profile_name)) }, singleLine = true)
-                }
-                item { NumberField(stringResource(R.string.age), age) { age = it } }
-                item {
-                    ChoiceRow(stringResource(R.string.sex), listOf(Sex.Male to R.string.sex_male, Sex.Female to R.string.sex_female), sex) { sex = it }
-                }
-                item {
-                    ChoiceRow(
-                        stringResource(R.string.units_distance),
-                        listOf(UnitSystem.Metric to R.string.units_metric, UnitSystem.Imperial to R.string.units_imperial),
-                        units,
-                    ) { units = it }
-                }
-                item {
-                    ChoiceRow(
-                        stringResource(R.string.units_weight),
-                        listOf(WeightUnit.Kilograms to R.string.unit_kg, WeightUnit.Pounds to R.string.unit_lb),
-                        weightUnit,
-                    ) { weightUnit = it }
-                }
-                item {
-                    if (googleHealthConnected) {
-                        Column {
-                            googleHealthProblem?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
-                            Row {
-                                if (googleHealthProblem != null) {
-                                    TextButton(onClick = onConnectGoogleHealth) { Text(stringResource(R.string.google_health_connect)) }
-                                }
-                                TextButton(onClick = onDisconnectGoogleHealth) { Text(stringResource(R.string.google_health_disconnect)) }
-                            }
-                        }
-                    } else {
-                        Column {
-                            Text(stringResource(R.string.google_health_offer), style = MaterialTheme.typography.bodySmall)
-                            TextButton(onClick = onConnectGoogleHealth) { Text(stringResource(R.string.google_health_connect)) }
-                        }
-                    }
-                }
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = {
-                onSave(
-                    profile.copy(
-                        name = name.trim(),
-                        age = age.toIntOrNull()?.takeIf { it in 5..120 },
-                        units = units,
-                        weightUnit = weightUnit,
-                        sex = sex,
-                    ),
-                )
-            }) { Text(stringResource(R.string.save)) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
-    )
-}
-
-private const val MAX_NAME_LENGTH = 40
-
-@Composable
-private fun <T> ChoiceRow(label: String, options: List<Pair<T, Int>>, selected: T, onSelect: (T) -> Unit) {
-    Column {
-        Text(label, style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            options.forEach { (value, text) ->
-                FilterChip(selected = value == selected, onClick = { onSelect(value) }, label = { Text(stringResource(text)) })
-            }
-        }
-    }
-}
-
-@Composable
-private fun NumberField(label: String, value: String, onValueChange: (String) -> Unit) {
-    OutlinedTextField(
-        value = value,
-        onValueChange = { input -> onValueChange(input.filter { it.isDigit() }) },
-        label = { Text(label) },
-        singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-    )
 }
 
 @Composable

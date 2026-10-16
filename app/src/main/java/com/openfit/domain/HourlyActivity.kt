@@ -1,4 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.domain
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 
 enum class HourStatus { Met, Missed, Upcoming }
 
@@ -29,6 +34,7 @@ fun hoursMet(hourlySteps: Map<Int, Double>, window: IntRange): Int =
     window.count { (hourlySteps[it] ?: 0.0) >= ACTIVE_HOUR_STEPS }
 
 /** "Your day at a glance": minutes with steps, inactive stretches of [MIN_INACTIVE_MINUTES]+, and the longest one. */
+@Serializable
 data class ActivityGlance(val activeMinutes: Int, val inactiveMinutes: Int, val longestInactiveMinutes: Int)
 
 const val MIN_INACTIVE_MINUTES = 10

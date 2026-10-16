@@ -805,4 +805,21 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="onboarding_import_reading">Reading Health Connect…</string>
     <string name="onboarding_import_scoring">Working out your scores…</string>
     <string name="onboarding_import_finishing">Almost done…</string>
+    <!-- Profile page -->
+    <string name="profile_birth_date">Birth date</string>
+    <string name="profile_age">Age</string>
+    <string name="profile_sex">Sex</string>
+    <string name="profile_not_set">Not set</string>
+    <string name="profile_max_heart_rate">Max heart rate</string>
+    <string name="profile_max_heart_rate_value">%d bpm</string>
+    <string name="profile_time_zone">Time zone</string>
+    <string name="profile_note">Days start at midnight in your phone\'s time zone. Changing your birth date or sex recalculates your zones and scores.</string>
+    <string name="profile_stays_here">Stays on this phone</string>
+    <string name="profile_edit">Edit</string>
+    <string name="profile_google_health">Google Health</string>
+    <string name="profile_google_health_on">Connected: openFit also reads what Health Connect does not have.</string>
+    <string name="profile_delete_everything">Delete everything</string>
+    <string name="profile_delete_title">Delete everything?</string>
+    <string name="profile_delete_body">This deletes your profile, goals, journal and openFit\'s saved data on this phone, then starts again. Your data in Health Connect stays.</string>
+    <string name="profile_delete_confirm">Delete</string>
 </resources>

@@ -1,4 +1,4 @@
-@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
 
 package com.openfit.health
 
@@ -8,6 +8,7 @@ import com.openfit.domain.DurationSerializer
 import com.openfit.domain.InstantSerializer
 import com.openfit.domain.IntRangeSerializer
 import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord

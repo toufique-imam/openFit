@@ -1,5 +1,14 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.profile
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import android.content.Context
 import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
@@ -16,6 +25,7 @@ enum class WeightUnit { Kilograms, Pounds }
  * The user's details and goals. Goals are null until the user sets them: openFit never invents a target, and screens
  * offer to set one instead.
  */
+@Serializable
 data class Profile(
     val name: String = "",
     /** Age in years: from [birthDate] when the user gave one (so it moves on with birthdays), else as entered. */

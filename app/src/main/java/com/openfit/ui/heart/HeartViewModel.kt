@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.heart
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.ChartPeriod
@@ -30,11 +42,13 @@ import java.time.YearMonth
 enum class HeartMode { Resting, Zones }
 
 /** A row of the list under the chart: a day (Week) or a week/month, with its resting rate and zones. */
+@Serializable
 data class HeartRow(val start: LocalDate, val end: LocalDate, val restingBpm: Double?, val zones: Int?, val sparkline: List<Double>)
 
 sealed interface HeartUiState {
     data object Loading : HeartUiState
     data class Failed(val message: String) : HeartUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -56,6 +70,7 @@ class HeartViewModel(
     private val gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
     dayLoadCache: DayLoadCache,
+    snapshots: SnapshotStore,
 ) : ViewModel() {
 
     private val source = HealthConnectSource(gateway, dayLoadCache)
@@ -63,6 +78,19 @@ class HeartViewModel(
 
     private val _state = MutableStateFlow<HeartUiState>(HeartUiState.Loading)
     val state: StateFlow<HeartUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "heart", HeartUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is HeartUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now(), mode = mode)
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
@@ -95,6 +123,9 @@ class HeartViewModel(
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val profile = profileStore.load()
                 val today = LocalDate.now()
@@ -116,7 +147,13 @@ class HeartViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                HeartUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is HeartUiState.Ready && shownName == name)
+                if (kept) current else HeartUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? HeartUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

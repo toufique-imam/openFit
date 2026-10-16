@@ -1,4 +1,4 @@
-@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
 
 package com.openfit.domain
 
@@ -10,6 +10,7 @@ import kotlin.math.roundToInt
 
 data class HeartRateSample(val time: Instant, val bpm: Long)
 
+@Serializable
 data class HeartRateZones(val fatBurnFrom: Int, val cardioFrom: Int, val peakFrom: Int)
 
 @Serializable

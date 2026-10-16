@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Instant
 import java.time.LocalDate
 import kotlin.math.exp
@@ -54,9 +58,11 @@ fun cardioLoad(
     movingMinutes: Set<Long>?,
 ): Double = cardioLoadByMinute(samples, restingBpm, maxBpm, sex, movingMinutes).values.sum()
 
+@Serializable
 data class WorkoutLoad(val name: String, val start: Instant, val end: Instant, val load: Double)
 
 /** One day of Cardio Load: what each minute earned, and which part came from logged workouts. */
+@Serializable
 data class CardioLoadDay(val date: LocalDate, val byMinute: Map<Long, Double>, val workouts: List<WorkoutLoad>) {
     val total: Double get() = byMinute.values.sum()
     val workoutShare: Double get() = if (total > 0) workouts.sumOf { it.load }.coerceAtMost(total) / total else 0.0

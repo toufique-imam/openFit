@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.goal
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.ChartPeriod
@@ -75,6 +87,7 @@ private fun distanceFromMeters(meters: Double, profile: Profile): Double =
 sealed interface GoalMetricUiState {
     data object Loading : GoalMetricUiState
     data class Failed(val message: String) : GoalMetricUiState
+    @Serializable
     data class Ready(
         val metric: GoalMetric,
         val profile: Profile,
@@ -96,6 +109,7 @@ class GoalMetricViewModel(
     gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
     dayLoadCache: DayLoadCache,
+    snapshots: SnapshotStore,
 ) : ViewModel() {
 
     private val totals = HealthConnectTotals(gateway)
@@ -103,6 +117,20 @@ class GoalMetricViewModel(
 
     private val _state = MutableStateFlow<GoalMetricUiState>(GoalMetricUiState.Loading)
     val state: StateFlow<GoalMetricUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "goal:${metric.name}", GoalMetricUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is GoalMetricUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            val profile = profileStore.load()
+            _state.value = ready.copy(today = LocalDate.now(), profile = profile, goal = metric.goal(profile))
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
@@ -134,6 +162,9 @@ class GoalMetricViewModel(
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val all = periodDays(period, anchor)
@@ -171,7 +202,13 @@ class GoalMetricViewModel(
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                GoalMetricUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is GoalMetricUiState.Ready && shownName == name)
+                if (kept) current else GoalMetricUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? GoalMetricUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

@@ -1,4 +1,4 @@
-@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
 
 package com.openfit.domain
 
@@ -122,6 +122,7 @@ enum class FactorLevel { MuchLower, Lower, Usual, Higher, MuchHigher }
 enum class SleepFactor { Good, Fair, Poor }
 
 /** "What impacted your readiness": each signal against the 30-day baseline; null when it is missing. */
+@Serializable
 data class ReadinessBreakdown(
     val hrv: FactorLevel?,
     val hrvPercent: Int?,

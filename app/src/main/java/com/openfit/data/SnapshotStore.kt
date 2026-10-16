@@ -20,8 +20,12 @@ class SnapshotStore(context: Context) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Snapshot<*>>?): Boolean = size > MEMORY_ENTRIES
     }
 
-    suspend fun <T : Any> get(kind: String, date: LocalDate, version: Int, serializer: KSerializer<T>): Snapshot<T>? {
-        val key = key(kind, date)
+    suspend fun <T : Any> get(kind: String, date: LocalDate, version: Int, serializer: KSerializer<T>): Snapshot<T>? =
+        get(kind, date.toString(), version, serializer)
+
+    /** A snapshot saved under [name] (a date, or a period and its anchor for a chart screen). */
+    suspend fun <T : Any> get(kind: String, name: String, version: Int, serializer: KSerializer<T>): Snapshot<T>? {
+        val key = "$kind:$name"
         synchronized(memory) {
             @Suppress("UNCHECKED_CAST")
             (memory[key] as Snapshot<T>?)?.let { return it }
@@ -31,8 +35,12 @@ class SnapshotStore(context: Context) {
         return Snapshot(value, Instant.ofEpochMilli(row.savedAt), row.profileKey, current = row.version == version).also { synchronized(memory) { memory[key] = it } }
     }
 
-    suspend fun <T : Any> put(kind: String, date: LocalDate, version: Int, serializer: KSerializer<T>, value: T, profileKey: String) {
-        val key = key(kind, date)
+    suspend fun <T : Any> put(kind: String, date: LocalDate, version: Int, serializer: KSerializer<T>, value: T, profileKey: String) =
+        put(kind, date.toString(), date, version, serializer, value, profileKey)
+
+    /** Saves [value] under [name]; [date] is the day it belongs to, for [prune]. */
+    suspend fun <T : Any> put(kind: String, name: String, date: LocalDate, version: Int, serializer: KSerializer<T>, value: T, profileKey: String) {
+        val key = "$kind:$name"
         val snapshot = Snapshot(value, Instant.now(), profileKey)
         synchronized(memory) { memory[key] = snapshot }
         runCatching {
@@ -44,8 +52,6 @@ class SnapshotStore(context: Context) {
     suspend fun prune(before: LocalDate) {
         runCatching { dao.deleteBefore(before.toString()) }
     }
-
-    private fun key(kind: String, date: LocalDate) = "$kind:$date"
 
     private companion object {
         const val MEMORY_ENTRIES = 32

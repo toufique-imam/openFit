@@ -213,7 +213,12 @@ fun DetailLoading(accent: Color) {
 @Composable
 fun DetailFailed(message: String) {
     Box(Modifier.fillMaxSize().padding(PagePadding), contentAlignment = Alignment.Center) {
-        Text(message, color = OpenFitColors.OnSurfaceVariant, textAlign = TextAlign.Center)
+        Text(
+            // Health Connect's own rate-limit message reads like a crash.
+            if (message.contains("quota", ignoreCase = true)) stringResource(R.string.hc_rate_limited) else message,
+            color = OpenFitColors.OnSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
     }
 }
 

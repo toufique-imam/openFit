@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.sleep
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.ChartPeriod
@@ -29,11 +41,13 @@ enum class StageMode { Stages, Benchmark, Average }
 enum class SleepChart { Duration, Score, Schedule, Stage }
 
 /** The user's sleep schedule (bedtime and wake time), as minutes after 6pm the evening before (so midnight is 360). */
+@Serializable
 data class SleepSchedule(val startMinute: Int, val endMinute: Int)
 
 sealed interface SleepUiState {
     data object Loading : SleepUiState
     data class Failed(val message: String) : SleepUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -53,12 +67,25 @@ sealed interface SleepUiState {
     }
 }
 
-class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
+class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, snapshots: SnapshotStore) : ViewModel() {
 
     private val sleep = HealthConnectSleep(gateway)
 
     private val _state = MutableStateFlow<SleepUiState>(SleepUiState.Loading)
     val state: StateFlow<SleepUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "sleep", SleepUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is SleepUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now(), profile = profileStore.load(), stageMode = stageMode, chart = chart, chartStage = chartStage)
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Day
     private var anchor: LocalDate = LocalDate.now()
@@ -102,6 +129,9 @@ class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: Pr
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
@@ -130,7 +160,13 @@ class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: Pr
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                SleepUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is SleepUiState.Ready && shownName == name)
+                if (kept) current else SleepUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? SleepUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

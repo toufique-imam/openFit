@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.exercise
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.ChartPeriod
@@ -24,11 +36,13 @@ import java.time.ZoneId
 enum class ExerciseMode { Days, Duration, Distance }
 
 /** A week in the Month list: how many workouts and how many kinds. */
+@Serializable
 data class ExerciseWeek(val start: LocalDate, val end: LocalDate, val count: Int, val types: Int)
 
 sealed interface ExerciseUiState {
     data object Loading : ExerciseUiState
     data class Failed(val message: String) : ExerciseUiState
+    @Serializable
     data class Ready(
         val period: ChartPeriod,
         val anchor: LocalDate,
@@ -44,13 +58,26 @@ sealed interface ExerciseUiState {
     }
 }
 
-class ExerciseViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
+class ExerciseViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, snapshots: SnapshotStore) : ViewModel() {
 
     private val exercises = HealthConnectExercises(gateway)
     private val zone = ZoneId.systemDefault()
 
     private val _state = MutableStateFlow<ExerciseUiState>(ExerciseUiState.Loading)
     val state: StateFlow<ExerciseUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "exercise", ExerciseUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is ExerciseUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now(), profile = profileStore.load(), mode = mode)
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Week
     private var anchor: LocalDate = LocalDate.now()
@@ -88,6 +115,9 @@ class ExerciseViewModel(gateway: HealthConnectGateway, private val profileStore:
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor)
@@ -113,7 +143,13 @@ class ExerciseViewModel(gateway: HealthConnectGateway, private val profileStore:
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                ExerciseUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is ExerciseUiState.Ready && shownName == name)
+                if (kept) current else ExerciseUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? ExerciseUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }

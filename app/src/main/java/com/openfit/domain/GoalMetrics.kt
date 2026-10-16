@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -7,6 +11,7 @@ import kotlin.math.log10
 import kotlin.math.pow
 
 /** A goal metric (steps, distance, floors, energy, zone minutes) over a period. */
+@Serializable
 data class GoalSummary(val averagePerDay: Double?, val total: Double, val goalDays: Int)
 
 /** Without a goal (the user has not set one) no day counts as a goal day. */

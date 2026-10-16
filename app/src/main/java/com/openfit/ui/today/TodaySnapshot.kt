@@ -1,4 +1,4 @@
-@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
 
 package com.openfit.ui.today
 
@@ -11,6 +11,7 @@ import com.openfit.domain.IntRangeSerializer
 import com.openfit.domain.LoadRange
 import com.openfit.domain.LoadTarget
 import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import com.openfit.domain.MetricReading
 import com.openfit.domain.PulseAge
 import com.openfit.domain.Readiness

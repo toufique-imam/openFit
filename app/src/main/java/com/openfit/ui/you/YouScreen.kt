@@ -32,9 +32,6 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -54,14 +51,6 @@ import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.SectionHeaderStyle
 import com.openfit.ui.today.TodayUiState
 import com.openfit.ui.today.TodayViewModel
-import com.openfit.ui.today.GoogleHealthStatus
-import com.openfit.ui.today.ProfileDialog
-import com.openfit.ui.today.googleHealthNotice
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.IntentSenderRequest
-import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.rememberCoroutineScope
-import kotlinx.coroutines.launch
 
 /** A goal category on the You tab and how many of its goals are set. */
 private data class GoalGroup(val title: Int, val icon: ImageVector, val active: Int)
@@ -71,34 +60,16 @@ private data class GoalGroup(val title: Int, val icon: ImageVector, val active: 
  * Premium and badges depend on Fitbit's services.
  */
 @Composable
-fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenGoals: () -> Unit, onOpenCustomize: () -> Unit, onOpenJournal: () -> Unit) {
+fun YouRoute(
+    viewModel: TodayViewModel,
+    onOpenHealthConnect: () -> Unit,
+    onOpenGoals: () -> Unit,
+    onOpenCustomize: () -> Unit,
+    onOpenJournal: () -> Unit,
+    onOpenProfile: () -> Unit,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    val ready = state as? TodayUiState.Ready
-    val profile = ready?.profile
-    var editing by rememberSaveable { mutableStateOf(false) }
-    val onEditProfile = { editing = true }
-    val consentLauncher = rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) { viewModel.refresh() }
-    val scope = rememberCoroutineScope()
-    if (editing && ready != null) {
-        ProfileDialog(
-            profile = ready.profile,
-            googleHealthConnected = ready.googleHealth != GoogleHealthStatus.Off,
-            googleHealthProblem = googleHealthNotice(ready.googleHealth)?.let { it.message ?: stringResource(it.messageRes) },
-            onConnectGoogleHealth = {
-                editing = false
-                scope.launch { viewModel.connectGoogleHealth()?.let { consentLauncher.launch(IntentSenderRequest.Builder(it).build()) } }
-            },
-            onDisconnectGoogleHealth = {
-                editing = false
-                viewModel.disconnectGoogleHealth()
-            },
-            onDismiss = { editing = false },
-            onSave = {
-                editing = false
-                viewModel.saveProfile(it)
-            },
-        )
-    }
+    val profile = (state as? TodayUiState.Ready)?.profile ?: viewModel.profile()
     LazyColumn(
         modifier = Modifier.fillMaxSize().background(OpenFitColors.Background).statusBarsPadding(),
         contentPadding = PaddingValues(bottom = 32.dp),
@@ -112,7 +83,7 @@ fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenG
                 textAlign = androidx.compose.ui.text.style.TextAlign.Center,
             )
         }
-        item { ProfileCard(profile, onEditProfile) }
+        item { ProfileCard(profile, onOpenProfile) }
         // Fitbit's order is profile, Records, Goals; its Premium, Community, assessments and Badges sections are online.
         item {
             Text(

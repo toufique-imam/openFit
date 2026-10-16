@@ -1,5 +1,17 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class, LocalTimeSerializer::class)
+
 package com.openfit.ui.vitals
 
+import com.openfit.ui.detail.keepAfterFailure
+import com.openfit.ui.detail.SavedScreen
+import com.openfit.data.SnapshotStore
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
+import com.openfit.domain.LocalTimeSerializer
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -83,11 +95,13 @@ private val OUT_OF_RANGE = OpenFitColors.Pink.accent
 private val PERIODS = listOf(ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.Year)
 
 /** A row of Fitbit's list under the chart: a day, week or month, its average and how often it left the range. */
+@Serializable
 data class MetricListRow(val start: LocalDate, val end: LocalDate, val average: Double, val outOfRange: Int)
 
 sealed interface MetricDetailUiState {
     data object Loading : MetricDetailUiState
     data class Failed(val message: String) : MetricDetailUiState
+    @Serializable
     data class Ready(
         val metric: HealthMetric,
         val period: ChartPeriod,
@@ -103,12 +117,25 @@ sealed interface MetricDetailUiState {
     }
 }
 
-class MetricDetailViewModel(private val metric: HealthMetric, gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
+class MetricDetailViewModel(private val metric: HealthMetric, gateway: HealthConnectGateway, private val profileStore: ProfileStore, snapshots: SnapshotStore) : ViewModel() {
 
     private val vitals = HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<MetricDetailUiState>(MetricDetailUiState.Loading)
     val state: StateFlow<MetricDetailUiState> = _state.asStateFlow()
+
+    private val saved = SavedScreen(snapshots, "metric:${metric.name}", MetricDetailUiState.Ready.serializer())
+    /** Which period (or day) the Ready state on screen is for. */
+    private var shownName: String? = null
+
+    /** Shows the saved state for [name] at once, unless it is already on screen. */
+    private suspend fun restoreSaved(name: String) {
+        if (shownName == name && _state.value is MetricDetailUiState.Ready) return
+        saved.restore(name)?.let { ready ->
+            _state.value = ready.copy(today = LocalDate.now(), profile = profileStore.load())
+            shownName = name
+        }
+    }
 
     private var period = ChartPeriod.Week
     private var anchor: LocalDate = LocalDate.now()
@@ -135,6 +162,9 @@ class MetricDetailViewModel(private val metric: HealthMetric, gateway: HealthCon
     private fun load() {
         loading?.cancel()
         loading = viewModelScope.launch {
+            val name = "$period:$anchor"
+            restoreSaved(name)
+            var kept = false
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
@@ -145,7 +175,13 @@ class MetricDetailViewModel(private val metric: HealthMetric, gateway: HealthCon
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
-                MetricDetailUiState.Failed(error.message ?: error.javaClass.simpleName)
+                val current = _state.value
+                kept = keepAfterFailure(error, current is MetricDetailUiState.Ready && shownName == name)
+                if (kept) current else MetricDetailUiState.Failed(error.message ?: error.javaClass.simpleName)
+            }
+            (_state.value as? MetricDetailUiState.Ready)?.takeIf { !kept }?.let { ready ->
+                shownName = name
+                saved.save(name, anchor, ready)
             }
         }
     }
