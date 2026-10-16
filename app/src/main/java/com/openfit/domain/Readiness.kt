@@ -120,6 +120,8 @@ enum class SleepFactor { Good, Fair, Poor }
 data class ReadinessBreakdown(
     val hrv: FactorLevel?,
     val hrvPercent: Int?,
+    /** The resting heart rate itself against usual: Fitbit's "About usual", "Higher than usual"... */
+    val resting: FactorLevel?,
     val restingDeltaBpm: Int?,
     val sleep: SleepFactor?,
 )
@@ -150,10 +152,23 @@ fun readinessBreakdown(date: LocalDate, history: DailyHistory): ReadinessBreakdo
     }
     val restingToday = history.restingBpm[date]
     val restingBaseline = baselineDays.mapNotNull { history.restingBpm[it]?.toDouble() }
+    val restingLevel = if (restingToday != null && restingBaseline.size >= 2) {
+        val z = (restingToday - restingBaseline.average()) / standardDeviation(restingBaseline).coerceAtLeast(MIN_RESTING_SD)
+        when {
+            z >= FAR_Z -> FactorLevel.MuchHigher
+            z >= USUAL_Z -> FactorLevel.Higher
+            z > -USUAL_Z -> FactorLevel.Usual
+            z > -FAR_Z -> FactorLevel.Lower
+            else -> FactorLevel.MuchLower
+        }
+    } else {
+        null
+    }
     val sleep = sleepComponent(date, baselineDays, history.sleepMinutes)?.z
     return ReadinessBreakdown(
         hrv = hrvLevel,
         hrvPercent = if (hrvToday != null && hrvBaseline.isNotEmpty()) ((hrvToday / hrvBaseline.average() - 1) * 100).roundToInt() else null,
+        resting = restingLevel,
         restingDeltaBpm = if (restingToday != null && restingBaseline.size >= 2) (restingToday - restingBaseline.average()).roundToInt() else null,
         sleep = sleep?.let {
             when {

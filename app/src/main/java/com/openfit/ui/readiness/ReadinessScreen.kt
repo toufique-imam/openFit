@@ -142,7 +142,8 @@ private fun LazyListScope.dayContent(state: ReadinessUiState.Ready) {
             )
         },
     )
-    val resting = breakdown.restingDeltaBpm
+    // Fitbit grades resting heart rate on the same five levels as HRV ("About usual" on 15 Oct 2026, 61 against 60).
+    val resting = breakdown.resting
     if (factors.isEmpty() && resting == null) return
     item {
         Column(Modifier.padding(start = PagePadding, end = PagePadding, top = 32.dp, bottom = 16.dp)) {
@@ -158,17 +159,7 @@ private fun LazyListScope.dayContent(state: ReadinessUiState.Ready) {
     val rows: List<Pair<ImageVector, Pair<Int, @Composable () -> String>>> = factors.map { (icon, title, subtitle) ->
         icon to (title to @Composable { stringResource(subtitle) })
     } + listOfNotNull(
-        resting?.let {
-            Icons.Outlined.FavoriteBorder to (
-                R.string.readiness_rhr_title to @Composable {
-                    when {
-                        it < 0 -> stringResource(R.string.factor_bpm_lower, abs(it))
-                        it > 0 -> stringResource(R.string.factor_bpm_higher, it)
-                        else -> stringResource(R.string.factor_usual)
-                    }
-                }
-                )
-        },
+        resting?.let { level -> Icons.Outlined.FavoriteBorder to (R.string.readiness_rhr_title to @Composable { stringResource(factorText(level)) }) },
     )
     itemsIndexed(rows) { index, (icon, content) ->
         val (title, subtitle) = content
