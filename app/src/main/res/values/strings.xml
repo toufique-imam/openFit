@@ -131,6 +131,7 @@
     <string name="cardio_breakdown_subtitle">General activity that contributes to your cardio load includes things like brisk walking or chores</string>
     <string name="cardio_breakdown_logged">Logged workouts · %d%%</string>
     <string name="cardio_breakdown_general">General activity · %d%%</string>
+    <string name="cardio_needs_sex">Add your sex in your profile for an accurate cardio load: effort is weighted differently for men and women.</string>
     <string name="cardio_training_title">Your past seven days of training</string>
     <string name="learn_more">Learn more</string>
     <string name="cardio_training_uncalibrated">Once you have 7 days of activity data, you’ll see how your cardio load is trending</string>
@@ -142,7 +143,7 @@
     <string name="cardio_training_maintaining_label">You are maintaining</string>
     <string name="cardio_training_improving">You steadily increased cardio load, which is ideal for improving cardio fitness with less risk of overtraining</string>
     <string name="cardio_training_improving_label">You are improving</string>
-    <string name="cardio_training_risk_over">You quickly increased cardio load. Be careful - rapid increases can lead to overtraining.</string>
+    <string name="cardio_training_risk_over">You quickly increased your cardio load. Be careful – rapid increases can lead to overtraining.</string>
     <string name="cardio_training_risk_over_label">At risk of overtraining</string>
     <string name="cardio_training_overtraining">You rapidly increased cardio load. Slow down to avoid overtraining.</string>
     <string name="cardio_training_overtraining_label">You are overtraining</string>

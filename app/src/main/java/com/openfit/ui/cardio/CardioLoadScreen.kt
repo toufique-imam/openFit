@@ -140,6 +140,17 @@ private fun LazyListScope.dayContent(state: CardioLoadUiState.Ready, onAdjustTar
     val day = state.day ?: return
     val isToday = state.anchor == state.today
     item { DayHeader(day, isToday) }
+    // Cardio load weights effort by sex (k = 1.92 men, 1.67 women); without it openFit uses the average, which reads low.
+    if (state.profile.sex == null) {
+        item {
+            Text(
+                stringResource(R.string.cardio_needs_sex),
+                style = MaterialTheme.typography.bodyMedium,
+                color = OpenFitColors.OnSurfaceVariant,
+                modifier = Modifier.padding(start = PagePadding, end = PagePadding, top = 8.dp),
+            )
+        }
+    }
     item {
         val detail = day.detail
         val start = dayStartMinute(state.anchor)

@@ -36,7 +36,6 @@ import com.openfit.ui.detail.GroupedCard
 import com.openfit.ui.detail.HeaderValue
 import com.openfit.ui.detail.PagePadding
 import com.openfit.ui.detail.PeriodNavigator
-import com.openfit.ui.detail.ZoneColors
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.today.SegmentedGauge
 import com.openfit.ui.today.count
@@ -44,7 +43,7 @@ import com.openfit.ui.today.relativeDay
 import com.openfit.ui.today.valueText
 
 private val ACCENT = OpenFitColors.Blue
-private val OUT_OF_RANGE = ZoneColors.Vigorous
+private val OUT_OF_RANGE = OpenFitColors.Pink.accent
 
 /** Fitbit's Health metrics page: a day's five metrics against their personal ranges; each opens its own chart. */
 @OptIn(ExperimentalMaterial3Api::class)

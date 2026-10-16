@@ -57,7 +57,6 @@ import com.openfit.ui.detail.PagePadding
 import com.openfit.ui.detail.PeriodNavigator
 import com.openfit.ui.detail.RangeLineChart
 import com.openfit.ui.detail.SectionGap
-import com.openfit.ui.detail.ZoneColors
 import com.openfit.ui.detail.canGoForward
 import com.openfit.ui.detail.chartXLabels
 import com.openfit.ui.detail.periodLabel
@@ -80,7 +79,7 @@ import kotlin.math.ceil
 import kotlin.math.floor
 
 private val ACCENT = OpenFitColors.Blue.accent
-private val OUT_OF_RANGE = ZoneColors.Vigorous
+private val OUT_OF_RANGE = OpenFitColors.Pink.accent
 private val PERIODS = listOf(ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.Year)
 
 /** A row of Fitbit's list under the chart: a day, week or month, its average and how often it left the range. */
