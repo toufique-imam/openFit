@@ -409,4 +409,35 @@
     <string name="sleep_monthly_average">Monthly average</string>
     <string name="sleep_row_score">Sleep score: %1$d • %2$s</string>
     <string name="sleep_no_night">Wear your device to bed to track your sleep</string>
+
+    <!-- Tabs, You and Coach -->
+    <string name="tab_today">Today</string>
+    <string name="tab_coach">Coach</string>
+    <string name="tab_you">You</string>
+    <string name="you_default_name">You</string>
+    <plurals name="you_age">
+        <item quantity="one">%d year old</item>
+        <item quantity="other">%d years old</item>
+    </plurals>
+    <string name="you_edit_profile">Edit profile</string>
+    <string name="you_goals">Goals</string>
+    <string name="you_see_all">See all</string>
+    <string name="you_goals_sleep">Sleep</string>
+    <string name="you_goals_activity">Activity</string>
+    <string name="you_goals_health">Health</string>
+    <plurals name="you_goal_count">
+        <item quantity="one">%d goal</item>
+        <item quantity="other">%d goals</item>
+    </plurals>
+    <string name="you_records">Records</string>
+    <string name="you_health_connect">Health Connect data</string>
+    <string name="you_health_connect_body">See health and fitness data from your other apps</string>
+    <string name="coach_today">Today’s focus</string>
+    <string name="coach_target">Aim for %1$s–%2$s cardio load</string>
+    <string name="coach_no_target">No cardio load target yet</string>
+    <string name="coach_high">Your readiness is high. It’s a good day for a harder workout.</string>
+    <string name="coach_moderate">Your readiness is moderate. A steady workout fits today.</string>
+    <string name="coach_low">Your readiness is low. Keep it light with a walk, stretching or yoga.</string>
+    <string name="coach_unknown">Wear your device to sleep to get readiness-based guidance.</string>
+    <string name="profile_name">Name</string>
 </resources>

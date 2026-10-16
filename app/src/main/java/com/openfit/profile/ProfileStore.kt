@@ -10,6 +10,7 @@ enum class UnitSystem { Metric, Imperial }
 enum class WeightUnit { Kilograms, Pounds }
 
 data class Profile(
+    val name: String = "",
     val age: Int? = null,
     val sex: Sex? = null,
     val units: UnitSystem = UnitSystem.Metric,
@@ -36,6 +37,7 @@ class ProfileStore(context: Context) {
             weightUnit = if (imperial) WeightUnit.Pounds else WeightUnit.Kilograms,
         )
         return Profile(
+            name = prefs.getString(KEY_NAME, null).orEmpty(),
             age = prefs.getInt(KEY_AGE, 0).takeIf { it > 0 },
             sex = prefs.getString(KEY_SEX, null)?.let(Sex::valueOf),
             units = prefs.getString(KEY_UNITS, null)?.let(UnitSystem::valueOf) ?: defaults.units,
@@ -48,6 +50,7 @@ class ProfileStore(context: Context) {
     }
 
     fun save(profile: Profile) = prefs.edit()
+        .putString(KEY_NAME, profile.name)
         .putInt(KEY_AGE, profile.age ?: 0)
         .putString(KEY_SEX, profile.sex?.name)
         .putString(KEY_UNITS, profile.units.name)
@@ -59,6 +62,7 @@ class ProfileStore(context: Context) {
         .apply()
 
     private companion object {
+        const val KEY_NAME = "name"
         const val KEY_AGE = "age"
         const val KEY_SEX = "sex"
         const val KEY_UNITS = "units"

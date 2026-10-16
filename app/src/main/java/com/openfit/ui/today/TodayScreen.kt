@@ -283,9 +283,9 @@ private fun Notice(message: String, action: String, onAction: () -> Unit) {
     }
 }
 
-private class NoticeText(@StringRes val messageRes: Int, val message: String? = null)
+internal class NoticeText(@StringRes val messageRes: Int, val message: String? = null)
 
-private fun googleHealthNotice(status: GoogleHealthStatus): NoticeText? = when (status) {
+internal fun googleHealthNotice(status: GoogleHealthStatus): NoticeText? = when (status) {
     GoogleHealthStatus.Connected -> null
     GoogleHealthStatus.Off -> null
     is GoogleHealthStatus.NeedsConsent -> NoticeText(R.string.google_health_reconnect)
@@ -293,7 +293,7 @@ private fun googleHealthNotice(status: GoogleHealthStatus): NoticeText? = when (
 }
 
 @Composable
-private fun ProfileDialog(
+internal fun ProfileDialog(
     profile: Profile,
     googleHealthConnected: Boolean,
     googleHealthProblem: String?,
@@ -302,6 +302,7 @@ private fun ProfileDialog(
     onDismiss: () -> Unit,
     onSave: (Profile) -> Unit,
 ) {
+    var name by remember { mutableStateOf(profile.name) }
     var age by remember { mutableStateOf(profile.age?.toString().orEmpty()) }
     var stepGoal by remember { mutableStateOf(profile.dailyStepGoal.toString()) }
     var fitnessGoal by remember { mutableStateOf(profile.fitnessGoal) }
@@ -316,6 +317,9 @@ private fun ProfileDialog(
         title = { Text(stringResource(R.string.profile)) },
         text = {
             LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                item {
+                    OutlinedTextField(value = name, onValueChange = { name = it.take(MAX_NAME_LENGTH) }, label = { Text(stringResource(R.string.profile_name)) }, singleLine = true)
+                }
                 item { NumberField(stringResource(R.string.age), age) { age = it } }
                 item {
                     ChoiceRow(stringResource(R.string.sex), listOf(Sex.Male to R.string.sex_male, Sex.Female to R.string.sex_female), sex) { sex = it }
@@ -368,6 +372,7 @@ private fun ProfileDialog(
             TextButton(onClick = {
                 onSave(
                     profile.copy(
+                        name = name.trim(),
                         age = age.toIntOrNull()?.takeIf { it in 5..120 },
                         units = units,
                         weightUnit = weightUnit,
@@ -384,6 +389,8 @@ private fun ProfileDialog(
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
 }
+
+private const val MAX_NAME_LENGTH = 40
 
 @Composable
 private fun <T> ChoiceRow(label: String, options: List<Pair<T, Int>>, selected: T, onSelect: (T) -> Unit) {
