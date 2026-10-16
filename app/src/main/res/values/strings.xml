@@ -822,4 +822,17 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="profile_delete_title">Delete everything?</string>
     <string name="profile_delete_body">This deletes your profile, goals, journal and openFit\'s saved data on this phone, then starts again. Your data in Health Connect stays.</string>
     <string name="profile_delete_confirm">Delete</string>
+    <!-- Health Connect usage -->
+    <string name="usage_title">Health Connect reads</string>
+    <string name="usage_body">openFit keeps a copy of what it reads and asks Health Connect only for new data, staying under the limit Health Connect sets for each app.</string>
+    <string name="usage_today">Reads today</string>
+    <string name="usage_saved">Answered from saved data</string>
+    <string name="usage_left_15m">Left this quarter hour</string>
+    <string name="usage_left_day">Left today</string>
+    <string name="usage_last">Last read</string>
+    <string name="usage_last_value">%1$s, %2$s</string>
+    <string name="usage_held_back">Held back to stay under the limit</string>
+    <string name="usage_count">%,d</string>
+    <string name="usage_of">%1$,d of %2$,d</string>
+    <string name="usage_limited_at">Health Connect limited openFit at %s. Saved data is shown until it allows reads again.</string>
 </resources>

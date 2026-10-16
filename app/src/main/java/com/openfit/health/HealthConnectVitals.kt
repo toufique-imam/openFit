@@ -48,13 +48,7 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
         val granted = gateway.grantedPermissions()
         if (read(WeightRecord::class) !in granted) return emptyMap()
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
-        val records = mutableListOf<WeightRecord>()
-        var pageToken: String? = null
-        do {
-            val response = gateway.client.readRecords(ReadRecordsRequest(WeightRecord::class, range, pageToken = pageToken))
-            records += response.records
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
+        val records = gateway.store.read(WeightRecord::class, range)
         return records.groupBy { it.time.atZone(zone).toLocalDate() }.mapValues { (_, day) -> day.maxBy { it.time }.weight.inKilograms }
     }
 
@@ -67,13 +61,7 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
         value: (T) -> Double,
     ): Map<LocalDate, Double> {
         if (read(type) !in granted) return emptyMap()
-        val records = mutableListOf<T>()
-        var pageToken: String? = null
-        do {
-            val response = gateway.client.readRecords(ReadRecordsRequest(type, range, pageToken = pageToken))
-            records += response.records
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
+        val records = gateway.store.read(type, range)
         return records.groupBy { time(it).atZone(zone).toLocalDate() }.mapValues { (_, day) -> if (latest) value(day.maxBy(time)) else day.map(value).average() }
     }
 }

@@ -31,7 +31,13 @@ enum class HealthConnectAvailability { Available, UpdateRequired, Unavailable }
 
 class HealthConnectGateway(private val context: Context) {
 
-    val client: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
+    private val client: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
+
+    /** How much of Health Connect's read quota openFit has used. */
+    val budget: HealthConnectBudget by lazy { HealthConnectBudget(context) }
+
+    /** openFit's saved copy of Health Connect: every read goes through it. */
+    val store: HealthStore by lazy { HealthStore(context, { client }, budget) }
 
     fun availability(): HealthConnectAvailability = when (HealthConnectClient.getSdkStatus(context)) {
         HealthConnectClient.SDK_AVAILABLE -> HealthConnectAvailability.Available

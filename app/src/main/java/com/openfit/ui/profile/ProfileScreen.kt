@@ -58,6 +58,7 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.domain.Sex
+import com.openfit.health.BudgetUsage
 import com.openfit.domain.maxHeartRate
 import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
@@ -147,6 +148,9 @@ fun ProfileRoute(viewModel: TodayViewModel, onBack: () -> Unit, onDeleteEverythi
                     onDisconnect = viewModel::disconnectGoogleHealth,
                 )
             }
+
+            Spacer(Modifier.height(16.dp))
+            HealthConnectUsageCard(remember(state) { viewModel.healthConnectUsage() })
 
             OutlinedButton(
                 onClick = { editing = Editing.Delete },
@@ -266,6 +270,42 @@ private fun GoogleHealthCard(status: GoogleHealthStatus, onConnect: () -> Unit, 
         }
     }
 }
+
+/** How much of Health Connect's read quota openFit has used, so a lockout is never a surprise. */
+@Composable
+private fun HealthConnectUsageCard(usage: BudgetUsage) {
+    val clock = DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)
+    fun time(millis: Long) = Instant.ofEpochMilli(millis).atZone(ZoneId.systemDefault()).format(clock)
+    Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.usage_title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+            Text(stringResource(R.string.usage_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+            Divider()
+            InfoRow(stringResource(R.string.usage_today), stringResource(R.string.usage_count, usage.callsToday))
+            Divider()
+            InfoRow(stringResource(R.string.usage_saved), stringResource(R.string.usage_count, usage.savedReadsToday))
+            Divider()
+            InfoRow(stringResource(R.string.usage_left_15m), stringResource(R.string.usage_of, usage.available15Min, QUOTA_15M))
+            Divider()
+            InfoRow(stringResource(R.string.usage_left_day), stringResource(R.string.usage_of, usage.available24H, QUOTA_24H))
+            usage.lastCall?.let { (kind, at) ->
+                Divider()
+                InfoRow(stringResource(R.string.usage_last), stringResource(R.string.usage_last_value, kind.removePrefix("read ").replace('_', ' '), time(at)))
+            }
+            if (usage.deniedToday > 0) {
+                Divider()
+                InfoRow(stringResource(R.string.usage_held_back), stringResource(R.string.usage_count, usage.deniedToday))
+            }
+            usage.lastLimitedAt?.takeIf { System.currentTimeMillis() - it < DAY_MS }?.let {
+                Text(stringResource(R.string.usage_limited_at, time(it)), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.Pink.accent)
+            }
+        }
+    }
+}
+
+private const val QUOTA_15M = 2_000
+private const val QUOTA_24H = 16_000
+private const val DAY_MS = 24 * 3_600_000L
 
 @Composable
 private fun NameDialog(initial: String, onDismiss: () -> Unit, onSave: (String) -> Unit) {

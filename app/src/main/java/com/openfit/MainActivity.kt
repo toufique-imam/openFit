@@ -93,7 +93,8 @@ import com.openfit.ui.you.YouRoute
 import java.time.LocalDate
 
 /** Every preferences file openFit writes, for Delete everything. */
-private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "onboarding")
+// The quota model (hc_budget) stays: Health Connect's own count of openFit's reads does not reset with it.
+private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "onboarding", "hc_changes")
 
 /** Tells this process apart from an earlier one whose saved state was restored. */
 private val PROCESS = UUID.randomUUID().toString()

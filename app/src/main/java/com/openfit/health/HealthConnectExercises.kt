@@ -40,19 +40,13 @@ class HealthConnectExercises(private val gateway: HealthConnectGateway, private 
         val granted = gateway.grantedPermissions()
         if (read(ExerciseSessionRecord::class) !in granted) return emptyList()
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
-        val records = mutableListOf<ExerciseSessionRecord>()
-        var pageToken: String? = null
-        do {
-            val response = gateway.client.readRecords(ReadRecordsRequest(ExerciseSessionRecord::class, range, pageToken = pageToken))
-            records += response.records
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
+        val records = gateway.store.read(ExerciseSessionRecord::class, range)
         val metrics = buildSet {
             if (read(DistanceRecord::class) in granted) add(DistanceRecord.DISTANCE_TOTAL)
             if (read(TotalCaloriesBurnedRecord::class) in granted) add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
         }
         return records.sortedBy { it.startTime }.map { record ->
-            val totals = if (metrics.isEmpty()) null else gateway.client.aggregate(AggregateRequest(metrics, TimeRangeFilter.between(record.startTime, record.endTime)))
+            val totals = if (metrics.isEmpty()) null else gateway.store.aggregate(metrics, record.startTime, record.endTime)
             ExerciseSession(
                 name = record.toExercise().name,
                 type = record.exerciseType,

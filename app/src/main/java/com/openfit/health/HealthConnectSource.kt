@@ -60,8 +60,6 @@ class HealthConnectSource(
     private val zone: ZoneId = ZoneId.systemDefault(),
 ) : DailyMetricsSource {
 
-    private val client: HealthConnectClient get() = gateway.client
-
     override suspend fun load(date: LocalDate, profile: Profile): DailyMetrics = coroutineScope {
         val granted = gateway.grantedPermissions()
         val start = date.atStartOfDay(zone).toInstant()
@@ -286,7 +284,7 @@ class HealthConnectSource(
                 if (!steps) {
                     emptyList()
                 } else {
-                    client.aggregateGroupByDuration(AggregateGroupByDurationRequest(setOf(StepsRecord.COUNT_TOTAL), range, Duration.ofMinutes(1)))
+                    gateway.store.aggregateByDuration(setOf(StepsRecord.COUNT_TOTAL), start, end, Duration.ofMinutes(1))
                         .filter { (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) > 0L }
                         .map { it.startTime.epochSecond / 60 }
                 }
@@ -303,12 +301,7 @@ class HealthConnectSource(
 
     private suspend fun hourlySteps(window: Window): Map<Int, Long> {
         if (read(StepsRecord::class) !in window.granted) return emptyMap()
-        val request = AggregateGroupByDurationRequest(
-            metrics = setOf(StepsRecord.COUNT_TOTAL),
-            timeRangeFilter = TimeRangeFilter.between(window.start, window.end),
-            timeRangeSlicer = Duration.ofHours(1),
-        )
-        return client.aggregateGroupByDuration(request).associate { bucket ->
+        return gateway.store.aggregateByDuration(setOf(StepsRecord.COUNT_TOTAL), window.start, window.end, Duration.ofHours(1)).associate { bucket ->
             bucket.startTime.atZone(zone).hour to (bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L)
         }
     }
@@ -318,23 +311,17 @@ class HealthConnectSource(
             if (read(type) in granted) readAll(type, TimeRangeFilter.between(from, end)) else emptyList()
     }
 
-    private suspend fun aggregate(window: Window): AggregationResult? {
+    private suspend fun aggregate(window: Window): AggregateValues? {
         val metrics = AGGREGATES
             .filterKeys { read(it) in window.granted }
             .values
             .toSet()
         if (metrics.isEmpty()) return null
-        return client.aggregate(AggregateRequest(metrics, TimeRangeFilter.between(window.start, window.end)))
+        return gateway.store.aggregate(metrics, window.start, window.end)
     }
 
     private suspend fun <T : Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
-        val records = mutableListOf<T>()
-        var pageToken: String? = null
-        do {
-            val response = client.readRecords(ReadRecordsRequest(type, range, pageToken = pageToken))
-            records += response.records
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
+        val records = gateway.store.read(type, range)
         return records
     }
 

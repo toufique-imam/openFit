@@ -79,13 +79,7 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
         ((time.epochSecond - dayStart.epochSecond) / SLOT_SECONDS).toInt().takeIf { it in 0 until SLOTS_PER_DAY }
 
     private suspend fun <T : Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
-        val records = mutableListOf<T>()
-        var pageToken: String? = null
-        do {
-            val response = gateway.client.readRecords(ReadRecordsRequest(type, range, pageToken = pageToken))
-            records += response.records
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
+        val records = gateway.store.read(type, range)
         return records
     }
 

@@ -15,13 +15,6 @@ class HealthConnectMindfulness(private val gateway: HealthConnectGateway, privat
     suspend fun mindfulDays(from: LocalDate, until: LocalDate): Set<LocalDate> {
         if (read(MindfulnessSessionRecord::class) !in gateway.grantedPermissions()) return emptySet()
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
-        val days = mutableSetOf<LocalDate>()
-        var pageToken: String? = null
-        do {
-            val response = gateway.client.readRecords(ReadRecordsRequest(MindfulnessSessionRecord::class, range, pageToken = pageToken))
-            response.records.forEach { days += it.startTime.atZone(zone).toLocalDate() }
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
-        return days
+        return gateway.store.read(MindfulnessSessionRecord::class, range).map { it.startTime.atZone(zone).toLocalDate() }.toSet()
     }
 }

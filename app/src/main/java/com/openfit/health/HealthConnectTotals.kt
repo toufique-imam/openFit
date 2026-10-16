@@ -29,17 +29,12 @@ enum class DailyTotal(val record: KClass<out Record>) {
     WaterLiters(HydrationRecord::class),
 }
 
-/** Daily and hourly sums from Health Connect's aggregation API — one request per range, however long. */
+/** Daily and hourly sums from Health Connect's aggregation API (through [HealthStore]) — one request per range, however long. */
 class HealthConnectTotals(private val gateway: HealthConnectGateway, private val zone: ZoneId = ZoneId.systemDefault()) {
 
     suspend fun daily(total: DailyTotal, from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
         if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
-        val request = AggregateGroupByPeriodRequest(
-            metrics = setOf(metric(total)),
-            timeRangeFilter = TimeRangeFilter.between(from.atStartOfDay(), until.plusDays(1).atStartOfDay()),
-            timeRangeSlicer = Period.ofDays(1),
-        )
-        return gateway.client.aggregateGroupByPeriod(request)
+        return gateway.store.aggregateByPeriod(setOf(metric(total)), from.atStartOfDay(), until.plusDays(1).atStartOfDay(), Period.ofDays(1))
             .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.toLocalDate() to it } }
             .toMap()
     }
@@ -49,12 +44,7 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
         val start = date.atStartOfDay(zone).toInstant()
         val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
         if (end <= start) return emptyMap()
-        val request = AggregateGroupByDurationRequest(
-            metrics = setOf(metric(total)),
-            timeRangeFilter = TimeRangeFilter.between(start, end),
-            timeRangeSlicer = Duration.ofHours(1),
-        )
-        return gateway.client.aggregateGroupByDuration(request)
+        return gateway.store.aggregateByDuration(setOf(metric(total)), start, end, Duration.ofHours(1))
             .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.atZone(zone).hour to it } }
             .toMap()
     }
@@ -65,8 +55,7 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
         val start = date.atTime(fromHour, 0).atZone(zone).toInstant()
         val end = minOf(date.atTime(untilHour.coerceAtMost(23), 59, 59).atZone(zone).toInstant(), Instant.now())
         if (end <= start) return emptyMap()
-        val request = AggregateGroupByDurationRequest(setOf(metric(total)), TimeRangeFilter.between(start, end), Duration.ofMinutes(1))
-        return gateway.client.aggregateGroupByDuration(request)
+        return gateway.store.aggregateByDuration(setOf(metric(total)), start, end, Duration.ofMinutes(1))
             .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.epochSecond / 60 to it } }
             .toMap()
     }
@@ -81,8 +70,7 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
             val start = chunk.atStartOfDay(zone).toInstant()
             val end = minOf(chunkEnd.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
             if (end > start) {
-                val request = AggregateGroupByDurationRequest(setOf(metric(total)), TimeRangeFilter.between(start, end), Duration.ofHours(1))
-                gateway.client.aggregateGroupByDuration(request).forEach { bucket ->
+                gateway.store.aggregateByDuration(setOf(metric(total)), start, end, Duration.ofHours(1)).forEach { bucket ->
                     val time = bucket.startTime.atZone(zone)
                     value(total, bucket.result)?.let { result.getOrPut(time.toLocalDate()) { mutableMapOf() }[time.hour] = it }
                 }
@@ -101,7 +89,7 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
         DailyTotal.WaterLiters -> HydrationRecord.VOLUME_TOTAL
     }
 
-    private fun value(total: DailyTotal, result: AggregationResult): Double? = when (total) {
+    private fun value(total: DailyTotal, result: AggregateValues): Double? = when (total) {
         DailyTotal.Steps -> result[StepsRecord.COUNT_TOTAL]?.toDouble()
         DailyTotal.DistanceMeters -> result[DistanceRecord.DISTANCE_TOTAL]?.inMeters
         DailyTotal.Floors -> result[FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL]

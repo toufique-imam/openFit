@@ -29,6 +29,8 @@ import com.openfit.googlehealth.GoogleHealthSource
 import com.openfit.health.DailyMetricsSource
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
+import com.openfit.health.BudgetUsage
+import com.openfit.health.HcPriority
 import com.openfit.health.HealthConnectSource
 import com.openfit.health.HealthConnectSleep
 import com.openfit.health.HealthConnectVitals
@@ -180,6 +182,9 @@ class TodayViewModel(
         show(currentDate(), Reload.IfStale)
     }
 
+    /** How much of Health Connect's read quota openFit has used, for the profile page. */
+    fun healthConnectUsage(): BudgetUsage = gateway.budget.usage()
+
     /** The saved profile, for screens opened before Today has loaded. */
     fun profile(): Profile = profileStore.load()
 
@@ -301,7 +306,8 @@ class TodayViewModel(
         if (date in fetches || Instant.now() < backoffUntil) return
         viewModelScope.launch {
             val cached = withContext(Dispatchers.IO) { snapshots.get(TodaySnapshot.KIND, date, TodaySnapshot.VERSION, TodaySnapshot.serializer()) }
-            if (cached == null && date !in fetches) startFetch(date, profile)
+            // Nobody is waiting for it: a background read, which leaves the quota's reserve to what the user opens.
+            if (cached == null && date !in fetches && gateway.budget.hasRoom()) startFetch(date, profile, background = true)
         }
     }
 
@@ -309,13 +315,14 @@ class TodayViewModel(
     /** A value already worked out for the date, to reuse instead of reading it again. */
     private class Kept<T>(val value: T)
 
-    private inner class Fetch(val date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null) {
+    private inner class Fetch(val date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null, background: Boolean = false) {
+        private val context = if (background) Dispatchers.Default + HcPriority.Background else Dispatchers.Default
         val profileKey = profile.snapshotKey()
         val startedAt: Instant = Instant.now()
-        val main: Deferred<TodayUiState> = viewModelScope.async(Dispatchers.Default) { loadMain(date, profile) }
-        val energy: Deferred<Pair<EnergyDay?, StressDay?>> = viewModelScope.async(Dispatchers.Default) { loadEnergy(date) }
+        val main: Deferred<TodayUiState> = viewModelScope.async(context) { loadMain(date, profile) }
+        val energy: Deferred<Pair<EnergyDay?, StressDay?>> = viewModelScope.async(context) { loadEnergy(date) }
         val pulseAge: Deferred<PulseAge?> = keptAge?.let { CompletableDeferred(it.value) }
-            ?: viewModelScope.async(Dispatchers.Default) { loadPulseAge(date, profile) }
+            ?: viewModelScope.async(context) { loadPulseAge(date, profile) }
         private val save: Job = viewModelScope.launch(Dispatchers.Default) {
             val ready = main.await() as? TodayUiState.Ready
             if (ready == null) {
@@ -337,9 +344,9 @@ class TodayViewModel(
         }
     }
 
-    private fun startFetch(date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null): Fetch {
+    private fun startFetch(date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null, background: Boolean = false): Fetch {
         fetches.remove(date)?.cancel()
-        return Fetch(date, profile, keptAge).also { fetches[date] = it }
+        return Fetch(date, profile, keptAge, background).also { fetches[date] = it }
     }
 
     private suspend fun loadEnergy(date: LocalDate): Pair<EnergyDay?, StressDay?> {
@@ -385,7 +392,10 @@ class TodayViewModel(
         }
         val requestable = gateway.requestablePermissions()
         val dataTypes = requestable - HealthConnectGateway.OPTIONAL_PERMISSIONS
-        val missing = dataTypes - gateway.grantedPermissions()
+        val granted = gateway.grantedPermissions()
+        val missing = dataTypes - granted
+        // Saved days Health Connect has changed since are forgotten first, so this load reads them again.
+        gateway.store.syncChanges(granted)
         if (missing == dataTypes) return@coroutineScope TodayUiState.PermissionsRequired(requestable)
 
         val today = LocalDate.now()

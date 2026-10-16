@@ -51,13 +51,7 @@ class HealthConnectSleep(private val gateway: HealthConnectGateway, private val 
     }
 
     private suspend fun <T : androidx.health.connect.client.records.Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
-        val records = mutableListOf<T>()
-        var pageToken: String? = null
-        do {
-            val response = gateway.client.readRecords(ReadRecordsRequest(type, range, pageToken = pageToken))
-            records += response.records
-            pageToken = response.pageToken
-        } while (!pageToken.isNullOrEmpty())
+        val records = gateway.store.read(type, range)
         return records
     }
 
