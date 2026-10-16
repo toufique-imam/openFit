@@ -199,7 +199,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         MetricTile(
             title = stringResource(R.string.tile_sleep_duration),
             value = asleep?.let { valueText { duration(it) } } ?: noValue(stringResource(R.string.no_data)),
-            subtitle = dayLabel(state),
+            subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" · "),
             onClick = { onOpen(MetricPage.Sleep) },
         ) {
             if (asleep == null) {
@@ -354,6 +354,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
                 dayLabel(state),
                 stringResource(if (difference >= 0) R.string.food_below_target else R.string.food_above_target, whole(abs(difference))),
             ).joinToString(" · "),
+            onClick = { onOpen(MetricPage.Food) },
         ) {
             ArcGauge(Icons.Outlined.Restaurant, OpenFitColors.Pink, (eaten / profile.dailyCaloriesInGoal).toFloat())
         }
@@ -368,6 +369,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
                 stringResource(if (imperial) R.string.unit_fl_oz else R.string.unit_ml),
             ),
             subtitle = dayLabel(state),
+            onClick = { onOpen(MetricPage.Water) },
         ) {
             ArcGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, (liters / profile.dailyWaterGoalLiters).toFloat())
         }

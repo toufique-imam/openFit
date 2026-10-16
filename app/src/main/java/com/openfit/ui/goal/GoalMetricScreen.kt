@@ -7,6 +7,9 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material3.MaterialTheme
+import com.openfit.ui.theme.MetricColor
+import androidx.compose.material.icons.outlined.LocalDrink
+import androidx.compose.material.icons.outlined.Restaurant
 import com.openfit.profile.UnitSystem
 import com.openfit.profile.Profile
 import androidx.compose.material.icons.outlined.KeyboardDoubleArrowUp
@@ -47,7 +50,6 @@ import com.openfit.ui.today.twoDecimals
 import com.openfit.ui.today.whole
 import kotlin.math.abs
 
-private val ACCENT = OpenFitColors.Mint
 
 private val HOUR_LABELS = listOf(0 to "12am", 4 to "4am", 8 to "8am", 12 to "12pm", 16 to "4pm", 20 to "8pm", 23 to "11pm")
 
@@ -55,15 +57,16 @@ private val HOUR_LABELS = listOf(0 to "12am", 4 to "4am", 8 to "8am", 12 to "12p
 fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? GoalMetricUiState.Ready
+    val accent = ready?.metric?.color ?: OpenFitColors.Mint
     DetailScaffold(
         title = stringResource(ready?.metric?.title ?: R.string.tile_steps),
-        accent = ACCENT.accent,
+        accent = accent.accent,
         period = ready?.period ?: ChartPeriod.Day,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
     ) {
         when (val current = state) {
-            GoalMetricUiState.Loading -> DetailLoading(ACCENT.accent)
+            GoalMetricUiState.Loading -> DetailLoading(accent.accent)
             is GoalMetricUiState.Failed -> DetailFailed(current.message)
             is GoalMetricUiState.Ready -> DetailList(current.period, current.anchor) {
                 item {
@@ -90,19 +93,22 @@ private fun LazyListScope.dayContent(state: GoalMetricUiState.Ready) {
             value = format(value),
             status = stringResource(R.string.goal_of, format(state.goal), unit),
             description = when {
+                // Food is a target to stay under, worded as Fitbit does ("2,000 cal below target").
+                state.metric == GoalMetric.Food ->
+                    stringResource(if (remaining >= 0) R.string.food_below_target else R.string.food_above_target, format(abs(remaining)))
                 format(remaining) == format(0.0) -> stringResource(R.string.goal_met)
                 remaining > 0 -> stringResource(if (isToday) R.string.goal_away_today else R.string.goal_away_past, format(remaining), unit)
                 else -> stringResource(R.string.goal_exceeded, format(abs(remaining)), unit)
             },
         ) {
-            ArcGauge(state.metric.icon, ACCENT, (value / state.goal).toFloat(), background = OpenFitColors.Background)
+            ArcGauge(state.metric.icon, state.metric.color, (value / state.goal).toFloat(), background = OpenFitColors.Background)
         }
     }
     item {
         val axis = hourlyAxis(state.hourly.maxOf { it ?: 0.0 })
         BarChart(
             values = state.hourly,
-            color = ACCENT.accent,
+            color = state.metric.color.accent,
             axisMax = axis.max,
             axisLabels = listOf(0.0, axis.max / 2, axis.max).map { AxisLabel(it, compact(it)) },
             xLabels = HOUR_LABELS,
@@ -145,7 +151,7 @@ private fun LazyListScope.periodContent(state: GoalMetricUiState.Ready) {
         val axis = goalAxis(state.goal, state.bars.maxOf { it ?: 0.0 })
         BarChart(
             values = state.bars,
-            color = ACCENT.accent,
+            color = state.metric.color.accent,
             axisMax = axis.max,
             axisLabels = axis.labels.map { AxisLabel(it, compact(it), highlight = it == state.goal) },
             xLabels = chartXLabels(state.period, state.anchor),
@@ -170,6 +176,8 @@ private val GoalMetric.title: Int
         GoalMetric.Floors -> R.string.tile_floors
         GoalMetric.Energy -> R.string.tile_energy_burned
         GoalMetric.ZoneMinutes -> R.string.azm_title
+        GoalMetric.Food -> R.string.tile_food
+        GoalMetric.Water -> R.string.tile_water
     }
 
 private val GoalMetric.icon: ImageVector
@@ -179,6 +187,8 @@ private val GoalMetric.icon: ImageVector
         GoalMetric.Floors -> Icons.Outlined.Stairs
         GoalMetric.Energy -> Icons.Outlined.LocalFireDepartment
         GoalMetric.ZoneMinutes -> Icons.Outlined.KeyboardDoubleArrowUp
+        GoalMetric.Food -> Icons.Outlined.Restaurant
+        GoalMetric.Water -> Icons.Outlined.LocalDrink
     }
 
 /** The short unit after numbers ("of 10,000 steps", "km per day (avg)"). */
@@ -188,10 +198,12 @@ private fun GoalMetric.unit(profile: Profile): Int = when (this) {
     GoalMetric.Floors -> R.string.unit_floors
     GoalMetric.Energy -> R.string.unit_cal
     GoalMetric.ZoneMinutes -> R.string.unit_zone_minutes
+    GoalMetric.Food -> R.string.unit_cal
+    GoalMetric.Water -> if (profile.units == UnitSystem.Imperial) R.string.unit_fl_oz else R.string.unit_ml
 }
 
 /** The unit inside takeaway sentences ("burned a total of 14,000 calories"). */
-private fun GoalMetric.longUnit(profile: Profile): Int = if (this == GoalMetric.Energy) R.string.unit_calories else unit(profile)
+private fun GoalMetric.longUnit(profile: Profile): Int = if (this == GoalMetric.Energy || this == GoalMetric.Food) R.string.unit_calories else unit(profile)
 
 private val GoalMetric.phrase: Int
     get() = when (this) {
@@ -200,7 +212,17 @@ private val GoalMetric.phrase: Int
         GoalMetric.Floors -> R.string.phrase_floors
         GoalMetric.Energy -> R.string.phrase_energy
         GoalMetric.ZoneMinutes -> R.string.phrase_zone_minutes
+        GoalMetric.Food -> R.string.phrase_food
+        GoalMetric.Water -> R.string.phrase_water
     }
 
 private val GoalMetric.format: (Double) -> String
     get() = if (this == GoalMetric.Distance) ::twoDecimals else { value -> whole(value) }
+
+/** Fitbit's colors: activity in mint, water in blue, food in pink. */
+private val GoalMetric.color: MetricColor
+    get() = when (this) {
+        GoalMetric.Water -> OpenFitColors.Blue
+        GoalMetric.Food -> OpenFitColors.Pink
+        else -> OpenFitColors.Mint
+    }

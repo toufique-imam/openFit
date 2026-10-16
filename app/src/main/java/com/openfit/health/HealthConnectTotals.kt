@@ -3,6 +3,8 @@ package com.openfit.health
 import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.FloorsClimbedRecord
+import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
 import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.StepsRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -23,6 +25,8 @@ enum class DailyTotal(val record: KClass<out Record>) {
     DistanceMeters(DistanceRecord::class),
     Floors(FloorsClimbedRecord::class),
     CaloriesOutKcal(TotalCaloriesBurnedRecord::class),
+    CaloriesInKcal(NutritionRecord::class),
+    WaterLiters(HydrationRecord::class),
 }
 
 /** Daily and hourly sums from Health Connect's aggregation API — one request per range, however long. */
@@ -93,6 +97,8 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
         DailyTotal.DistanceMeters -> DistanceRecord.DISTANCE_TOTAL
         DailyTotal.Floors -> FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL
         DailyTotal.CaloriesOutKcal -> TotalCaloriesBurnedRecord.ENERGY_TOTAL
+        DailyTotal.CaloriesInKcal -> NutritionRecord.ENERGY_TOTAL
+        DailyTotal.WaterLiters -> HydrationRecord.VOLUME_TOTAL
     }
 
     private fun value(total: DailyTotal, result: AggregationResult): Double? = when (total) {
@@ -100,5 +106,7 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
         DailyTotal.DistanceMeters -> result[DistanceRecord.DISTANCE_TOTAL]?.inMeters
         DailyTotal.Floors -> result[FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL]
         DailyTotal.CaloriesOutKcal -> result[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories
+        DailyTotal.CaloriesInKcal -> result[NutritionRecord.ENERGY_TOTAL]?.inKilocalories
+        DailyTotal.WaterLiters -> result[HydrationRecord.VOLUME_TOTAL]?.inLiters
     }
 }

@@ -474,4 +474,8 @@
     <string name="azm_title">Active Zone Minutes</string>
     <string name="unit_zone_minutes">Zone Minutes</string>
     <string name="phrase_zone_minutes">earned a total of %1$s %2$s</string>
+
+    <string name="phrase_food">logged a total of %1$s %2$s</string>
+    <string name="phrase_water">drank a total of %1$s %2$s</string>
+    <string name="sleep_score_subtitle">Sleep Score: %d</string>
 </resources>

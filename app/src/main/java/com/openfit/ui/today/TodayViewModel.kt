@@ -27,7 +27,9 @@ import com.openfit.health.DailyMetricsSource
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectSource
+import com.openfit.health.HealthConnectSleep
 import com.openfit.health.HealthConnectVitals
+import com.openfit.domain.sleepScore
 import com.openfit.health.DayLoadCache
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
@@ -73,6 +75,7 @@ sealed interface TodayUiState {
         val missingPermissions: Set<String>,
         val googleHealth: GoogleHealthStatus,
         val healthMetrics: List<MetricReading> = emptyList(),
+        val sleepScore: Int? = null,
         val refreshing: Boolean = false,
     ) : TodayUiState
 }
@@ -182,6 +185,7 @@ class TodayViewModel(
             profile = profile,
             missingPermissions = missing,
             googleHealth = googleHealth,
+            sleepScore = runCatching { HealthConnectSleep(gateway).nights(date, date)[date]?.let(::sleepScore) }.getOrNull(),
             healthMetrics = runCatching {
                 metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date))
             }.getOrDefault(emptyList()),

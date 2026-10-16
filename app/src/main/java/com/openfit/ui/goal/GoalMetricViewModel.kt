@@ -48,9 +48,18 @@ enum class GoalMetric(val total: DailyTotal?, val goal: (Profile) -> Double, val
     Floors(DailyTotal.Floors, { it.dailyFloorsGoal.toDouble() }),
     Energy(DailyTotal.CaloriesOutKcal, { it.dailyCaloriesOutGoal.toDouble() }),
 
+    Food(DailyTotal.CaloriesInKcal, { it.dailyCaloriesInGoal.toDouble() }),
+    Water(DailyTotal.WaterLiters, { water(it.dailyWaterGoalLiters, it) }, { liters, profile -> water(liters, profile) }),
+
     /** Fitbit's default daily goal is the weekly one spread over seven days (150 → 22). */
     ZoneMinutes(null, { ceil(it.fitnessGoal.weeklyZoneMinutes / 7.0) }),
 }
+
+private const val FL_OZ_PER_LITER = 33.814
+
+/** Water in millilitres, or fluid ounces for imperial units. */
+private fun water(liters: Double, profile: Profile): Double =
+    if (profile.units == UnitSystem.Imperial) liters * FL_OZ_PER_LITER else liters * 1_000
 
 private fun distanceFromMeters(meters: Double, profile: Profile): Double =
     if (profile.units == UnitSystem.Imperial) meters / METERS_PER_MILE else meters / 1_000
