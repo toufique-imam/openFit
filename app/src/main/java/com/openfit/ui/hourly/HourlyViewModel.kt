@@ -4,7 +4,6 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.openfit.domain.ActivityGlance
 import com.openfit.domain.ChartPeriod
-import com.openfit.domain.DEFAULT_ACTIVE_HOURS
 import com.openfit.domain.PeriodRow
 import com.openfit.domain.activityGlance
 import com.openfit.domain.dayRows
@@ -16,6 +15,8 @@ import com.openfit.domain.weekRows
 import com.openfit.health.DailyTotal
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectTotals
+import com.openfit.profile.Profile
+import com.openfit.profile.ProfileStore
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -38,7 +39,10 @@ sealed interface HourlyUiState {
         val anchor: LocalDate,
         val today: LocalDate,
         val mode: HourlyMode,
-        /** Day: steps per hour of the 9am–5pm window, and the hour now (null on past days). */
+        val profile: Profile,
+        /** The user's hourly goal window; null until it is set, when the screen offers to set it. */
+        val window: IntRange?,
+        /** Day: steps per hour, and the hour now (null on past days). */
         val hourly: Map<Int, Double>,
         val currentHour: Int?,
         val glance: ActivityGlance?,
@@ -49,7 +53,7 @@ sealed interface HourlyUiState {
     ) : HourlyUiState
 }
 
-class HourlyViewModel(gateway: HealthConnectGateway) : ViewModel() {
+class HourlyViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
 
     private val totals = HealthConnectTotals(gateway)
     private val zone = ZoneId.systemDefault()
@@ -80,6 +84,11 @@ class HourlyViewModel(gateway: HealthConnectGateway) : ViewModel() {
         load()
     }
 
+    fun saveProfile(profile: Profile) {
+        profileStore.save(profile)
+        load()
+    }
+
     fun selectMode(selected: HourlyMode) {
         mode = selected
         (_state.value as? HourlyUiState.Ready)?.let { _state.value = it.copy(mode = selected) }
@@ -91,23 +100,42 @@ class HourlyViewModel(gateway: HealthConnectGateway) : ViewModel() {
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
-                if (period == ChartPeriod.Day) {
+                val profile = profileStore.load()
+                val window = profile.activeHours
+                if (window == null) {
                     HourlyUiState.Ready(
                         period = period,
                         anchor = anchor,
                         today = today,
                         mode = mode,
+                        profile = profile,
+                        window = null,
+                        hourly = emptyMap(),
+                        currentHour = null,
+                        glance = null,
+                        hoursByDay = emptyMap(),
+                        inactiveByDay = emptyMap(),
+                        rows = emptyList(),
+                    )
+                } else if (period == ChartPeriod.Day) {
+                    HourlyUiState.Ready(
+                        period = period,
+                        anchor = anchor,
+                        today = today,
+                        mode = mode,
+                        profile = profile,
+                        window = window,
                         hourly = totals.hourly(DailyTotal.Steps, anchor),
                         currentHour = if (anchor == today) LocalDateTime.now().hour else null,
-                        glance = glance(anchor),
+                        glance = glance(anchor, window),
                         hoursByDay = emptyMap(),
                         inactiveByDay = emptyMap(),
                         rows = emptyList(),
                     )
                 } else {
-                    val hours = totals.hourlyByDay(DailyTotal.Steps, days.first(), days.last()).mapValues { hoursMet(it.value).toDouble() }
+                    val hours = totals.hourlyByDay(DailyTotal.Steps, days.first(), days.last()).mapValues { hoursMet(it.value, window).toDouble() }
                     val inactive = if (period == ChartPeriod.Week || period == ChartPeriod.Month) {
-                        days.associateWith { day -> glance(day).inactiveMinutes.toDouble() }
+                        days.associateWith { day -> glance(day, window).inactiveMinutes.toDouble() }
                     } else {
                         emptyMap()
                     }
@@ -116,6 +144,8 @@ class HourlyViewModel(gateway: HealthConnectGateway) : ViewModel() {
                         anchor = anchor,
                         today = today,
                         mode = mode,
+                        profile = profile,
+                        window = window,
                         hourly = emptyMap(),
                         currentHour = null,
                         glance = null,
@@ -137,8 +167,7 @@ class HourlyViewModel(gateway: HealthConnectGateway) : ViewModel() {
         }
     }
 
-    private suspend fun glance(day: LocalDate): ActivityGlance {
-        val window = DEFAULT_ACTIVE_HOURS
+    private suspend fun glance(day: LocalDate, window: IntRange): ActivityGlance {
         val minutes = totals.minutely(DailyTotal.Steps, day, window.first, window.last)
         val from = day.atTime(window.first, 0).atZone(zone).toEpochSecond() / 60
         val until = minOf(day.atTime(window.last, 59).atZone(zone).toEpochSecond() / 60 + 1, System.currentTimeMillis() / 60_000)

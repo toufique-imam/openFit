@@ -78,6 +78,10 @@ import com.openfit.ui.detail.canGoForward
 import com.openfit.ui.detail.chartXLabels
 import com.openfit.ui.detail.isCurrentPeriod
 import com.openfit.ui.detail.periodLabel
+import com.openfit.ui.detail.MenuAction
+import com.openfit.ui.detail.SetGoalLink
+import com.openfit.ui.goals.Goal
+import com.openfit.ui.goals.GoalEditor
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.today.ArcGauge
 import com.openfit.ui.today.IconBadge
@@ -112,6 +116,8 @@ private val CLOCK_24H = DateTimeFormatter.ofPattern("HH:mm")
 fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sheet by rememberSaveable { mutableStateOf<Int?>(null) }
+    var editingGoal by rememberSaveable { mutableStateOf<Goal?>(null) }
+    val setGoal: (Goal) -> Unit = { editingGoal = it }
     val ready = state as? SleepUiState.Ready
     DetailScaffold(
         title = stringResource(R.string.sleep_title),
@@ -119,6 +125,11 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
         period = ready?.period ?: ChartPeriod.Day,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
+        menu = if (ready == null) {
+            emptyList()
+        } else {
+            listOf(Goal.SleepDuration, Goal.SleepSchedule).map { goal -> MenuAction(stringResource(goal.title)) { setGoal(goal) } }
+        },
     ) {
         when (val current = state) {
             SleepUiState.Loading -> DetailLoading(ACCENT.accent)
@@ -132,17 +143,29 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
                     )
                 }
                 if (current.period == ChartPeriod.Day) {
-                    dayContent(current, viewModel::selectStageMode, onLearnMore = { sheet = it })
+                    dayContent(current, viewModel::selectStageMode, onLearnMore = { sheet = it }, onSetGoal = setGoal)
                 } else {
-                    periodContent(current, viewModel::selectChart)
+                    periodContent(current, viewModel::selectChart, setGoal)
                 }
             }
         }
     }
     sheet?.let { InfoSheet(it) { sheet = null } }
+    val goal = editingGoal
+    if (goal != null && ready != null) {
+        GoalEditor(
+            goal = goal,
+            profile = ready.profile,
+            onSave = {
+                editingGoal = null
+                viewModel.saveProfile(it)
+            },
+            onDismiss = { editingGoal = null },
+        )
+    }
 }
 
-private fun LazyListScope.dayContent(state: SleepUiState.Ready, onMode: (StageMode) -> Unit, onLearnMore: (Int) -> Unit) {
+private fun LazyListScope.dayContent(state: SleepUiState.Ready, onMode: (StageMode) -> Unit, onLearnMore: (Int) -> Unit, onSetGoal: (Goal) -> Unit) {
     val night = state.night
     val goal = state.profile.sleepGoalMinutes
     item {
@@ -152,11 +175,15 @@ private fun LazyListScope.dayContent(state: SleepUiState.Ready, onMode: (StageMo
                     HeaderValue("–", "")
                     Text(stringResource(R.string.sleep_no_night), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
                 } else {
-                    HeaderValue(valueText { duration(Duration.ofMinutes(night.totalAsleepMinutes.toLong()), false) }, stringResource(R.string.sleep_of_goal, goalLabel(goal)))
+                    HeaderValue(
+                        valueText { duration(Duration.ofMinutes(night.totalAsleepMinutes.toLong()), false) },
+                        goal?.let { stringResource(R.string.sleep_of_goal, goalLabel(it)) }.orEmpty(),
+                    )
                 }
+                if (goal == null) SetGoalLink(ACCENT.accent) { onSetGoal(Goal.SleepDuration) }
             }
             Column(Modifier.padding(top = 14.dp)) {
-                if (night == null) {
+                if (night == null || goal == null) {
                     IconBadge(Icons.Outlined.Bedtime, ACCENT)
                 } else {
                     ArcGauge(Icons.Outlined.Bedtime, ACCENT, night.totalAsleepMinutes / goal.toFloat(), background = OpenFitColors.Background)
@@ -184,9 +211,12 @@ private fun LazyListScope.dayContent(state: SleepUiState.Ready, onMode: (StageMo
                 onLearnMore(R.string.sleep_timeline_sheet)
             }
             Text(timeRange(night), style = MaterialTheme.typography.headlineMedium, color = OpenFitColors.OnSurface, modifier = Modifier.padding(top = 8.dp))
-            state.schedule?.let {
+            val schedule = state.schedule
+            if (schedule == null) {
+                SetGoalLink(ACCENT.accent, stringResource(R.string.sleep_set_schedule_link)) { onSetGoal(Goal.SleepSchedule) }
+            } else {
                 Text(
-                    stringResource(R.string.sleep_schedule_current, scheduleTime(it.startMinute), scheduleTime(it.endMinute)),
+                    stringResource(R.string.sleep_schedule_current, scheduleTime(schedule.startMinute), scheduleTime(schedule.endMinute)),
                     style = MaterialTheme.typography.bodyMedium,
                     color = OpenFitColors.OnSurfaceVariant,
                 )
@@ -368,23 +398,27 @@ private fun StageBars(night: SleepNight, state: SleepUiState.Ready, modifier: Mo
     }
 }
 
-private fun LazyListScope.periodContent(state: SleepUiState.Ready, onChart: (SleepChart, SleepStage) -> Unit) {
+private fun LazyListScope.periodContent(state: SleepUiState.Ready, onChart: (SleepChart, SleepStage) -> Unit, onSetGoal: (Goal) -> Unit) {
     val current = isCurrentPeriod(state.period, state.anchor, state.today)
     val days = periodDays(state.period, state.anchor).filter { it <= state.today }
     val asleep = state.nights.mapValues { it.value.totalAsleepMinutes.toDouble() }
-    val goal = state.profile.sleepGoalMinutes.toDouble()
+    val goal = state.profile.sleepGoalMinutes?.toDouble()
     item {
         Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 13.dp)) {
             when (state.chart) {
                 SleepChart.Duration -> {
                     val average = averagePerDay(days, asleep)
                     HeaderValue(average?.let { valueText { duration(Duration.ofMinutes(it.roundToInt().toLong()), false) } } ?: AnnotatedString("–"), stringResource(R.string.sleep_per_day_avg))
-                    val goalDays = days.count { (asleep[it] ?: 0.0) >= goal }
-                    Text(
-                        pluralStringResource(if (current) R.plurals.sleep_goal_days_current else R.plurals.sleep_goal_days_past, goalDays, goalDays),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OpenFitColors.OnSurfaceVariant,
-                    )
+                    if (goal == null) {
+                        SetGoalLink(ACCENT.accent) { onSetGoal(Goal.SleepDuration) }
+                    } else {
+                        val goalDays = days.count { (asleep[it] ?: 0.0) >= goal }
+                        Text(
+                            pluralStringResource(if (current) R.plurals.sleep_goal_days_current else R.plurals.sleep_goal_days_past, goalDays, goalDays),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OpenFitColors.OnSurfaceVariant,
+                        )
+                    }
                 }
                 SleepChart.Score -> {
                     val average = state.scores.values.takeIf { it.isNotEmpty() }?.average()?.roundToInt()
@@ -414,8 +448,8 @@ private fun LazyListScope.periodContent(state: SleepUiState.Ready, onChart: (Sle
                 }
                 SleepChart.Schedule -> {
                     val schedule = state.schedule
-                    val onSchedule = if (schedule == null) 0 else state.nights.values.count { onSchedule(it, schedule) }
-                    HeaderValue(onSchedule.toString(), stringResource(R.string.sleep_on_schedule))
+                    HeaderValue(schedule?.let { s -> state.nights.values.count { onSchedule(it, s) }.toString() } ?: "–", stringResource(R.string.sleep_on_schedule))
+                    if (schedule == null) SetGoalLink(ACCENT.accent, stringResource(R.string.sleep_set_schedule_link)) { onSetGoal(Goal.SleepSchedule) }
                     val nights = state.nights.values
                     if (nights.isNotEmpty()) {
                         val zone = ZoneId.systemDefault()
@@ -449,12 +483,16 @@ private fun LazyListScope.periodContent(state: SleepUiState.Ready, onChart: (Sle
                         values = values,
                         color = ACCENT.accent,
                         axisMax = top,
-                        axisLabels = listOf(
-                            AxisLabel(0.0, "0m"),
-                            AxisLabel(goal / 2, hoursLabel(goal / 2)),
-                            AxisLabel(goal, hoursLabel(goal), highlight = true),
-                            AxisLabel(top, hoursLabel(top)),
-                        ),
+                        axisLabels = if (goal == null) {
+                            listOf(AxisLabel(0.0, "0m"), AxisLabel(top / 2, hoursLabel(top / 2)), AxisLabel(top, hoursLabel(top)))
+                        } else {
+                            listOf(
+                                AxisLabel(0.0, "0m"),
+                                AxisLabel(goal / 2, hoursLabel(goal / 2)),
+                                AxisLabel(goal, hoursLabel(goal), highlight = true),
+                                AxisLabel(top, hoursLabel(top)),
+                            )
+                        },
                         xLabels = labels,
                         goal = goal,
                     )
@@ -639,7 +677,7 @@ private fun LazyListScope.sleepRows(state: SleepUiState.Ready, current: Boolean)
                         Text(stringResource(R.string.no_data), style = MaterialTheme.typography.headlineMedium, color = OpenFitColors.OnSurface)
                     } else {
                         Row(verticalAlignment = Alignment.CenterVertically) {
-                            if (state.period == ChartPeriod.Week && row.load >= goal) {
+                            if (state.period == ChartPeriod.Week && goal != null && row.load >= goal) {
                                 Icon(Icons.Filled.Check, contentDescription = null, tint = ACCENT.accent, modifier = Modifier.size(18.dp).padding(end = 4.dp))
                             }
                             Text(valueText { duration(Duration.ofMinutes(row.load.roundToInt().toLong()), true) }, style = MaterialTheme.typography.headlineMedium, color = OpenFitColors.OnSurface)

@@ -34,10 +34,19 @@ is left, so that work can resume without re-deriving it.
   - Cardio Load
   - Daily Readiness
   - Steps, Distance, Floors and Energy burned
+  - Active Zone Minutes
   - Heart (with 3 months)
   - Exercise
   - Hourly activity
   - Sleep
+  - Health Metrics
+  - Food, Water and Weight
+- Goals (from the You tab): Sleep, Activity, Nutrition and Health, as in Fitbit's Goals list.
+
+**Goals are user input only.** No goal has a built-in value:
+- An unset goal shows "Set goal" on the Goals list and on its screen, and tiles show the icon without a progress ring.
+- Each screen's menu has "Set goal" or "Adjust goal". "Reset goal" clears one.
+- The fitness goal (Maintain or Improve) always has a value, because the Cardio Load target and the weekly Active Zone Minutes goal follow from it.
 
 **Calibrated against Fitbit's own numbers:**
 
@@ -51,13 +60,8 @@ is left, so that work can resume without re-deriving it.
 
 ## Roadmap
 
-1. **Health Metrics** tile and screen: breathing rate, RHR, HRV, SpO2 and skin temperature against a personal range.
-2. **Active Zone Minutes** screen.
-3. **Nutrition and body:** Food, Water and Weight screens.
-4. **Stress and mindfulness:** mindful days from Health Connect. Fitbit's Stress Management Score needs EDA data Health Connect doesn't carry.
-5. **Profile settings:**
-   - A sleep schedule (bedtime and wake targets) for "Your current sleep schedule" and "days on schedule".
-   - Distance, floors, energy and water goals.
-6. **Hourly activity glance:** Fitbit's stationary-time definition (see algorithms).
-7. **Today chrome:** the header's battery chip and messages, the + FAB, and a sticky date header.
-8. **Calibration:** more Readiness and Sleep Score data once a full month of baseline exists. The Cardio Load Improve window and readiness shifts are still assumed.
+1. **Stress and mindfulness:** mindful days from Health Connect, and a mindfulness goal. Fitbit's Stress Management Score needs EDA data Health Connect doesn't carry.
+2. **Hourly activity glance:** Fitbit's stationary-time definition (see algorithms).
+3. **Today chrome:** the header's battery chip and messages, the + FAB, and a sticky date header.
+4. **Calibration:** more Readiness and Sleep Score data once a full month of baseline exists. The Cardio Load Improve window and readiness shifts are still assumed.
+5. **Goals still missing:** body fat, running distance and mindfulness (Fitbit has them; openFit has no screens for them yet).

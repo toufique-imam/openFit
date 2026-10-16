@@ -64,6 +64,11 @@ class ExerciseViewModel(gateway: HealthConnectGateway, private val profileStore:
         load()
     }
 
+    fun saveProfile(profile: com.openfit.profile.Profile) {
+        profileStore.save(profile)
+        load()
+    }
+
     fun selectPeriod(selected: ChartPeriod) {
         if (selected == period) return
         period = selected

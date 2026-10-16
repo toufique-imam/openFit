@@ -34,6 +34,13 @@ import com.openfit.ui.detail.DetailScaffold
 import com.openfit.ui.detail.GroupedCard
 import com.openfit.ui.detail.HeaderValue
 import com.openfit.ui.detail.LineDotsChart
+import com.openfit.ui.detail.MenuAction
+import com.openfit.ui.detail.SetGoalLink
+import com.openfit.ui.goals.Goal
+import com.openfit.ui.goals.GoalEditor
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.openfit.ui.detail.PagePadding
 import com.openfit.ui.detail.PeriodNavigator
 import com.openfit.ui.detail.SectionGap
@@ -92,6 +99,11 @@ class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: P
         load()
     }
 
+    fun saveProfile(profile: Profile) {
+        profileStore.save(profile)
+        load()
+    }
+
     fun selectPeriod(selected: ChartPeriod) {
         if (selected == period) return
         period = selected
@@ -132,6 +144,8 @@ class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: P
 fun WeightRoute(viewModel: WeightViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? WeightUiState.Ready
+    var editingGoal by rememberSaveable { mutableStateOf(false) }
+    val setGoal = { editingGoal = true }
     DetailScaffold(
         title = stringResource(R.string.tile_weight),
         accent = ACCENT.accent,
@@ -139,6 +153,7 @@ fun WeightRoute(viewModel: WeightViewModel, onBack: () -> Unit) {
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
+        menu = listOfNotNull(ready?.let { MenuAction(stringResource(if (it.profile.weightGoalKg == null) R.string.goal_set else R.string.goal_adjust), setGoal) }),
     ) {
         when (val current = state) {
             WeightUiState.Loading -> DetailLoading(ACCENT.accent)
@@ -151,7 +166,7 @@ fun WeightRoute(viewModel: WeightViewModel, onBack: () -> Unit) {
                         viewModel::shift,
                     )
                 }
-                item { Header(current) }
+                item { Header(current, setGoal) }
                 item { Chart(current) }
                 val rows = current.weights.entries.sortedByDescending { it.key }
                 if (rows.isNotEmpty()) {
@@ -179,10 +194,21 @@ fun WeightRoute(viewModel: WeightViewModel, onBack: () -> Unit) {
             }
         }
     }
+    if (editingGoal && ready != null) {
+        GoalEditor(
+            goal = Goal.Weight,
+            profile = ready.profile,
+            onSave = {
+                editingGoal = false
+                viewModel.saveProfile(it)
+            },
+            onDismiss = { editingGoal = false },
+        )
+    }
 }
 
 @Composable
-private fun Header(state: WeightUiState.Ready) {
+private fun Header(state: WeightUiState.Ready, onSetGoal: () -> Unit) {
     Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 13.dp)) {
         val latest = state.latest
         val unit = stringResource(unit(state.profile))
@@ -202,6 +228,7 @@ private fun Header(state: WeightUiState.Ready) {
         goalText(latest?.second, state.profile)?.let {
             Text(it, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
         }
+        if (state.profile.weightGoalKg == null) SetGoalLink(ACCENT.accent, onClick = onSetGoal)
     }
 }
 

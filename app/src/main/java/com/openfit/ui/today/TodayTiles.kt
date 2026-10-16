@@ -20,7 +20,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
-import androidx.compose.material.icons.outlined.Air
+import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -32,8 +32,6 @@ import androidx.compose.material.icons.outlined.MonitorHeart
 import androidx.compose.material.icons.outlined.MonitorWeight
 import androidx.compose.material.icons.outlined.Restaurant
 import androidx.compose.material.icons.outlined.Stairs
-import androidx.compose.material.icons.outlined.Thermostat
-import androidx.compose.material.icons.outlined.WaterDrop
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -58,6 +56,7 @@ import com.openfit.ui.MetricPage
 import com.openfit.domain.MetricReading
 import com.openfit.ui.vitals.abbreviation
 import com.openfit.ui.weight.goalText
+import com.openfit.ui.goals.hourText
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.LoadRange
 import com.openfit.domain.Reading
@@ -130,38 +129,29 @@ fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
             MiniMetric(
                 label = stringResource(R.string.tile_exercise_days),
-                value = valueText { count(state.exerciseDays.size, profile.weeklyExerciseDaysGoal, smallTotal = true) },
+                value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal, smallTotal = true) },
                 onClick = { onOpen(MetricPage.Exercise) },
             ) {
-                SegmentedGauge(
-                    Icons.Outlined.FitnessCenter,
-                    OpenFitColors.Mint,
-                    profile.weeklyExerciseDaysGoal,
-                    state.exerciseDays.size,
-                    iconRotation = 90f,
-                )
+                val goal = profile.weeklyExerciseDaysGoal
+                if (goal == null) {
+                    IconBadge(Icons.Outlined.FitnessCenter, OpenFitColors.Mint, MINI_GAUGE)
+                } else {
+                    SegmentedGauge(Icons.Outlined.FitnessCenter, OpenFitColors.Mint, goal, state.exerciseDays.size, iconRotation = 90f)
+                }
             }
             MiniMetric(
                 label = stringResource(R.string.focus_sleep),
                 value = asleep?.let { valueText { duration(it) } },
                 onClick = { onOpen(MetricPage.Sleep) },
             ) {
-                if (asleep == null) {
-                    IconBadge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, MINI_GAUGE)
-                } else {
-                    ArcGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, progress(asleep, profile.sleepGoalMinutes))
-                }
+                GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
             }
             MiniMetric(
                 label = stringResource(R.string.tile_steps),
                 value = AnnotatedString(whole(metrics.steps ?: 0)),
                 onClick = { onOpen(MetricPage.Steps) },
             ) {
-                ArcGauge(
-                    Icons.AutoMirrored.Outlined.DirectionsWalk,
-                    OpenFitColors.Mint,
-                    (metrics.steps ?: 0).toFloat() / profile.dailyStepGoal,
-                )
+                GoalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal)
             }
         }
     }
@@ -203,11 +193,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" · "),
             onClick = { onOpen(MetricPage.Sleep) },
         ) {
-            if (asleep == null) {
-                IconBadge(Icons.Outlined.Bedtime, OpenFitColors.Lavender)
-            } else {
-                ArcGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, progress(asleep, profile.sleepGoalMinutes))
-            }
+            GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
         }
     }
     item {
@@ -248,7 +234,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
         MetricTile(
             title = stringResource(R.string.tile_exercise_days),
-            value = valueText { count(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
+            value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
             subtitle = weekLabel(state),
             onClick = { onOpen(MetricPage.Exercise) },
         ) {
@@ -273,18 +259,23 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     }
     item {
         MetricTile(stringResource(R.string.tile_steps), AnnotatedString(whole(metrics.steps ?: 0)), dayLabel(state), onClick = { onOpen(MetricPage.Steps) }) {
-            ArcGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toFloat() / profile.dailyStepGoal)
+            GoalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal)
         }
     }
     item {
-        val hourly = hourlyActivity(metrics.hourlySteps, currentHour = if (state.isToday) LocalTime.now().hour else null)
+        val window = profile.activeHours
+        val hourly = window?.let { hourlyActivity(metrics.hourlySteps, currentHour = if (state.isToday) LocalTime.now().hour else null, window = it) }
         MetricTile(
             title = stringResource(R.string.tile_hourly_activity),
-            value = valueText { count(hourly.met, hourly.hours.size) },
+            value = hourly?.let { valueText { count(it.met, it.hours.size) } } ?: noValue(stringResource(R.string.goal_no_goal)),
             subtitle = dayLabel(state),
             onClick = { onOpen(MetricPage.Hourly) },
         ) {
-            HourlyBars(hourly.hours, "%02d:00".format(hourly.window.first), "%02d:00".format(hourly.window.last), OpenFitColors.Mint)
+            if (hourly == null) {
+                IconBadge(Icons.Outlined.AccessTime, OpenFitColors.Mint)
+            } else {
+                HourlyBars(hourly.hours, hourText(hourly.window.first), hourText(hourly.window.last), OpenFitColors.Mint)
+            }
         }
     }
     item {
@@ -299,7 +290,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             subtitle = dayLabel(state),
             onClick = { onOpen(MetricPage.Distance) },
         ) {
-            ArcGauge(Icons.Outlined.LocationOn, OpenFitColors.Mint, (meters / profile.dailyDistanceGoalMeters).toFloat())
+            GoalGauge(Icons.Outlined.LocationOn, OpenFitColors.Mint, meters, profile.dailyDistanceGoalMeters)
         }
     }
     item {
@@ -310,13 +301,13 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             subtitle = dayLabel(state),
             onClick = { onOpen(MetricPage.Energy) },
         ) {
-            ArcGauge(Icons.Outlined.LocalFireDepartment, OpenFitColors.Mint, (calories / profile.dailyCaloriesOutGoal).toFloat())
+            GoalGauge(Icons.Outlined.LocalFireDepartment, OpenFitColors.Mint, calories, profile.dailyCaloriesOutGoal)
         }
     }
     item {
         val floors = metrics.floors ?: 0.0
         MetricTile(stringResource(R.string.tile_floors), AnnotatedString(whole(floors.toInt())), dayLabel(state), onClick = { onOpen(MetricPage.Floors) }) {
-            ArcGauge(Icons.Outlined.Stairs, OpenFitColors.Mint, (floors / profile.dailyFloorsGoal).toFloat())
+            GoalGauge(Icons.Outlined.Stairs, OpenFitColors.Mint, floors, profile.dailyFloorsGoal)
         }
     }
 
@@ -350,17 +341,17 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     section(R.string.section_nutrition)
     item {
         val eaten = metrics.caloriesInKcal ?: 0.0
-        val difference = profile.dailyCaloriesInGoal - eaten
+        val difference = profile.dailyCaloriesInGoal?.let { it - eaten }
         MetricTile(
             title = stringResource(R.string.tile_food),
             value = quantityText(whole(eaten), stringResource(R.string.unit_cal)),
-            subtitle = listOf(
+            subtitle = listOfNotNull(
                 dayLabel(state),
-                stringResource(if (difference >= 0) R.string.food_below_target else R.string.food_above_target, whole(abs(difference))),
+                difference?.let { stringResource(if (it >= 0) R.string.food_below_target else R.string.food_above_target, whole(abs(it))) },
             ).joinToString(" · "),
             onClick = { onOpen(MetricPage.Food) },
         ) {
-            ArcGauge(Icons.Outlined.Restaurant, OpenFitColors.Pink, (eaten / profile.dailyCaloriesInGoal).toFloat())
+            GoalGauge(Icons.Outlined.Restaurant, OpenFitColors.Pink, eaten, profile.dailyCaloriesInGoal)
         }
     }
     item {
@@ -375,7 +366,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             subtitle = dayLabel(state),
             onClick = { onOpen(MetricPage.Water) },
         ) {
-            ArcGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, (liters / profile.dailyWaterGoalLiters).toFloat())
+            GoalGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, liters, profile.dailyWaterGoalLiters)
         }
     }
 }
@@ -580,4 +571,13 @@ private fun readinessLabel(readiness: Readiness): Int = when {
     else -> R.string.readiness_moderate
 }
 
-private fun progress(asleep: Duration?, goalMinutes: Int): Float = (asleep?.toMinutes() ?: 0).toFloat() / goalMinutes
+/** A goal's progress ring, or just its icon while the user has not set the goal (or there is nothing to measure). */
+@Composable
+private fun GoalGauge(icon: ImageVector, color: MetricColor, value: Double?, goal: Number?) {
+    if (value == null || goal == null) IconBadge(icon, color) else ArcGauge(icon, color, (value / goal.toDouble()).toFloat())
+}
+
+/** "3 of 5" exercise days, or just "3" without a weekly goal. */
+private fun ValueText.exerciseCount(days: Int, goal: Int?, smallTotal: Boolean = false) {
+    if (goal == null) big(days.toString()) else count(days, goal, smallTotal)
+}

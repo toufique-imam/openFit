@@ -44,6 +44,9 @@ import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.profile.Profile
+import com.openfit.ui.goals.GoalCategory
+import com.openfit.ui.goals.activeGoals
+import androidx.compose.material.icons.outlined.Restaurant
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.SectionHeaderStyle
 import com.openfit.ui.today.TodayUiState
@@ -57,15 +60,15 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 
-/** A group of goals on the You tab and how many it holds. */
-private data class GoalGroup(val title: Int, val icon: ImageVector, val count: Int)
+/** A goal category on the You tab and how many of its goals are set. */
+private data class GoalGroup(val title: Int, val icon: ImageVector, val active: Int)
 
 /**
  * Fitbit's You tab, limited to what openFit can show: the profile card, goals and Health Connect. Fitbit's community,
  * Premium and badges depend on Fitbit's services.
  */
 @Composable
-fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit) {
+fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenGoals: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? TodayUiState.Ready
     val profile = ready?.profile
@@ -114,18 +117,16 @@ fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit) {
                     stringResource(R.string.you_see_all),
                     style = MaterialTheme.typography.titleMedium,
                     color = OpenFitColors.Mint.accent,
-                    modifier = Modifier.clickable(onClick = onEditProfile),
+                    modifier = Modifier.clickable(onClick = onOpenGoals),
                 )
             }
         }
         item {
-            val groups = listOf(
-                GoalGroup(R.string.you_goals_sleep, Icons.Outlined.Bedtime, 1),
-                GoalGroup(R.string.you_goals_activity, Icons.AutoMirrored.Outlined.DirectionsWalk, 6),
-                GoalGroup(R.string.you_goals_health, Icons.Outlined.BarChart, 1),
-            )
+            val groups = GoalCategory.entries.map { category ->
+                GoalGroup(category.title, category.icon, profile?.let { activeGoals(it, category) } ?: 0)
+            }
             LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(groups) { group -> GoalCard(group, onEditProfile) }
+                items(groups) { group -> GoalCard(group, onOpenGoals) }
             }
         }
         item {
@@ -188,8 +189,16 @@ private fun GoalCard(group: GoalGroup, onClick: () -> Unit) {
             Icon(group.icon, contentDescription = null, tint = OpenFitColors.OnSurface, modifier = Modifier.size(24.dp))
             Column {
                 Text(stringResource(group.title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
-                Text(pluralStringResource(R.plurals.you_goal_count, group.count, group.count), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                Text(stringResource(R.string.you_goal_count, group.active), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
             }
         }
     }
 }
+
+private val GoalCategory.icon: ImageVector
+    get() = when (this) {
+        GoalCategory.Sleep -> Icons.Outlined.Bedtime
+        GoalCategory.Activity -> Icons.AutoMirrored.Outlined.DirectionsWalk
+        GoalCategory.Nutrition -> Icons.Outlined.Restaurant
+        GoalCategory.Health -> Icons.Outlined.BarChart
+    }

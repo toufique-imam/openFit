@@ -123,7 +123,8 @@ The user only picks a goal, **Maintain** or **Improve** (Profile). Everything el
 
 ## Hourly activity (`HourlyActivity.kt`)
 
-- Window 09:00–17:00 (9 hours).
+- The window is the user's hourly goal (start and end hour). Fitbit's usual 9am–6pm gives 9 hours, 09:00–17:00.
+- Unset, the tile reads "No goal set" and the screen offers to set it.
 - An hour is met at ≥ 250 steps.
 - Statuses: Met, Missed, Upcoming.
 
@@ -175,7 +176,7 @@ Health Connect's stage minutes agree with Fitbit's timeline:
 - 24 Sept: REM 53 vs 54, Deep 69 vs 70, with the same 2:21–9:09 am window.
 - Total sleep reads 1–2 % lower than Fitbit's.
 
-**"Current sleep schedule":** in Fitbit this is the user's own bedtime target. openFit shows the 30-night median instead, until a schedule setting exists.
+**"Current sleep schedule":** the user's own bedtime and wake-time goal, as in Fitbit. Until it is set, the Sleep screen offers "Set a sleep schedule", and "days on schedule" shows a dash. A night is on schedule when both ends are within 30 minutes of the goal.
 
 ## Heart-rate zones (`ZoneMinutes.kt`)
 

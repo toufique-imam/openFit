@@ -40,6 +40,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRowDefaults
 import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
@@ -293,6 +294,28 @@ fun LinkSection(title: String, action: String, body: String, accent: Color, onAc
     }
 }
 
+/** A screen whose goal the user has not set yet: what the goal is for, and a button to set it. */
+@Composable
+fun SetGoalPrompt(body: String, accent: Color, onSetGoal: () -> Unit) {
+    GroupedCard(0, 1, minHeight = 0.dp, modifier = Modifier.padding(top = 24.dp)) {
+        Column(Modifier.padding(start = 20.dp, end = 12.dp, top = 16.dp, bottom = 8.dp)) {
+            Text(body, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurface)
+            TextButton(onClick = onSetGoal, modifier = Modifier.align(Alignment.End)) { Text(stringResource(R.string.goal_set), color = accent) }
+        }
+    }
+}
+
+/** "Set goal" in a header, where the goal would otherwise be ("of 10,000 steps"). */
+@Composable
+fun SetGoalLink(accent: Color, label: String = stringResource(R.string.goal_set), onClick: () -> Unit) {
+    Text(
+        label,
+        style = MaterialTheme.typography.titleSmall,
+        color = accent,
+        modifier = Modifier.clickable(onClick = onClick).padding(vertical = 4.dp),
+    )
+}
+
 /** The big number at the top of a period, with its unit or status beside it on the same baseline. */
 @Composable
 fun HeaderValue(value: String, label: String) = HeaderValue(AnnotatedString(value), label)
@@ -306,13 +329,17 @@ fun HeaderValue(value: AnnotatedString, label: String) {
     }
 }
 
-/** Day tab header shared by metric screens: value and status on one baseline, description below, gauge at the end. */
+/**
+ * Day tab header shared by metric screens: value and status on one baseline, description below (or [footer], such as a
+ * "Set goal" link), gauge at the end.
+ */
 @Composable
-fun DayHeaderRow(value: String, status: String, description: String, gauge: @Composable () -> Unit) {
+fun DayHeaderRow(value: String, status: String, description: String?, footer: @Composable () -> Unit = {}, gauge: @Composable () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(start = PagePadding, end = 21.dp, top = 13.dp), verticalAlignment = Alignment.Top) {
         Column(Modifier.weight(1f).padding(end = 16.dp)) {
             HeaderValue(value, status)
-            Text(description, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+            description?.let { Text(it, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant) }
+            footer()
         }
         Column(Modifier.padding(top = 14.dp)) { gauge() }
     }

@@ -120,3 +120,24 @@ openFit's models for these are in [findings_algorithms.md](findings_algorithms.m
 - **Training status:** the ratio is clamped at 1.89 and truncated to 2 decimals, then banded: < 0.4 undertraining, < 0.8 at risk, < 1.1 maintaining, < 1.3 improving, < 1.5 at risk, else overtraining.
 - **Month headline:** the average daily ratio (needs ≥ 7 days), banded 0.8 / 1.1 / 1.3.
 - **Values:** loads are int-cast (truncated). Averages skip zero days.
+
+## Goals screen (decompiled)
+
+`anye.g` renders one category of the Goals list (`goals_l2_screen_app_bar_title`): rows 4dp apart, 16dp side margins.
+
+**Categories:** Activity, Health, Mindfulness, Nutrition, Sleep (`goal_list_category_title_*`). The You tab card shows "%1$d active" (`goals_category_card_description`).
+
+**Goal ids** (`anye.i`, "GoalsRenderingId"):
+
+| Category | Ids |
+| --- | --- |
+| Sleep | BEDTIME, WAKE_UP_TIME, SLEEP_SCHEDULE, DAILY_SLEEP_DURATION |
+| Activity | DAILY_STEPS, DAILY_DISTANCE, DAILY_ENERGY_BURNED, DAILY_FLOORS, DAILY_ACTIVE_MINUTES, DAILY_ACTIVE_ZONE_MINUTES, EXERCISE_SESSIONS, HOURLY_ACTIVITY, CARDIO_LOAD, RUNNING_MILEAGE |
+| Nutrition | DAILY_ENERGY_CONSUMED, DAILY_WATER_CONSUMED |
+| Health | WEIGHT, BODY_FAT_PERCENTAGE, BLOOD_GLUCOSE |
+| Mindfulness | MINDFULNESS_SESSIONS |
+
+**Row rules** (`anye.h`):
+- A goal whose state is DISABLED or UNSPECIFIED shows a "Set goal" button (`goal_list_item_set_goal`).
+- A set goal shows its value with a meta line: "Daily" (`goal_list_item_meta_daily`), "Weekly", "Target value" or "Target range" (blood glucose).
+- "Reset goal" asks "Reset %1$s?" and leaves the goal blank until a new one is set (`reset_goal_dialog_message`).

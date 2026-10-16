@@ -20,7 +20,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.LocalTime
-import java.time.ZoneId
 import kotlin.math.sqrt
 
 /** Day tab: how the stage rows are drawn. */
@@ -29,7 +28,7 @@ enum class StageMode { Stages, Benchmark, Average }
 /** Week and longer: which chart is shown. */
 enum class SleepChart { Duration, Score, Schedule, Stage }
 
-/** A usual bedtime and wake time, as minutes after 6pm the evening before (so midnight is 360). */
+/** The user's sleep schedule (bedtime and wake time), as minutes after 6pm the evening before (so midnight is 360). */
 data class SleepSchedule(val startMinute: Int, val endMinute: Int)
 
 sealed interface SleepUiState {
@@ -57,7 +56,6 @@ sealed interface SleepUiState {
 class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
 
     private val sleep = HealthConnectSleep(gateway)
-    private val zone = ZoneId.systemDefault()
 
     private val _state = MutableStateFlow<SleepUiState>(SleepUiState.Loading)
     val state: StateFlow<SleepUiState> = _state.asStateFlow()
@@ -87,6 +85,11 @@ class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: Pr
         load()
     }
 
+    fun saveProfile(profile: Profile) {
+        profileStore.save(profile)
+        load()
+    }
+
     fun selectStageMode(mode: StageMode) = update { it.copy(stageMode = mode.also { stageMode = it }) }
 
     fun selectChart(selected: SleepChart, stage: SleepStage = chartStage) =
@@ -102,19 +105,20 @@ class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: Pr
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
-                // The schedule and 30-day averages look back a month before the period.
-                val history = sleep.nights(days.first().minusDays(SCHEDULE_DAYS), days.last())
+                // The 30-day averages look back a month before the period.
+                val history = sleep.nights(days.first().minusDays(AVERAGE_DAYS), days.last())
                 val reference = if (period == ChartPeriod.Day) anchor else days.last()
-                val recent = history.filterKeys { it < reference && it >= reference.minusDays(SCHEDULE_DAYS) }
+                val recent = history.filterKeys { it < reference && it >= reference.minusDays(AVERAGE_DAYS) }
                 val night = history[anchor]
+                val profile = profileStore.load()
                 SleepUiState.Ready(
                     period = period,
                     anchor = anchor,
                     today = today,
-                    profile = profileStore.load(),
+                    profile = profile,
                     nights = history.filterKeys { it in days },
                     scores = history.filterKeys { it in days }.mapNotNull { (day, n) -> sleepScore(n)?.let { day to it } }.toMap(),
-                    schedule = schedule(recent.values),
+                    schedule = schedule(profile),
                     averagePercent = SleepStage.entries.associateWith { stage ->
                         recent.values.filter { it.segments.size > 1 }.map { it.percent(stage) }.takeIf { it.isNotEmpty() }?.average() ?: 0.0
                     },
@@ -131,12 +135,11 @@ class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: Pr
         }
     }
 
-    /** The median bedtime and wake time of recent nights. */
-    private fun schedule(nights: Collection<SleepNight>): SleepSchedule? {
-        if (nights.size < MIN_SCHEDULE_NIGHTS) return null
-        val starts = nights.map { minutesAfterSixPm(it.start.atZone(zone).toLocalTime()) }.sorted()
-        val ends = nights.map { minutesAfterSixPm(it.end.atZone(zone).toLocalTime()) }.sorted()
-        return SleepSchedule(starts[starts.size / 2], ends[ends.size / 2])
+    /** The schedule the user set as a goal; null until they set one. */
+    private fun schedule(profile: Profile): SleepSchedule? {
+        val bedtime = profile.bedtime ?: return null
+        val wake = profile.wakeTime ?: return null
+        return SleepSchedule(minutesAfterSixPm(bedtime), minutesAfterSixPm(wake))
     }
 
     private fun spread(values: List<Double>): Double? {
@@ -146,8 +149,7 @@ class SleepViewModel(gateway: HealthConnectGateway, private val profileStore: Pr
     }
 
     companion object {
-        const val SCHEDULE_DAYS = 30L
-        private const val MIN_SCHEDULE_NIGHTS = 3
+        const val AVERAGE_DAYS = 30L
 
         fun minutesAfterSixPm(time: LocalTime): Int = ((time.hour * 60 + time.minute) - 18 * 60).mod(24 * 60)
     }

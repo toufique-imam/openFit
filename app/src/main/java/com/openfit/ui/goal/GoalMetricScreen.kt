@@ -27,7 +27,15 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.domain.ChartPeriod
+import com.openfit.domain.GoalAxis
 import com.openfit.domain.goalAxis
+import com.openfit.ui.detail.MenuAction
+import com.openfit.ui.detail.SetGoalLink
+import com.openfit.ui.goals.GoalEditor
+import com.openfit.ui.today.IconBadge
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.openfit.domain.hourlyAxis
 import com.openfit.ui.detail.AxisLabel
 import com.openfit.ui.detail.BarChart
@@ -58,12 +66,15 @@ fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? GoalMetricUiState.Ready
     val accent = ready?.metric?.color ?: OpenFitColors.Mint
+    var editingGoal by rememberSaveable { mutableStateOf(false) }
+    val setGoal = { editingGoal = true }
     DetailScaffold(
         title = stringResource(ready?.metric?.title ?: R.string.tile_steps),
         accent = accent.accent,
         period = ready?.period ?: ChartPeriod.Day,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
+        menu = listOfNotNull(ready?.let { MenuAction(stringResource(if (it.goal == null) R.string.goal_set else R.string.goal_adjust), setGoal) }),
     ) {
         when (val current = state) {
             GoalMetricUiState.Loading -> DetailLoading(accent.accent)
@@ -76,22 +87,40 @@ fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
                         viewModel::shift,
                     )
                 }
-                if (current.period == ChartPeriod.Day) dayContent(current) else periodContent(current)
+                if (current.period == ChartPeriod.Day) dayContent(current, setGoal) else periodContent(current)
             }
         }
     }
+    if (editingGoal && ready != null) {
+        GoalEditor(
+            goal = ready.metric.editableGoal,
+            profile = ready.profile,
+            onSave = {
+                editingGoal = false
+                viewModel.saveProfile(it)
+            },
+            onDismiss = { editingGoal = false },
+        )
+    }
 }
 
-private fun LazyListScope.dayContent(state: GoalMetricUiState.Ready) {
+private fun LazyListScope.dayContent(state: GoalMetricUiState.Ready, onSetGoal: () -> Unit) {
     val value = state.dayValue ?: 0.0
     val isToday = state.anchor == state.today
     item {
-        val remaining = state.goal - value
+        val goal = state.goal
         val unit = stringResource(state.metric.unit(state.profile))
         val format = state.metric.format
+        if (goal == null) {
+            DayHeaderRow(value = format(value), status = unit, description = null, footer = { SetGoalLink(state.metric.color.accent, onClick = onSetGoal) }) {
+                IconBadge(state.metric.icon, state.metric.color)
+            }
+            return@item
+        }
+        val remaining = goal - value
         DayHeaderRow(
             value = format(value),
-            status = stringResource(R.string.goal_of, format(state.goal), unit),
+            status = stringResource(R.string.goal_of, format(goal), unit),
             description = when {
                 // Food is a target to stay under, worded as Fitbit does ("2,000 cal below target").
                 state.metric == GoalMetric.Food ->
@@ -101,7 +130,7 @@ private fun LazyListScope.dayContent(state: GoalMetricUiState.Ready) {
                 else -> stringResource(R.string.goal_exceeded, format(abs(remaining)), unit)
             },
         ) {
-            ArcGauge(state.metric.icon, state.metric.color, (value / state.goal).toFloat(), background = OpenFitColors.Background)
+            ArcGauge(state.metric.icon, state.metric.color, (value / goal).toFloat(), background = OpenFitColors.Background)
         }
     }
     item {
@@ -131,6 +160,7 @@ private fun LazyListScope.periodContent(state: GoalMetricUiState.Ready) {
             Text(
                 when {
                     state.period == ChartPeriod.Year -> stringResource(if (current) R.string.goal_year_current else R.string.goal_year_past, phrase)
+                    state.goal == null -> stringResource(if (current) R.string.goal_total_current else R.string.goal_year_past, phrase)
                     summary.goalDays > 0 -> pluralStringResource(
                         if (current) R.plurals.goal_days_current else R.plurals.goal_days_past,
                         summary.goalDays,
@@ -148,7 +178,8 @@ private fun LazyListScope.periodContent(state: GoalMetricUiState.Ready) {
         }
     }
     item {
-        val axis = goalAxis(state.goal, state.bars.maxOf { it ?: 0.0 })
+        val highest = state.bars.maxOf { it ?: 0.0 }
+        val axis = state.goal?.let { goalAxis(it, highest) } ?: hourlyAxis(highest).let { GoalAxis(it.max, listOf(0.0, it.max / 2, it.max)) }
         BarChart(
             values = state.bars,
             color = state.metric.color.accent,

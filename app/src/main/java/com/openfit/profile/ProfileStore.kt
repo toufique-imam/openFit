@@ -3,27 +3,36 @@ package com.openfit.profile
 import android.content.Context
 import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
+import java.time.LocalTime
 import java.util.Locale
 
 enum class UnitSystem { Metric, Imperial }
 
 enum class WeightUnit { Kilograms, Pounds }
 
+/**
+ * The user's details and goals. Goals are null until the user sets them: openFit never invents a target, and screens
+ * offer to set one instead.
+ */
 data class Profile(
     val name: String = "",
     val age: Int? = null,
     val sex: Sex? = null,
     val units: UnitSystem = UnitSystem.Metric,
     val weightUnit: WeightUnit = WeightUnit.Kilograms,
-    val dailyStepGoal: Int = 10_000,
     val fitnessGoal: FitnessGoal = FitnessGoal.Maintain,
-    val sleepGoalMinutes: Int = 8 * 60,
-    val weeklyExerciseDaysGoal: Int = 5,
-    val dailyDistanceGoalMeters: Double = 8_047.0,
-    val dailyFloorsGoal: Int = 10,
-    val dailyCaloriesOutGoal: Int = 2_500,
-    val dailyCaloriesInGoal: Int = 2_000,
-    val dailyWaterGoalLiters: Double = 1.9,
+    val dailyStepGoal: Int? = null,
+    val dailyDistanceGoalMeters: Double? = null,
+    val dailyFloorsGoal: Int? = null,
+    val dailyCaloriesOutGoal: Int? = null,
+    val weeklyExerciseDaysGoal: Int? = null,
+    /** Hourly activity: the hours to move 250 steps in, first to last (9..17 is 9am–6pm). */
+    val activeHours: IntRange? = null,
+    val sleepGoalMinutes: Int? = null,
+    val bedtime: LocalTime? = null,
+    val wakeTime: LocalTime? = null,
+    val dailyCaloriesInGoal: Int? = null,
+    val dailyWaterGoalLiters: Double? = null,
     val weightGoalKg: Double? = null,
 )
 
@@ -33,36 +42,66 @@ class ProfileStore(context: Context) {
 
     fun load(): Profile {
         val imperial = Locale.getDefault().country in IMPERIAL_COUNTRIES
-        val defaults = Profile(
-            units = if (imperial) UnitSystem.Imperial else UnitSystem.Metric,
-            weightUnit = if (imperial) WeightUnit.Pounds else WeightUnit.Kilograms,
-        )
         return Profile(
             name = prefs.getString(KEY_NAME, null).orEmpty(),
-            age = prefs.getInt(KEY_AGE, 0).takeIf { it > 0 },
+            age = int(KEY_AGE),
             sex = prefs.getString(KEY_SEX, null)?.let(Sex::valueOf),
-            units = prefs.getString(KEY_UNITS, null)?.let(UnitSystem::valueOf) ?: defaults.units,
-            weightUnit = prefs.getString(KEY_WEIGHT_UNIT, null)?.let(WeightUnit::valueOf) ?: defaults.weightUnit,
-            dailyStepGoal = prefs.getInt(KEY_STEP_GOAL, defaults.dailyStepGoal),
-            fitnessGoal = prefs.getString(KEY_FITNESS_GOAL, null)?.let(FitnessGoal::valueOf) ?: defaults.fitnessGoal,
-            sleepGoalMinutes = prefs.getInt(KEY_SLEEP_GOAL, defaults.sleepGoalMinutes),
-            weeklyExerciseDaysGoal = prefs.getInt(KEY_EXERCISE_DAYS_GOAL, defaults.weeklyExerciseDaysGoal),
-            weightGoalKg = prefs.getFloat(KEY_WEIGHT_GOAL, 0f).takeIf { it > 0f }?.toDouble(),
+            units = prefs.getString(KEY_UNITS, null)?.let(UnitSystem::valueOf) ?: if (imperial) UnitSystem.Imperial else UnitSystem.Metric,
+            weightUnit = prefs.getString(KEY_WEIGHT_UNIT, null)?.let(WeightUnit::valueOf) ?: if (imperial) WeightUnit.Pounds else WeightUnit.Kilograms,
+            fitnessGoal = prefs.getString(KEY_FITNESS_GOAL, null)?.let(FitnessGoal::valueOf) ?: FitnessGoal.Maintain,
+            dailyStepGoal = int(KEY_STEP_GOAL),
+            dailyDistanceGoalMeters = double(KEY_DISTANCE_GOAL),
+            dailyFloorsGoal = int(KEY_FLOORS_GOAL),
+            dailyCaloriesOutGoal = int(KEY_ENERGY_GOAL),
+            weeklyExerciseDaysGoal = int(KEY_EXERCISE_DAYS_GOAL),
+            activeHours = activeHours(),
+            sleepGoalMinutes = int(KEY_SLEEP_GOAL),
+            bedtime = time(KEY_BEDTIME),
+            wakeTime = time(KEY_WAKE_TIME),
+            dailyCaloriesInGoal = int(KEY_FOOD_GOAL),
+            dailyWaterGoalLiters = double(KEY_WATER_GOAL),
+            weightGoalKg = double(KEY_WEIGHT_GOAL),
         )
     }
 
-    fun save(profile: Profile) = prefs.edit()
-        .putString(KEY_NAME, profile.name)
-        .putInt(KEY_AGE, profile.age ?: 0)
-        .putString(KEY_SEX, profile.sex?.name)
-        .putString(KEY_UNITS, profile.units.name)
-        .putString(KEY_WEIGHT_UNIT, profile.weightUnit.name)
-        .putInt(KEY_STEP_GOAL, profile.dailyStepGoal)
-        .putString(KEY_FITNESS_GOAL, profile.fitnessGoal.name)
-        .putInt(KEY_SLEEP_GOAL, profile.sleepGoalMinutes)
-        .putInt(KEY_EXERCISE_DAYS_GOAL, profile.weeklyExerciseDaysGoal)
-        .putFloat(KEY_WEIGHT_GOAL, profile.weightGoalKg?.toFloat() ?: 0f)
-        .apply()
+    fun save(profile: Profile) {
+        prefs.edit().apply {
+            putString(KEY_NAME, profile.name)
+            putString(KEY_SEX, profile.sex?.name)
+            putString(KEY_UNITS, profile.units.name)
+            putString(KEY_WEIGHT_UNIT, profile.weightUnit.name)
+            putString(KEY_FITNESS_GOAL, profile.fitnessGoal.name)
+            putInt(KEY_AGE, profile.age ?: 0)
+            putInt(KEY_STEP_GOAL, profile.dailyStepGoal ?: 0)
+            putFloat(KEY_DISTANCE_GOAL, profile.dailyDistanceGoalMeters?.toFloat() ?: 0f)
+            putInt(KEY_FLOORS_GOAL, profile.dailyFloorsGoal ?: 0)
+            putInt(KEY_ENERGY_GOAL, profile.dailyCaloriesOutGoal ?: 0)
+            putInt(KEY_EXERCISE_DAYS_GOAL, profile.weeklyExerciseDaysGoal ?: 0)
+            putInt(KEY_ACTIVE_HOURS_FIRST, profile.activeHours?.first?.plus(1) ?: 0)
+            putInt(KEY_ACTIVE_HOURS_LAST, profile.activeHours?.last?.plus(1) ?: 0)
+            putInt(KEY_SLEEP_GOAL, profile.sleepGoalMinutes ?: 0)
+            putInt(KEY_BEDTIME, profile.bedtime?.toSecondOfDay()?.div(60)?.plus(1) ?: 0)
+            putInt(KEY_WAKE_TIME, profile.wakeTime?.toSecondOfDay()?.div(60)?.plus(1) ?: 0)
+            putInt(KEY_FOOD_GOAL, profile.dailyCaloriesInGoal ?: 0)
+            putFloat(KEY_WATER_GOAL, profile.dailyWaterGoalLiters?.toFloat() ?: 0f)
+            putFloat(KEY_WEIGHT_GOAL, profile.weightGoalKg?.toFloat() ?: 0f)
+        }.apply()
+    }
+
+    /** Zero means "not set" for every stored number. */
+    private fun int(key: String): Int? = prefs.getInt(key, 0).takeIf { it > 0 }
+
+    private fun double(key: String): Double? = prefs.getFloat(key, 0f).takeIf { it > 0f }?.toDouble()
+
+    /** Hours are stored + 1, so midnight is distinguishable from "not set". */
+    private fun activeHours(): IntRange? {
+        val first = int(KEY_ACTIVE_HOURS_FIRST) ?: return null
+        val last = int(KEY_ACTIVE_HOURS_LAST) ?: return null
+        return (first - 1)..(last - 1)
+    }
+
+    /** Times are stored as minute of day + 1, so midnight is distinguishable from "not set". */
+    private fun time(key: String): LocalTime? = int(key)?.let { LocalTime.ofSecondOfDay((it - 1) * 60L) }
 
     private companion object {
         const val KEY_NAME = "name"
@@ -70,10 +109,19 @@ class ProfileStore(context: Context) {
         const val KEY_SEX = "sex"
         const val KEY_UNITS = "units"
         const val KEY_WEIGHT_UNIT = "weight_unit"
-        const val KEY_STEP_GOAL = "daily_step_goal"
         const val KEY_FITNESS_GOAL = "fitness_goal"
-        const val KEY_SLEEP_GOAL = "sleep_goal_minutes"
+        const val KEY_STEP_GOAL = "daily_step_goal"
+        const val KEY_DISTANCE_GOAL = "daily_distance_goal_m"
+        const val KEY_FLOORS_GOAL = "daily_floors_goal"
+        const val KEY_ENERGY_GOAL = "daily_energy_goal_kcal"
         const val KEY_EXERCISE_DAYS_GOAL = "weekly_exercise_days_goal"
+        const val KEY_ACTIVE_HOURS_FIRST = "active_hours_first"
+        const val KEY_ACTIVE_HOURS_LAST = "active_hours_last"
+        const val KEY_SLEEP_GOAL = "sleep_goal_minutes"
+        const val KEY_BEDTIME = "bedtime_minute"
+        const val KEY_WAKE_TIME = "wake_time_minute"
+        const val KEY_FOOD_GOAL = "daily_food_goal_kcal"
+        const val KEY_WATER_GOAL = "daily_water_goal_l"
         const val KEY_WEIGHT_GOAL = "weight_goal_kg"
 
         val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")

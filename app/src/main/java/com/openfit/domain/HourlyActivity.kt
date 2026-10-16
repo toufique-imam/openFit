@@ -7,12 +7,12 @@ data class HourlyActivity(val window: IntRange, val hours: List<HourStatus>) {
 }
 
 const val ACTIVE_HOUR_STEPS = 250L
-val DEFAULT_ACTIVE_HOURS = 9..17
 
+/** [window] is the user's hourly goal: the hours, first to last, that each need [ACTIVE_HOUR_STEPS]. */
 fun hourlyActivity(
     hourlySteps: Map<Int, Long>,
     currentHour: Int?,
-    window: IntRange = DEFAULT_ACTIVE_HOURS,
+    window: IntRange,
 ): HourlyActivity = HourlyActivity(
     window = window,
     hours = window.map { hour ->
@@ -25,7 +25,7 @@ fun hourlyActivity(
     },
 )
 
-fun hoursMet(hourlySteps: Map<Int, Double>, window: IntRange = DEFAULT_ACTIVE_HOURS): Int =
+fun hoursMet(hourlySteps: Map<Int, Double>, window: IntRange): Int =
     window.count { (hourlySteps[it] ?: 0.0) >= ACTIVE_HOUR_STEPS }
 
 /** "Your day at a glance": minutes with steps, inactive stretches of [MIN_INACTIVE_MINUTES]+, and the longest one. */

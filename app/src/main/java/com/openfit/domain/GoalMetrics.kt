@@ -9,12 +9,13 @@ import kotlin.math.pow
 /** A goal metric (steps, distance, floors, energy, zone minutes) over a period. */
 data class GoalSummary(val averagePerDay: Double?, val total: Double, val goalDays: Int)
 
-fun goalSummary(days: List<LocalDate>, values: Map<LocalDate, Double>, goal: Double): GoalSummary {
+/** Without a goal (the user has not set one) no day counts as a goal day. */
+fun goalSummary(days: List<LocalDate>, values: Map<LocalDate, Double>, goal: Double?): GoalSummary {
     val tracked = days.mapNotNull { values[it] }
     return GoalSummary(
         averagePerDay = tracked.takeIf { it.isNotEmpty() }?.average(),
         total = tracked.sum(),
-        goalDays = tracked.count { it >= goal },
+        goalDays = if (goal == null) 0 else tracked.count { it >= goal },
     )
 }
 

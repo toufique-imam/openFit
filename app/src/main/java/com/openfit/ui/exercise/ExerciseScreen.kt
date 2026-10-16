@@ -48,6 +48,13 @@ import com.openfit.ui.detail.DetailLoading
 import com.openfit.ui.detail.DetailScaffold
 import com.openfit.ui.detail.GroupedCard
 import com.openfit.ui.detail.HeaderValue
+import com.openfit.ui.detail.MenuAction
+import com.openfit.ui.detail.SetGoalLink
+import com.openfit.ui.goals.Goal
+import com.openfit.ui.goals.GoalEditor
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
 import com.openfit.ui.detail.PagePadding
 import com.openfit.ui.detail.PeriodNavigator
 import com.openfit.ui.detail.SectionGap
@@ -78,6 +85,8 @@ private const val METERS_PER_MILE = 1_609.344
 fun ExerciseRoute(viewModel: ExerciseViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? ExerciseUiState.Ready
+    var editingGoal by rememberSaveable { mutableStateOf(false) }
+    val setGoal = { editingGoal = true }
     DetailScaffold(
         title = stringResource(R.string.exercise_title),
         accent = ACCENT.accent,
@@ -85,6 +94,9 @@ fun ExerciseRoute(viewModel: ExerciseViewModel, onBack: () -> Unit) {
         periods = listOf(ChartPeriod.Week, ChartPeriod.Month),
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
+        menu = listOfNotNull(
+            ready?.let { MenuAction(stringResource(if (it.profile.weeklyExerciseDaysGoal == null) R.string.goal_set else R.string.goal_adjust), setGoal) },
+        ),
     ) {
         when (val current = state) {
             ExerciseUiState.Loading -> DetailLoading(ACCENT.accent)
@@ -97,24 +109,37 @@ fun ExerciseRoute(viewModel: ExerciseViewModel, onBack: () -> Unit) {
                         viewModel::shift,
                     )
                 }
-                content(current, viewModel::selectMode)
+                content(current, viewModel::selectMode, setGoal)
             }
         }
     }
+    if (editingGoal && ready != null) {
+        GoalEditor(
+            goal = Goal.ExerciseDays,
+            profile = ready.profile,
+            onSave = {
+                editingGoal = false
+                viewModel.saveProfile(it)
+            },
+            onDismiss = { editingGoal = false },
+        )
+    }
 }
 
-private fun LazyListScope.content(state: ExerciseUiState.Ready, onMode: (ExerciseMode) -> Unit) {
+private fun LazyListScope.content(state: ExerciseUiState.Ready, onMode: (ExerciseMode) -> Unit, onSetGoal: () -> Unit) {
     val current = isCurrentPeriod(state.period, state.anchor, state.today)
     val week = state.period == ChartPeriod.Week
     item {
         Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 13.dp)) {
             val days = state.exerciseDays.size
-            if (week) {
-                HeaderValue(valueText { count(days, state.profile.weeklyExerciseDaysGoal, smallTotal = true) }, stringResource(R.string.exercise_days_unit))
+            val goal = state.profile.weeklyExerciseDaysGoal
+            if (week && goal != null) {
+                HeaderValue(valueText { count(days, goal, smallTotal = true) }, stringResource(R.string.exercise_days_unit))
             } else {
                 HeaderValue(days.toString(), stringResource(R.string.exercise_days_unit))
             }
             Text(description(state, current), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+            if (week && goal == null) SetGoalLink(ACCENT.accent, onClick = onSetGoal)
         }
     }
     item {

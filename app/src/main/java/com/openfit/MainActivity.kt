@@ -35,6 +35,8 @@ import com.openfit.ui.exercise.ExerciseViewModel
 import com.openfit.ui.goal.GoalMetric
 import com.openfit.ui.goal.GoalMetricRoute
 import com.openfit.ui.goal.GoalMetricViewModel
+import com.openfit.ui.goals.GoalsRoute
+import com.openfit.ui.goals.GoalsViewModel
 import com.openfit.ui.heart.HeartRoute
 import com.openfit.ui.heart.HeartViewModel
 import com.openfit.ui.hourly.HourlyRoute
@@ -128,7 +130,11 @@ class MainActivity : ComponentActivity() {
         when (tab) {
             RootTab.Today -> TodayRoute(viewModel = todayViewModel, onOpenHealthConnectStore = ::openHealthConnectStore, onOpen = onOpen)
             RootTab.Coach -> CoachRoute(todayViewModel)
-            RootTab.You -> YouRoute(todayViewModel, onOpenHealthConnect = ::openHealthConnectSettings)
+            RootTab.You -> YouRoute(
+                todayViewModel,
+                onOpenHealthConnect = ::openHealthConnectSettings,
+                onOpenGoals = { onOpen(MetricPage.Goals, LocalDate.now()) },
+            )
         }
     }
 
@@ -162,7 +168,7 @@ class MainActivity : ComponentActivity() {
                 ExerciseRoute(model, onBack)
             }
             MetricPage.Hourly -> {
-                val model = viewModel { HourlyViewModel(gateway) }
+                val model = viewModel { HourlyViewModel(gateway, profileStore) }
                 LaunchedEffect(screen) { model.open(screen.date) }
                 HourlyRoute(model, onBack)
             }
@@ -180,6 +186,11 @@ class MainActivity : ComponentActivity() {
                 val model = viewModel { SleepViewModel(gateway, profileStore) }
                 LaunchedEffect(screen) { model.open(screen.date) }
                 SleepRoute(model, onBack)
+            }
+            MetricPage.Goals -> {
+                val model = viewModel { GoalsViewModel(profileStore) }
+                LaunchedEffect(screen) { model.reload() }
+                GoalsRoute(model, onBack)
             }
         }
     }

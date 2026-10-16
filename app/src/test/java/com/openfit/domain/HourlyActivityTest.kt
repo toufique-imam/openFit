@@ -9,7 +9,7 @@ class HourlyActivityTest {
     fun countsHoursWithEnoughSteps() {
         val steps = mapOf(9 to 300L, 10 to 249L, 12 to 1_000L, 20 to 5_000L)
 
-        val result = hourlyActivity(steps, currentHour = null)
+        val result = hourlyActivity(steps, currentHour = null, window = 9..17)
 
         assertEquals(2, result.met)
         assertEquals(HourStatus.Missed, result.hours[1])
@@ -18,7 +18,7 @@ class HourlyActivityTest {
 
     @Test
     fun hoursNotYetFinishedAreUpcomingUnlessAlreadyMet() {
-        val result = hourlyActivity(mapOf(13 to 400L), currentHour = 13)
+        val result = hourlyActivity(mapOf(13 to 400L), currentHour = 13, window = 9..17)
 
         assertEquals(HourStatus.Missed, result.hours[3])
         assertEquals(HourStatus.Met, result.hours[4])

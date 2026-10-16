@@ -23,6 +23,7 @@ import kotlin.math.ceil
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import com.openfit.profile.UnitSystem
+import com.openfit.ui.goals.Goal
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -35,24 +36,31 @@ import java.time.YearMonth
 private const val METERS_PER_MILE = 1_609.344
 
 /**
- * A Fitbit goal screen: which daily total it shows, in which unit, and where its goal comes from. [total] is null for
- * Active Zone Minutes, which openFit works out from heart rate rather than reading from Health Connect.
+ * A Fitbit goal screen: which daily total it shows, in which unit, and where its goal comes from (null while the user
+ * has not set it). [total] is null for Active Zone Minutes, which openFit works out from heart rate rather than reading
+ * from Health Connect.
  */
-enum class GoalMetric(val total: DailyTotal?, val goal: (Profile) -> Double, val display: (Double, Profile) -> Double = { value, _ -> value }) {
-    Steps(DailyTotal.Steps, { it.dailyStepGoal.toDouble() }),
+enum class GoalMetric(
+    val total: DailyTotal?,
+    val editableGoal: Goal,
+    val goal: (Profile) -> Double?,
+    val display: (Double, Profile) -> Double = { value, _ -> value },
+) {
+    Steps(DailyTotal.Steps, Goal.Steps, { it.dailyStepGoal?.toDouble() }),
     Distance(
         DailyTotal.DistanceMeters,
-        { distanceFromMeters(it.dailyDistanceGoalMeters, it) },
+        Goal.Distance,
+        { profile -> profile.dailyDistanceGoalMeters?.let { distanceFromMeters(it, profile) } },
         { meters, profile -> distanceFromMeters(meters, profile) },
     ),
-    Floors(DailyTotal.Floors, { it.dailyFloorsGoal.toDouble() }),
-    Energy(DailyTotal.CaloriesOutKcal, { it.dailyCaloriesOutGoal.toDouble() }),
+    Floors(DailyTotal.Floors, Goal.Floors, { it.dailyFloorsGoal?.toDouble() }),
+    Energy(DailyTotal.CaloriesOutKcal, Goal.Energy, { it.dailyCaloriesOutGoal?.toDouble() }),
 
-    Food(DailyTotal.CaloriesInKcal, { it.dailyCaloriesInGoal.toDouble() }),
-    Water(DailyTotal.WaterLiters, { water(it.dailyWaterGoalLiters, it) }, { liters, profile -> water(liters, profile) }),
+    Food(DailyTotal.CaloriesInKcal, Goal.Food, { it.dailyCaloriesInGoal?.toDouble() }),
+    Water(DailyTotal.WaterLiters, Goal.Water, { profile -> profile.dailyWaterGoalLiters?.let { water(it, profile) } }, { liters, profile -> water(liters, profile) }),
 
-    /** Fitbit's default daily goal is the weekly one spread over seven days (150 → 22). */
-    ZoneMinutes(null, { ceil(it.fitnessGoal.weeklyZoneMinutes / 7.0) }),
+    /** Fitbit's daily goal is the weekly one (from the user's fitness goal) spread over seven days (150 → 22). */
+    ZoneMinutes(null, Goal.Fitness, { ceil(it.fitnessGoal.weeklyZoneMinutes / 7.0) }),
 }
 
 private const val FL_OZ_PER_LITER = 33.814
@@ -73,7 +81,7 @@ sealed interface GoalMetricUiState {
         val period: ChartPeriod,
         val anchor: LocalDate,
         val today: LocalDate,
-        val goal: Double,
+        val goal: Double?,
         val dayValue: Double?,
         val hourly: List<Double?>,
         /** Bars: one per day (Week, Month) or the monthly average day (Year). */
@@ -104,6 +112,11 @@ class GoalMetricViewModel(
         period = ChartPeriod.Day
         anchor = date
         _state.value = GoalMetricUiState.Loading
+        load()
+    }
+
+    fun saveProfile(profile: Profile) {
+        profileStore.save(profile)
         load()
     }
 

@@ -15,7 +15,6 @@
 
     <string name="focus_zone_minutes">Active Zone Min</string>
     <string name="focus_sleep">Sleep</string>
-    <string name="focus_goal_format">%1$s · Goal %2$s</string>
 
     <string name="section_sleep">Sleep</string>
     <string name="section_activity">Activity</string>
@@ -78,12 +77,8 @@
     <string name="unit_vo2">VO2 max</string>
 
     <string name="age">Age</string>
-    <string name="daily_step_goal">Daily step goal</string>
-    <string name="fitness_goal">Active Zone Minutes goal</string>
     <string name="fitness_goal_maintain">Maintain · 150/wk</string>
     <string name="fitness_goal_improve">Improve · 300/wk</string>
-    <string name="sleep_goal_hours">Sleep goal (hours)</string>
-    <string name="exercise_days_goal">Exercise days per week</string>
     <string name="units_distance">Distance and water</string>
     <string name="units_metric">km, ml</string>
     <string name="units_imperial">mi, fl oz</string>
@@ -251,6 +246,7 @@
     <string name="goal_none_past">You didn’t hit your goal. You %1$s.</string>
     <string name="goal_year_current">You %1$s so far this year</string>
     <string name="goal_year_past">You %1$s</string>
+    <string name="goal_total_current">You %1$s so far</string>
     <string name="phrase_steps">took a total of %1$s %2$s</string>
     <string name="phrase_distance">covered a total of %1$s %2$s</string>
     <string name="phrase_floors">climbed a total of %1$s %2$s</string>
@@ -425,10 +421,8 @@
     <string name="you_goals_sleep">Sleep</string>
     <string name="you_goals_activity">Activity</string>
     <string name="you_goals_health">Health</string>
-    <plurals name="you_goal_count">
-        <item quantity="one">%d goal</item>
-        <item quantity="other">%d goals</item>
-    </plurals>
+    <string name="you_goals_nutrition">Nutrition</string>
+    <string name="you_goal_count">%d active</string>
     <string name="you_records">Records</string>
     <string name="you_health_connect">Health Connect data</string>
     <string name="you_health_connect_body">See health and fitness data from your other apps</string>
@@ -480,7 +474,6 @@
     <string name="sleep_score_subtitle">Sleep Score: %d</string>
 
     <!-- Weight -->
-    <string name="weight_goal">Weight goal</string>
     <string name="weight_left_to_lose">%s left to lose</string>
     <string name="weight_left_to_gain">%s left to gain</string>
     <string name="weight_goal_met">Weight goal met!</string>
@@ -489,4 +482,42 @@
     <string name="weight_unchanged_over_period">No weight difference over period</string>
     <string name="weight_no_data">No weight logged this period</string>
     <string name="weight_list_header">Weight</string>
+
+    <!-- Goals -->
+    <string name="goal_set">Set goal</string>
+    <string name="goal_adjust">Adjust goal</string>
+    <string name="goal_reset">Reset goal</string>
+    <string name="goal_sleep_schedule">Sleep schedule</string>
+    <string name="goal_sleep_duration">Time asleep</string>
+    <string name="goal_fitness">Fitness goal</string>
+    <string name="goal_fitness_maintain">Maintain</string>
+    <string name="goal_fitness_improve">Improve</string>
+    <string name="goal_fitness_body">Sets your daily Cardio Load target and your weekly Active Zone Minutes goal.</string>
+    <string name="goal_food">Calories eaten</string>
+    <string name="goal_value_days">%d days</string>
+    <string name="goal_meta_daily">Daily</string>
+    <string name="goal_meta_weekly">Weekly</string>
+    <string name="goal_meta_target_value">Target value</string>
+    <string name="goal_input_steps">Steps per day</string>
+    <string name="goal_input_distance_km">Kilometers per day</string>
+    <string name="goal_input_distance_mi">Miles per day</string>
+    <string name="goal_input_energy">Calories burned per day</string>
+    <string name="goal_input_floors">Floors per day</string>
+    <string name="goal_input_exercise_days">Exercise days per week (1–7)</string>
+    <string name="goal_input_food">Calories eaten per day</string>
+    <string name="goal_input_water_ml">Milliliters per day</string>
+    <string name="goal_input_water_oz">Fluid ounces per day</string>
+    <string name="goal_input_weight_kg">Weight goal (kg)</string>
+    <string name="goal_input_weight_lb">Weight goal (lb)</string>
+    <string name="goal_input_hours">Hours</string>
+    <string name="goal_input_minutes">Minutes</string>
+    <string name="goal_input_bedtime">Bedtime</string>
+    <string name="goal_input_wake">Wake-up time</string>
+    <string name="goal_input_start">Start</string>
+    <string name="goal_input_end">End</string>
+    <string name="goal_input_choose">Choose</string>
+    <string name="goal_no_goal">No goal set</string>
+    <string name="sleep_set_schedule_link">Set a sleep schedule</string>
+    <string name="sleep_set_schedule">Set a sleep schedule to see how consistently you sleep and wake.</string>
+    <string name="hourly_set_goal">Set the hours you want to move 250 steps in, and see how many you hit each day.</string>
 </resources>

@@ -63,7 +63,6 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.ui.MetricPage
-import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
 import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
@@ -304,16 +303,9 @@ internal fun ProfileDialog(
 ) {
     var name by remember { mutableStateOf(profile.name) }
     var age by remember { mutableStateOf(profile.age?.toString().orEmpty()) }
-    var stepGoal by remember { mutableStateOf(profile.dailyStepGoal.toString()) }
-    var fitnessGoal by remember { mutableStateOf(profile.fitnessGoal) }
     var sex by remember { mutableStateOf(profile.sex) }
-    var sleepGoalHours by remember { mutableStateOf(oneDecimal(profile.sleepGoalMinutes / 60.0)) }
-    var exerciseDaysGoal by remember { mutableStateOf(profile.weeklyExerciseDaysGoal.toString()) }
     var units by remember { mutableStateOf(profile.units) }
     var weightUnit by remember { mutableStateOf(profile.weightUnit) }
-    var weightGoal by remember {
-        mutableStateOf(profile.weightGoalKg?.let { oneDecimal(if (profile.weightUnit == WeightUnit.Pounds) it * POUNDS_PER_KG else it) }.orEmpty())
-    }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -327,16 +319,6 @@ internal fun ProfileDialog(
                 item {
                     ChoiceRow(stringResource(R.string.sex), listOf(Sex.Male to R.string.sex_male, Sex.Female to R.string.sex_female), sex) { sex = it }
                 }
-                item { NumberField(stringResource(R.string.daily_step_goal), stepGoal) { stepGoal = it } }
-                item {
-                    ChoiceRow(
-                        stringResource(R.string.fitness_goal),
-                        listOf(FitnessGoal.Maintain to R.string.fitness_goal_maintain, FitnessGoal.Improve to R.string.fitness_goal_improve),
-                        fitnessGoal,
-                    ) { fitnessGoal = it }
-                }
-                item { NumberField(stringResource(R.string.sleep_goal_hours), sleepGoalHours, decimal = true) { sleepGoalHours = it } }
-                item { NumberField(stringResource(R.string.exercise_days_goal), exerciseDaysGoal) { exerciseDaysGoal = it } }
                 item {
                     ChoiceRow(
                         stringResource(R.string.units_distance),
@@ -344,7 +326,6 @@ internal fun ProfileDialog(
                         units,
                     ) { units = it }
                 }
-                item { NumberField(stringResource(R.string.weight_goal), weightGoal, decimal = true) { weightGoal = it } }
                 item {
                     ChoiceRow(
                         stringResource(R.string.units_weight),
@@ -380,13 +361,7 @@ internal fun ProfileDialog(
                         age = age.toIntOrNull()?.takeIf { it in 5..120 },
                         units = units,
                         weightUnit = weightUnit,
-                        dailyStepGoal = stepGoal.toIntOrNull()?.takeIf { it > 0 } ?: profile.dailyStepGoal,
-                        fitnessGoal = fitnessGoal,
                         sex = sex,
-                        sleepGoalMinutes = sleepGoalHours.toDoubleOrNull()?.takeIf { it in 1.0..16.0 }?.let { (it * 60).toInt() }
-                            ?: profile.sleepGoalMinutes,
-                        weeklyExerciseDaysGoal = exerciseDaysGoal.toIntOrNull()?.takeIf { it in 1..7 } ?: profile.weeklyExerciseDaysGoal,
-                        weightGoalKg = weightGoal.toDoubleOrNull()?.takeIf { it > 0 }?.let { if (weightUnit == WeightUnit.Pounds) it / POUNDS_PER_KG else it },
                     ),
                 )
             }) { Text(stringResource(R.string.save)) }
@@ -396,7 +371,6 @@ internal fun ProfileDialog(
 }
 
 private const val MAX_NAME_LENGTH = 40
-private const val POUNDS_PER_KG = 2.20462
 
 @Composable
 private fun <T> ChoiceRow(label: String, options: List<Pair<T, Int>>, selected: T, onSelect: (T) -> Unit) {
@@ -411,13 +385,13 @@ private fun <T> ChoiceRow(label: String, options: List<Pair<T, Int>>, selected: 
 }
 
 @Composable
-private fun NumberField(label: String, value: String, decimal: Boolean = false, onValueChange: (String) -> Unit) {
+private fun NumberField(label: String, value: String, onValueChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
-        onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (decimal && it == '.') }) },
+        onValueChange = { input -> onValueChange(input.filter { it.isDigit() }) },
         label = { Text(label) },
         singleLine = true,
-        keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
     )
 }
 
