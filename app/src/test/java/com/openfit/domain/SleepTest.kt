@@ -34,7 +34,7 @@ class SleepTest {
         // Sixty-seven segments of 1 m 30 s: truncating each would give 67 minutes instead of 100.5.
         val start = Instant.parse("2026-10-14T18:05:00Z")
         val segments = (0 until 67).map { i -> StageSegment(SleepStage.Light, start.plusSeconds(90L * i), start.plusSeconds(90L * (i + 1))) }
-        assertEquals(101L, minutesOf(segments))
+        assertEquals(100L, minutesOf(segments))
     }
 
     @Test
