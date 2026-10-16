@@ -11,6 +11,7 @@ import com.openfit.domain.AgeFactor
 import com.openfit.domain.MINUTES_PER_DAY
 import com.openfit.domain.PulseAge
 import com.openfit.domain.pulseAge
+import com.openfit.domain.estimateVo2Max
 import com.openfit.domain.sleepRegularity
 import com.openfit.health.HealthConnectGateway.Companion.read
 import com.openfit.profile.Profile
@@ -31,8 +32,15 @@ class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: Da
     suspend fun pulseAge(until: LocalDate, profile: Profile): PulseAge? {
         val age = profile.age ?: return null
         val sex = profile.sex ?: return null
-        return pulseAge(age, sex, inputs(until, profile))
+        val inputs = inputs(until, profile)
+        return pulseAge(age, sex, inputs, estimated(inputs))
     }
+
+    /** The factors [inputs] filled by an estimate: VO2 max from heart rate when Health Connect had none. */
+    fun estimated(inputs: Map<AgeFactor, Double>): Set<AgeFactor> =
+        if (AgeFactor.Vo2Max in inputs && measuredVo2 == null) setOf(AgeFactor.Vo2Max) else emptySet()
+
+    private var measuredVo2: Double? = null
 
     suspend fun inputs(until: LocalDate, profile: Profile): Map<AgeFactor, Double> {
         val from = until.minusDays(WINDOW_DAYS - 1)
@@ -57,7 +65,10 @@ class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: Da
             inputs[AgeFactor.StrengthMinutes] = strengthMinutes(from, until, granted) * 7.0 / WINDOW_DAYS
         }
 
-        latestAverage(Vo2MaxRecord::class, until, granted) { it.time to it.vo2MillilitersPerMinuteKilogram }?.let { inputs[AgeFactor.Vo2Max] = it }
+        measuredVo2 = latestAverage(Vo2MaxRecord::class, until, granted) { it.time to it.vo2MillilitersPerMinuteKilogram }
+        val age = profile.age
+        val resting = inputs[AgeFactor.RestingHeartRate]
+        (measuredVo2 ?: if (age != null && resting != null) estimateVo2Max(age, resting) else null)?.let { inputs[AgeFactor.Vo2Max] = it }
         latestAverage(BodyFatRecord::class, until, granted) { it.time to it.percentage.value }?.let { inputs[AgeFactor.BodyFat] = it }
         return inputs
     }

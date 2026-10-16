@@ -103,7 +103,7 @@ class PulseAgeViewModel(gateway: HealthConnectGateway, private val profileStore:
                     PulseAgeUiState.NeedsProfile
                 } else {
                     val inputs = source.inputs(date.minusDays(1), profile)
-                    PulseAgeUiState.Ready(profile, com.openfit.domain.pulseAge(age, sex, inputs), inputs)
+                    PulseAgeUiState.Ready(profile, com.openfit.domain.pulseAge(age, sex, inputs, source.estimated(inputs)), inputs)
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -200,7 +200,11 @@ private fun FactorRow(factor: AgeFactor, value: Double?, effect: AgeEffect?, age
             Column(Modifier.weight(1f)) {
                 Text(stringResource(factorTitle(factor)), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
                 Text(
-                    if (value == null) stringResource(R.string.no_data) else stringResource(R.string.age_average, format(factor, value)),
+                    when {
+                        value == null -> stringResource(R.string.no_data)
+                        effect?.estimated == true -> stringResource(R.string.age_estimated, format(factor, value))
+                        else -> stringResource(R.string.age_average, format(factor, value))
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                     color = OpenFitColors.OnSurfaceVariant,
                 )

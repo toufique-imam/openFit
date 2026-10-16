@@ -711,4 +711,14 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
     <string name="stress_about_title">About stress</string>
     <string name="stress_about_body">How hard your body is working while you are not exercising, from 0 to 100, from your heart rate against your own usual.</string>
     <string name="stress_sheet">Each 6-minute stretch of your day gets a stress score: where its heart rate ranks among your awake, non-workout heart rates of the last 30 days. The higher it ranks, the higher the stress.\n\n0-29 Low: calm.\n30-59 Medium: more active than your calm level.\n60-100 High: well above your usual heart rate while you are not exercising.\n\nToday shows the latest reading; past days show the day\'s average. Workouts show no stress. It needs 5 days of data.\n\nIt reads heart rate only, so caffeine, heat, illness or walking about raise it too. It is not a measure of how you feel. Modelled on Pulse\'s Stress Monitor.</string>
+
+    <!-- Cardio fitness -->
+    <string name="fitness_poor">Poor</string>
+    <string name="fitness_fair">Fair</string>
+    <string name="fitness_good">Good</string>
+    <string name="fitness_excellent">Excellent</string>
+    <string name="fitness_superior">Superior</string>
+    <string name="fitness_percentile">%s percentile</string>
+    <string name="fitness_estimated">Estimated</string>
+    <string name="age_estimated">Estimated from heart rate: %s</string>
 </resources>

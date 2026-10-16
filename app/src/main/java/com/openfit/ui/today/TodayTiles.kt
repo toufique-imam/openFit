@@ -351,6 +351,22 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         item { HealthMetricsSummary(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
     }
     if (showHeart) item { HeartTile(state, onClick = { onOpen(MetricPage.Heart) }) }
+    state.fitness?.let { fitness ->
+        item {
+            MetricTile(
+                title = stringResource(R.string.tile_cardio_fitness),
+                value = quantityText(oneDecimal(fitness.vo2Max), stringResource(R.string.unit_vo2)),
+                subtitle = listOfNotNull(
+                    stringResource(fitnessBandName(fitness.band)),
+                    stringResource(R.string.fitness_percentile, ordinal(fitness.percentile.toInt())),
+                    if (fitness.estimated) stringResource(R.string.fitness_estimated) else null,
+                ).joinToString(" · "),
+                onClick = { onOpen(MetricPage.PulseAge) },
+            ) {
+                ArcGauge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Blue, (fitness.percentile / 100).toFloat())
+            }
+        }
+    }
     item {
         val age = state.pulseAge
         MetricTile(
@@ -546,7 +562,6 @@ private class HealthTile(
 
 /** Health tiles besides Heart: Fitbit shows HRV, SpO2, breathing rate and skin temperature inside Health Metrics instead. */
 private fun healthTiles(metrics: DailyMetrics, profile: Profile): List<HealthTile> = listOfNotNull(
-    metrics.vo2Max?.let { HealthTile(R.string.tile_cardio_fitness, it, whole(it.value), R.string.unit_vo2, Icons.AutoMirrored.Outlined.DirectionsRun) },
     metrics.weightKg?.let { weight ->
         val pounds = profile.weightUnit == WeightUnit.Pounds
         HealthTile(
@@ -683,6 +698,14 @@ private fun readinessLabel(readiness: Readiness): Int = when {
     else -> R.string.readiness_moderate
 }
 
+private fun fitnessBandName(band: com.openfit.domain.FitnessBand): Int = when (band) {
+    com.openfit.domain.FitnessBand.Poor -> R.string.fitness_poor
+    com.openfit.domain.FitnessBand.Fair -> R.string.fitness_fair
+    com.openfit.domain.FitnessBand.Good -> R.string.fitness_good
+    com.openfit.domain.FitnessBand.Excellent -> R.string.fitness_excellent
+    com.openfit.domain.FitnessBand.Superior -> R.string.fitness_superior
+}
+
 private fun energyBandText(band: EnergyBand): Int = when (band) {
     EnergyBand.Plenty -> R.string.energy_band_plenty
     EnergyBand.PaceYourself -> R.string.energy_band_pace
@@ -706,4 +729,13 @@ fun relativeDay(day: LocalDate): String = when (day) {
     LocalDate.now() -> stringResource(R.string.today)
     LocalDate.now().minusDays(1) -> stringResource(R.string.yesterday)
     else -> day.weekdayDayMonth()
+}
+
+/** "1st", "22nd", "73rd", "11th". */
+fun ordinal(n: Int): String = n.toString() + when {
+    n % 100 in 11..13 -> "th"
+    n % 10 == 1 -> "st"
+    n % 10 == 2 -> "nd"
+    n % 10 == 3 -> "rd"
+    else -> "th"
 }

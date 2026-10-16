@@ -93,3 +93,13 @@ Ideas not done:
 - **On 16 Oct:** openFit gave 9 h 6 m low, 6 h medium and 1 h high; Pulse gave 10:00, 6:06 and 0:12.
 - **Not done:** Pulse's HRV term during sleep, its "typical Friday" comparison, and Breathe.
 
+## Cardio fitness / VO2 max (`Fitness.kt`)
+
+- **VO2 max:** Health Connect's value when there is one. Otherwise Uth et al. 2004: 15.3 x (220 - age) / the 30-day average resting heart rate. Pulse's figure for this user, 47.9 at 190 / 60.7, fits it exactly.
+- **Fitness level:** the percentile in the FRIEND treadmill table (Kaminsky et al. 2015) for the user's sex and age decade, read linearly between columns and kept within the 5th-95th. Bands: Superior 80+, Excellent 60-79, Good 40-59, Fair 20-39, Poor below.
+  - Pulse's two worked examples reproduce exactly: a man of 35 at 45.0 sits at 59.6, and a woman of 52 at 30 sits at 83.2.
+  - The table values themselves were not checked against the paper beyond those anchors.
+- **On 16 Oct:** openFit gave 48.4, 72nd percentile (age 30, 30-39 row). Pulse gave 47.9, 50th, because it has the user's age as 27.9 and so uses the 20-29 row.
+- **Today:** a "Cardio fitness" tile in Health ("Excellent · 72nd percentile · Estimated") opens Pulse Age.
+- **Pulse Age:** an estimated VO2 max counts at half weight, as in Pulse. Pulse Age then read 32.1, against 33.0 without VO2 max.
+

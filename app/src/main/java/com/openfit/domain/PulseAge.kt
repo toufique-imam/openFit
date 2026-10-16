@@ -24,7 +24,9 @@ enum class AgeFactor(val group: AgeGroup) {
 enum class AgeGroup { Sleep, Activity, Fitness }
 
 /** One factor's part: its value (in the factor's units: hours, SRI, minutes a week, steps, mL/kg/min, bpm, %). */
-data class AgeEffect(val factor: AgeFactor, val value: Double, val reference: Double, val years: Double)
+data class AgeEffect(val factor: AgeFactor, val value: Double, val reference: Double, val years: Double, val estimated: Boolean = false)
+
+private const val ESTIMATE_WEIGHT = 0.5
 
 data class PulseAge(val age: Double, val chronologicalAge: Int, val effects: List<AgeEffect>) {
     val difference: Double get() = age - chronologicalAge
@@ -128,12 +130,14 @@ fun ageLnHr(factor: AgeFactor, value: Double, age: Int, sex: Sex): Double {
  * stand for all nine, and the result is clamped to ±[PulseAgeModel.CLAMP_YEARS]. Null with fewer than
  * [PulseAgeModel.MIN_FACTORS] factors.
  */
-fun pulseAge(age: Int, sex: Sex, inputs: Map<AgeFactor, Double>): PulseAge? {
+fun pulseAge(age: Int, sex: Sex, inputs: Map<AgeFactor, Double>, estimated: Set<AgeFactor> = emptySet()): PulseAge? {
     if (inputs.size < PulseAgeModel.MIN_FACTORS) return null
     val scale = AgeFactor.entries.size.toDouble() / inputs.size
     val effects = AgeFactor.entries.mapNotNull { factor ->
         inputs[factor]?.let { value ->
-            AgeEffect(factor, value, ageReference(factor, age, sex), PulseAgeModel.YEARS_PER_LN_HR * ageLnHr(factor, value, age, sex) * scale)
+            // An estimated input (VO2 max from heart rate) counts at half weight, as in Pulse.
+            val weight = if (factor in estimated) ESTIMATE_WEIGHT else 1.0
+            AgeEffect(factor, value, ageReference(factor, age, sex), PulseAgeModel.YEARS_PER_LN_HR * ageLnHr(factor, value, age, sex) * scale * weight, factor in estimated)
         }
     }
     val years = effects.sumOf { it.years }.coerceIn(-PulseAgeModel.CLAMP_YEARS, PulseAgeModel.CLAMP_YEARS)

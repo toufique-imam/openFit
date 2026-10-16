@@ -32,6 +32,8 @@ import com.openfit.health.HealthConnectVitals
 import com.openfit.domain.sleepScore
 import com.openfit.domain.EnergyDay
 import com.openfit.domain.StressDay
+import com.openfit.domain.FitnessLevel
+import com.openfit.domain.fitnessLevel
 import com.openfit.health.EnergySource
 import com.openfit.health.ExerciseSession
 import com.openfit.health.HealthConnectExercises
@@ -92,6 +94,8 @@ sealed interface TodayUiState {
         val energy: EnergyDay? = null,
         val energyLoading: Boolean = true,
         val stress: StressDay? = null,
+        /** VO2 max (measured, or estimated from resting heart rate) against people of the same age and sex. */
+        val fitness: FitnessLevel? = null,
         /** Pulse Age over the 28 days before the date; loaded after the rest. */
         val pulseAge: PulseAge? = null,
         val pulseAgeLoading: Boolean = true,
@@ -245,6 +249,12 @@ class TodayViewModel(
             profile = profile,
             missingPermissions = missing,
             googleHealth = googleHealth,
+            fitness = profile.age?.let { age ->
+                profile.sex?.let { sex ->
+                    val resting = loaded.history.restingBpm.filterKeys { it > date.minusDays(FITNESS_DAYS) }.values
+                    fitnessLevel(age, sex, metrics.vo2Max?.value, resting.takeIf { it.isNotEmpty() }?.average())
+                }
+            },
             sleepScore = runCatching { HealthConnectSleep(gateway).nights(date, date)[date]?.let(::sleepScore) }.getOrNull(),
             healthMetrics = runCatching {
                 metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date))
@@ -301,6 +311,8 @@ class TodayViewModel(
     }
 
     private companion object {
+        /** The VO2 max estimate uses the average resting heart rate over the last 30 days. */
+        const val FITNESS_DAYS = 30L
         val STALE_AFTER: Duration = Duration.ofMinutes(1)
         const val HISTORY_WEEKS = 4L
         const val HEALTH_METRIC_DAYS = 30L
