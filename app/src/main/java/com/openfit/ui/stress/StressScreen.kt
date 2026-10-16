@@ -121,7 +121,9 @@ class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snaps
         }
     }
 
-    private var period = ChartPeriod.Day
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Day)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var loading: Job? = null
 
@@ -176,7 +178,7 @@ fun StressRoute(viewModel: StressViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.stress_title),
         accent = ACCENT.accent,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,

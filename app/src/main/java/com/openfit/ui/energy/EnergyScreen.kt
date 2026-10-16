@@ -126,7 +126,9 @@ class EnergyViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snaps
         }
     }
 
-    private var period = ChartPeriod.Day
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Day)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var loading: Job? = null
 
@@ -187,7 +189,7 @@ fun EnergyRoute(viewModel: EnergyViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.energy_title),
         accent = ACCENT.accent,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,

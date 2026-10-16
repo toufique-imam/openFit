@@ -80,6 +80,19 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
     /** A read served from what openFit saved, without calling Health Connect. */
     fun savedRead() = count(KEY_SAVED)
 
+    /**
+     * How long until [calls] reads fit in every bucket (above the reserve, for [background] reads), at the rate Health
+     * Connect refills them; zero when they fit now.
+     */
+    fun waitFor(calls: Int, background: Boolean): java.time.Duration = synchronized(this) {
+        val now = clock()
+        val millis = BUCKETS.maxOf { bucket ->
+            val short = calls + (if (background) bucket.capacity * RESERVE else 0.0) - level(bucket, now)
+            if (short <= 0) 0L else (short * bucket.windowMs / bucket.capacity).toLong()
+        }
+        java.time.Duration.ofMillis(millis)
+    }
+
     /** Whether a background read would be allowed now. */
     fun hasRoom(background: Boolean = true): Boolean = synchronized(this) {
         val now = clock()

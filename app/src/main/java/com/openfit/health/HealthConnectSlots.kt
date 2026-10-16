@@ -30,10 +30,20 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
         val dates = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
         val fresh = mutableMapOf<LocalDate, List<Slot>>()
         val result = dates.map { date ->
-            date to (cache.get(date) ?: slots(date, granted).also { if (date < settled) fresh[date] = it })
+            // A day that cannot be read now (Health Connect's quota) shows as not worn, and is not saved, rather than
+            // failing the whole range.
+            date to (cache.get(date) ?: readable(date, granted)?.also { if (date < settled) fresh[date] = it } ?: EMPTY_DAY)
         }
         cache.putAll(fresh)
         return result
+    }
+
+    private suspend fun readable(date: LocalDate, granted: Set<String>): List<Slot>? = try {
+        slots(date, granted)
+    } catch (error: kotlinx.coroutines.CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
     }
 
     private suspend fun slots(date: LocalDate, granted: Set<String>): List<Slot> {
@@ -86,6 +96,7 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
     private companion object {
         const val SLOT_SECONDS = SLOT_MINUTES * 60L
         const val SLEEP_LOOKBACK_SECONDS = 18 * 3600L
+        val EMPTY_DAY = List(SLOTS_PER_DAY) { Slot(bpm = null, asleep = false, exercise = false) }
     }
 }
 

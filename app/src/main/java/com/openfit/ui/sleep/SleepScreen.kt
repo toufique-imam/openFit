@@ -122,7 +122,7 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.sleep_title),
         accent = ACCENT.accent,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
         menu = if (ready == null) {

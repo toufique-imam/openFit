@@ -2,6 +2,9 @@
 
 package com.openfit.ui.cardio
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import com.openfit.domain.DurationSerializer
@@ -126,7 +129,9 @@ class CardioLoadViewModel(
         }
     }
 
-    private var period = ChartPeriod.Day
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Day)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var loading: Job? = null
 

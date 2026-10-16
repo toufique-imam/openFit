@@ -96,7 +96,7 @@ fun HeartRoute(viewModel: HeartViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.heart_title),
         accent = ACCENT,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,

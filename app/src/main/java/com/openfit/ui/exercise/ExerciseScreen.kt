@@ -90,7 +90,7 @@ fun ExerciseRoute(viewModel: ExerciseViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.exercise_title),
         accent = ACCENT.accent,
-        period = ready?.period ?: ChartPeriod.Week,
+        period = viewModel.period,
         periods = listOf(ChartPeriod.Week, ChartPeriod.Month),
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,

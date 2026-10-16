@@ -114,7 +114,9 @@ class WeightViewModel(gateway: HealthConnectGateway, private val profileStore: P
         }
     }
 
-    private var period = ChartPeriod.Month
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Month)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var loading: Job? = null
 
@@ -184,7 +186,7 @@ fun WeightRoute(viewModel: WeightViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.tile_weight),
         accent = ACCENT.accent,
-        period = ready?.period ?: ChartPeriod.Month,
+        period = viewModel.period,
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,

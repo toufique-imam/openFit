@@ -137,7 +137,9 @@ class MetricDetailViewModel(private val metric: HealthMetric, gateway: HealthCon
         }
     }
 
-    private var period = ChartPeriod.Week
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Week)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var loading: Job? = null
 
@@ -218,7 +220,7 @@ fun MetricDetailRoute(viewModel: MetricDetailViewModel, metric: HealthMetric, on
     DetailScaffold(
         title = stringResource(title(metric)),
         accent = ACCENT,
-        period = ready?.period ?: ChartPeriod.Week,
+        period = viewModel.period,
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,

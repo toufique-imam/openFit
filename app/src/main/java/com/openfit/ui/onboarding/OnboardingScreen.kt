@@ -359,7 +359,7 @@ private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinis
         importDone = true
         todayViewModel.refresh()
     }
-    val imported = (syncState as? SyncState.Importing)?.progress
+    val imported = (syncState as? SyncState.Importing)?.progress ?: (syncState as? SyncState.Waiting)?.progress
     val ready = (state as? TodayUiState.Ready)?.takeIf { importDone && !it.refreshing && it.pendingDate == null }
     // The import is most of the work; Today's own load is the last tenth.
     val importShare = imported?.let { it.done.toFloat() / it.total.coerceAtLeast(1) } ?: 0f
@@ -369,7 +369,12 @@ private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinis
         ready.energyLoading || ready.pulseAgeLoading -> (1 + IMPORT_SHARE) / 2
         else -> 1f
     }
+    val waiting = syncState as? SyncState.Waiting
     val stage = when {
+        waiting != null -> stringResource(
+            R.string.sync_waiting,
+            waiting.resumeAt.atZone(java.time.ZoneId.systemDefault()).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT)),
+        )
         !importDone -> when (imported?.stage) {
             ImportStage.HeartRate -> stringResource(R.string.onboarding_import_heart, imported.done, imported.total)
             ImportStage.Scoring -> stringResource(R.string.onboarding_import_scoring)
@@ -403,7 +408,13 @@ private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinis
             drawStopIndicator = {},
         )
         Spacer(Modifier.height(16.dp))
-        Text(stage, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+        Text(stage, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, textAlign = TextAlign.Center)
+        // Health Connect's quota can pause the import for a while: it carries on in the background either way.
+        if (syncState is SyncState.Waiting) {
+            TextButton(onClick = onFinish, modifier = Modifier.padding(top = 24.dp)) {
+                Text(stringResource(R.string.onboarding_continue_background), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.Mint.accent)
+            }
+        }
     }
 }
 

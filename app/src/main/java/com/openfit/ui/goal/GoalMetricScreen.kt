@@ -78,7 +78,7 @@ fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(viewModel.metric.title),
         accent = accent.accent,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
         menu = listOfNotNull(ready?.let { MenuAction(stringResource(if (it.goal == null) R.string.goal_set else R.string.goal_adjust), setGoal) }),

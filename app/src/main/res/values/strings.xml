@@ -846,4 +846,6 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="sync_recent">Reading the last days…</string>
     <string name="sync_stopped">Stopped before the end, most likely Health Connect\'s limit. Sync again later to finish.</string>
     <string name="sync_now">Sync</string>
+    <string name="sync_waiting">Health Connect limits how fast apps can read, so the copy pauses here and carries on by itself at %s.</string>
+    <string name="onboarding_continue_background">Continue in the background</string>
 </resources>

@@ -2,6 +2,9 @@
 
 package com.openfit.ui.heart
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import com.openfit.ui.detail.keepAfterFailure
 import com.openfit.ui.detail.SavedScreen
 import com.openfit.data.SnapshotStore
@@ -92,7 +95,9 @@ class HeartViewModel(
         }
     }
 
-    private var period = ChartPeriod.Day
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Day)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var mode = HeartMode.Resting
     private var loading: Job? = null

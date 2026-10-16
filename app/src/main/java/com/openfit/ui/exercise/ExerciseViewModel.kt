@@ -2,6 +2,9 @@
 
 package com.openfit.ui.exercise
 
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.getValue
 import com.openfit.ui.detail.keepAfterFailure
 import com.openfit.ui.detail.SavedScreen
 import com.openfit.data.SnapshotStore
@@ -79,7 +82,9 @@ class ExerciseViewModel(gateway: HealthConnectGateway, private val profileStore:
         }
     }
 
-    private var period = ChartPeriod.Week
+    /** The selected tab, observed by the screen: it shows even while a period loads or fails. */
+    var period by mutableStateOf(ChartPeriod.Week)
+        private set
     private var anchor: LocalDate = LocalDate.now()
     private var mode = ExerciseMode.Days
     private var loading: Job? = null

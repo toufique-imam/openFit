@@ -25,7 +25,8 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
         val sync = HealthSync.get(applicationContext)
         // Background reads: Health Connect's background quota is half the foreground one, and these leave a reserve.
         withContext(HcPriority.Background) {
-            if (!sync.imported) sync.importAll()
+            // No waiting for the quota here: Android stops background work after ten minutes.
+            if (!sync.imported) sync.importAll(waitForQuota = false)
             sync.syncRecent()
         }
         return Result.success()

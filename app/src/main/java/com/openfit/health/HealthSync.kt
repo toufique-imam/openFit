@@ -20,6 +20,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.delay
+import kotlin.coroutines.coroutineContext
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
@@ -37,6 +39,8 @@ sealed interface SyncState {
     /** Nothing running; [lastSync] is when Health Connect was last read, [firstDay] how far back the copy goes. */
     data class Idle(val lastSync: Instant?, val firstDay: LocalDate?, val imported: Boolean, val failed: Boolean = false) : SyncState
     data class Importing(val progress: ImportProgress) : SyncState
+    /** The import paused for Health Connect's quota; it carries on by itself at [resumeAt]. */
+    data class Waiting(val resumeAt: Instant, val progress: ImportProgress?) : SyncState
     data object Syncing : SyncState
 }
 
@@ -70,12 +74,22 @@ class HealthSync private constructor(
     /** Stops what is running (Delete everything). */
     fun stop() = scope.coroutineContext.cancelChildren()
 
+    private var importJob: Job? = null
+    private var importInBackground = false
+
     /**
-     * Starts the import (or after the sync running now); screens follow [state]. [background] imports nobody waits for
-     * leave the quota's reserve to the pages; onboarding and Sync run at full priority.
+     * Starts the import, or returns the one already going; screens follow [state]. [background] imports nobody waits
+     * for leave the quota's reserve to the pages; onboarding and Sync run at full priority, and take over a background
+     * one.
      */
-    fun startImport(background: Boolean = false): Job =
+    fun startImport(background: Boolean = false): Job = synchronized(this) {
+        val current = importJob?.takeIf { it.isActive }
+        if (current != null && (background || !importInBackground)) return current
+        current?.cancel()
+        importInBackground = background
         scope.launch(if (background) HcPriority.Background else kotlin.coroutines.EmptyCoroutineContext) { importAll() }
+            .also { importJob = it }
+    }
 
     /** Starts a recent sync in the background unless one ran within [due] minutes. */
     fun startRecent(dueMinutes: Long = OPEN_SYNC_MINUTES): Job = scope.launch { syncRecent(dueMinutes) }
@@ -84,20 +98,43 @@ class HealthSync private constructor(
      * Reads everything Health Connect has into the copy, then works out the scores from it. Days already saved are not
      * read again. Returns false when it stopped early (the quota, or Health Connect failing): what it saved stays.
      */
-    suspend fun importAll(): Boolean = running.withLock {
-        val ok = try {
-            import()
-            prefs.edit().putBoolean(KEY_IMPORTED, true).putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
-            true
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            Log.w(TAG, "Import stopped", error)
-            false
+    suspend fun importAll(waitForQuota: Boolean = true): Boolean {
+        val background = coroutineContext[HcPriority]?.background == true
+        while (true) {
+            val error = running.withLock {
+                try {
+                    import()
+                    prefs.edit().putBoolean(KEY_IMPORTED, true).putLong(KEY_LAST_SYNC, System.currentTimeMillis()).apply()
+                    null
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    error
+                }
+            }
+            if (error == null) {
+                _state.value = idle()
+                return true
+            }
+            if (!waitForQuota || !isQuota(error)) {
+                Log.w(TAG, "Import stopped", error)
+                _state.value = idle(failed = true)
+                return false
+            }
+            // Health Connect's quota: wait (without holding up other syncs) until a batch of reads fits, then carry on
+            // from where it stopped; the days saved so far are not read again.
+            val wait = maxOf(gateway.budget.waitFor(RESUME_BATCH, background), MIN_WAIT)
+            _state.value = SyncState.Waiting(Instant.now().plus(wait), lastProgress)
+            delay(wait.toMillis())
         }
-        _state.value = idle(failed = !ok)
-        ok
     }
+
+    @Volatile private var lastProgress: ImportProgress? = null
+
+    /** Whether [error] (or what it wraps) is Health Connect's quota, or openFit's guard before it. */
+    private fun isQuota(error: Throwable): Boolean =
+        generateSequence(error) { it.cause }.take(MAX_CAUSES).any { it is QuotaGuardException || it.message?.contains("quota", ignoreCase = true) == true } ||
+            error.suppressed.any(::isQuota)
 
     /**
      * Reads the last [RECENT_DAYS] days again and the older days Health Connect reports changed, then forgets the
@@ -229,7 +266,9 @@ class HealthSync private constructor(
     }
 
     private fun progress(stage: ImportStage, done: Int, total: Int) {
-        _state.value = SyncState.Importing(ImportProgress(stage, done, total))
+        val progress = ImportProgress(stage, done, total)
+        lastProgress = progress
+        _state.value = SyncState.Importing(progress)
     }
 
     private fun idle(failed: Boolean = false) = SyncState.Idle(
@@ -254,6 +293,10 @@ class HealthSync private constructor(
         /** Reads in flight at once (Pulse's figure): enough to overlap, not enough to burst through the quota. */
         private val reads = Semaphore(4)
         private const val TAG = "openFit.sync"
+        /** Reads to wait for before carrying on: enough to make progress, a few minutes of Health Connect's refill. */
+        private const val RESUME_BATCH = 60
+        private val MIN_WAIT: java.time.Duration = java.time.Duration.ofSeconds(30)
+        private const val MAX_CAUSES = 8
         private const val KEY_IMPORTED = "imported"
         private const val KEY_LAST_SYNC = "last_sync"
 

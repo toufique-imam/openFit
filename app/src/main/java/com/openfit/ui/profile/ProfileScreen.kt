@@ -300,6 +300,18 @@ private fun SyncCard(state: SyncState, onSync: () -> Unit) {
                     )
                 }
                 SyncState.Syncing -> Text(stringResource(R.string.sync_recent), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                is SyncState.Waiting -> {
+                    val at = state.resumeAt.atZone(ZoneId.systemDefault()).format(DateTimeFormatter.ofLocalizedTime(FormatStyle.SHORT))
+                    Text(stringResource(R.string.sync_waiting, at), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                    state.progress?.let { progress ->
+                        LinearProgressIndicator(
+                            progress = { progress.done.toFloat() / progress.total.coerceAtLeast(1) },
+                            modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                            color = OpenFitColors.Mint.accent,
+                            trackColor = OpenFitColors.Mint.track,
+                        )
+                    }
+                }
                 is SyncState.Idle -> {
                     Text(
                         state.firstDay?.let { stringResource(R.string.sync_since, it.format(date)) } ?: stringResource(R.string.sync_not_imported),

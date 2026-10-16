@@ -67,7 +67,7 @@ fun ReadinessRoute(viewModel: ReadinessViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.readiness),
         accent = ACCENT,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
     ) {

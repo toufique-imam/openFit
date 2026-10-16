@@ -91,7 +91,7 @@ fun HourlyRoute(viewModel: HourlyViewModel, onBack: () -> Unit) {
     DetailScaffold(
         title = stringResource(R.string.tile_hourly_activity),
         accent = ACCENT.accent,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = viewModel.period,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
         menu = listOfNotNull(ready?.let { MenuAction(stringResource(if (it.window == null) R.string.goal_set else R.string.goal_adjust)) { editingGoal = true } }),

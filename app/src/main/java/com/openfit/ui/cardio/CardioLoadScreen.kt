@@ -87,12 +87,13 @@ private val BREAKDOWN_TRACK = Color(0xFF292D2C)
 @Composable
 fun CardioLoadRoute(viewModel: CardioLoadViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
-    CardioLoadScreen(state, onBack, viewModel::selectPeriod, viewModel::shift, viewModel::setGoal)
+    CardioLoadScreen(state, viewModel.period, onBack, viewModel::selectPeriod, viewModel::shift, viewModel::setGoal)
 }
 
 @Composable
 fun CardioLoadScreen(
     state: CardioLoadUiState,
+    period: ChartPeriod,
     onBack: () -> Unit,
     onPeriod: (ChartPeriod) -> Unit,
     onShift: (Long) -> Unit,
@@ -105,7 +106,7 @@ fun CardioLoadScreen(
     DetailScaffold(
         title = stringResource(R.string.cardio_load),
         accent = ACCENT,
-        period = ready?.period ?: ChartPeriod.Day,
+        period = period,
         onPeriod = onPeriod,
         onBack = onBack,
         menu = listOf(MenuAction(stringResource(R.string.cardio_activity_settings)) { choosingGoal = true }),
