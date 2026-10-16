@@ -24,7 +24,8 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
         return metrics.associateWith { metric ->
             when (metric) {
-                HealthMetric.RestingHeartRate -> byDay(RestingHeartRateRecord::class, granted, range, { it.time }) { it.beatsPerMinute.toDouble() }
+                // Fitbit's resting heart rate is one value a day (61 on 16 Oct 2026); other apps' readings would pull an average away from it.
+                HealthMetric.RestingHeartRate -> byDay(RestingHeartRateRecord::class, granted, range, { it.time }, latest = true) { it.beatsPerMinute.toDouble() }
                 HealthMetric.HeartRateVariability -> byDay(HeartRateVariabilityRmssdRecord::class, granted, range, { it.time }) { it.heartRateVariabilityMillis }
                 HealthMetric.BreathingRate -> byDay(RespiratoryRateRecord::class, granted, range, { it.time }) { it.rate }
                 HealthMetric.BloodOxygen -> byDay(OxygenSaturationRecord::class, granted, range, { it.time }) { it.percentage.value }
@@ -55,6 +56,7 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
         granted: Set<String>,
         range: TimeRangeFilter,
         time: (T) -> Instant,
+        latest: Boolean = false,
         value: (T) -> Double,
     ): Map<LocalDate, Double> {
         if (read(type) !in granted) return emptyMap()
@@ -65,6 +67,6 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
             records += response.records
             pageToken = response.pageToken
         } while (!pageToken.isNullOrEmpty())
-        return records.groupBy { time(it).atZone(zone).toLocalDate() }.mapValues { (_, day) -> day.map(value).average() }
+        return records.groupBy { time(it).atZone(zone).toLocalDate() }.mapValues { (_, day) -> if (latest) value(day.maxBy(time)) else day.map(value).average() }
     }
 }

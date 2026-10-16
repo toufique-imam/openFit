@@ -56,6 +56,10 @@ import com.openfit.ui.weight.WeightRoute
 import com.openfit.ui.weight.WeightViewModel
 import com.openfit.ui.vitals.HealthMetricsRoute
 import com.openfit.ui.vitals.HealthMetricsViewModel
+import com.openfit.ui.vitals.MetricDetailRoute
+import com.openfit.ui.vitals.MetricDetailViewModel
+import com.openfit.ui.vitals.metricOf
+import com.openfit.ui.vitals.page
 import com.openfit.ui.sleep.SleepViewModel
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.OpenFitTheme
@@ -133,7 +137,7 @@ class MainActivity : ComponentActivity() {
                     Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
                         when (top) {
                             is Screen.Tab -> TabScreen(top.tab, todayViewModel) { page, date -> backStack.add(Screen.Metric(page, date)) }
-                            is Screen.Metric -> MetricScreen(top, pop)
+                            is Screen.Metric -> MetricScreen(top, pop) { page, date -> backStack.add(Screen.Metric(page, date)) }
                         }
                     }
                 }
@@ -155,7 +159,7 @@ class MainActivity : ComponentActivity() {
     }
 
     @Composable
-    private fun MetricScreen(screen: Screen.Metric, onBack: () -> Unit) {
+    private fun MetricScreen(screen: Screen.Metric, onBack: () -> Unit, onOpen: (MetricPage, LocalDate) -> Unit) {
         when (screen.page) {
             MetricPage.CardioLoad -> {
                 val model = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache) }
@@ -191,7 +195,14 @@ class MainActivity : ComponentActivity() {
             MetricPage.HealthMetrics -> {
                 val model = viewModel { HealthMetricsViewModel(gateway, profileStore) }
                 LaunchedEffect(screen) { model.open(screen.date) }
-                HealthMetricsRoute(model, onBack)
+                HealthMetricsRoute(model, onBack, onOpenMetric = { metric -> onOpen(page(metric), screen.date) })
+            }
+            MetricPage.MetricBreathingRate, MetricPage.MetricRestingHeartRate, MetricPage.MetricHrv, MetricPage.MetricBloodOxygen,
+            MetricPage.MetricSkinTemperature -> {
+                val metric = metricOf(screen.page) ?: return
+                val model = viewModel(key = metric.name) { MetricDetailViewModel(metric, gateway, profileStore) }
+                LaunchedEffect(screen) { model.open(screen.date) }
+                MetricDetailRoute(model, metric, onBack)
             }
             MetricPage.Weight -> {
                 val model = viewModel { WeightViewModel(gateway, profileStore) }

@@ -287,10 +287,17 @@ fun TitleWithAction(title: String, action: String, accent: Color, onAction: () -
 }
 
 @Composable
-fun LinkSection(title: String, action: String, body: String, accent: Color, onAction: () -> Unit) {
+fun LinkSection(title: String, action: String, body: String, accent: Color, maxLines: Int = Int.MAX_VALUE, onAction: () -> Unit) {
     Column(Modifier.padding(start = PagePadding, end = PagePadding, top = SectionGap)) {
         TitleWithAction(title, action, accent, onAction)
-        Text(body, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
+        Text(
+            body,
+            style = MaterialTheme.typography.bodyMedium,
+            color = OpenFitColors.OnSurfaceVariant,
+            maxLines = maxLines,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            modifier = Modifier.padding(top = 8.dp),
+        )
     }
 }
 

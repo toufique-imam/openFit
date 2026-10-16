@@ -435,6 +435,29 @@
 
     <!-- Health metrics -->
     <string name="hm_title">Health Metrics</string>
+    <string name="hm_screen_title">Health metrics</string>
+    <string name="hm_row_breathing_rate">Breathing rate (BR)</string>
+    <string name="hm_row_resting_heart_rate">Resting heart rate (RHR)</string>
+    <string name="hm_row_hrv">Heart rate variability (HRV)</string>
+    <string name="hm_row_blood_oxygen">Blood oxygen (SpO2)</string>
+    <string name="hm_average_unit">%s (avg)</string>
+    <string name="hm_list_average">%s (avg)</string>
+    <string name="hm_unavailable">%s unavailable</string>
+    <plurals name="hm_out_of_range_times">
+        <item quantity="one">Out of range %d time</item>
+        <item quantity="other">Out of range %d times</item>
+    </plurals>
+    <string name="hm_about_breathing_rate">About breathing rate</string>
+    <string name="hm_about_resting_heart_rate">About resting heart rate</string>
+    <string name="hm_about_hrv">About heart rate variability</string>
+    <string name="hm_about_blood_oxygen">About blood oxygen</string>
+    <string name="hm_about_skin_temperature">About skin temp variation</string>
+    <string name="hm_about_breathing_rate_body">Breathing rate is how many breaths you take a minute, averaged over your sleep. It usually stays steady from night to night, so a change away from your personal range can be worth noticing.</string>
+    <string name="hm_about_resting_heart_rate_body">Resting heart rate is how fast your heart beats while you are still and rested. A lower number usually goes with better fitness; a rise above your range can follow stress, illness, alcohol or poor sleep.</string>
+    <string name="hm_about_hrv_body">Heart rate variability is the variation in time, in milliseconds, between your heartbeats while you sleep. Higher than usual often means your body is well recovered; lower than usual can follow hard training, stress or illness.</string>
+    <string name="hm_about_blood_oxygen_body">Blood oxygen (SpO2) estimates how much of your blood carries oxygen, measured while you sleep. It is normally a little lower asleep than awake. It needs a device that measures SpO2 and writes it to Health Connect.</string>
+    <string name="hm_about_skin_temperature_body">Skin temp variation is how your skin temperature during sleep differs from your own baseline. It moves with your environment, your cycle and illness, so watch for changes that last several nights.</string>
+    <string name="hm_disclaimer">These metrics are not intended to diagnose or treat any medical condition. They help you notice changes in your own wellbeing; if you are concerned about your health, talk to a healthcare provider.</string>
     <string name="hm_breathing_rate">Breathing rate</string>
     <string name="hm_resting_heart_rate">Resting heart rate</string>
     <string name="hm_hrv">Heart rate variability</string>

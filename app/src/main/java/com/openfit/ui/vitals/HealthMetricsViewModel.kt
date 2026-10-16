@@ -2,12 +2,9 @@ package com.openfit.ui.vitals
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import com.openfit.domain.ChartPeriod
 import com.openfit.domain.HealthMetric
 import com.openfit.domain.PersonalRange
-import com.openfit.domain.periodDays
 import com.openfit.domain.personalRange
-import com.openfit.domain.shiftPeriod
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectVitals
 import com.openfit.profile.Profile
@@ -20,21 +17,21 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-/** One metric over the period: its value and personal range for each day. */
-data class MetricSeries(val metric: HealthMetric, val values: Map<LocalDate, Double>, val ranges: Map<LocalDate, PersonalRange>)
+/** One metric on the Health metrics page: the day's value (null for "No data") and its personal range. */
+data class MetricRow(val metric: HealthMetric, val value: Double?, val range: PersonalRange?) {
+    val inRange: Boolean? get() = value?.let { v -> range?.let { v in it } }
+}
 
 sealed interface HealthMetricsUiState {
     data object Loading : HealthMetricsUiState
     data class Failed(val message: String) : HealthMetricsUiState
-    data class Ready(
-        val period: ChartPeriod,
-        val anchor: LocalDate,
-        val today: LocalDate,
-        val profile: Profile,
-        val series: List<MetricSeries>,
-    ) : HealthMetricsUiState
+    data class Ready(val date: LocalDate, val today: LocalDate, val profile: Profile, val rows: List<MetricRow>) : HealthMetricsUiState {
+        /** Metrics with a value and a range, which Fitbit counts in "3 of 3". */
+        val ranged: List<MetricRow> get() = rows.filter { it.inRange != null }
+    }
 }
 
+/** Fitbit's Health metrics page: one day, each metric's value against its personal range. */
 class HealthMetricsViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore) : ViewModel() {
 
     private val vitals = HealthConnectVitals(gateway)
@@ -42,25 +39,17 @@ class HealthMetricsViewModel(gateway: HealthConnectGateway, private val profileS
     private val _state = MutableStateFlow<HealthMetricsUiState>(HealthMetricsUiState.Loading)
     val state: StateFlow<HealthMetricsUiState> = _state.asStateFlow()
 
-    private var period = ChartPeriod.Week
-    private var anchor: LocalDate = LocalDate.now()
+    private var date: LocalDate = LocalDate.now()
     private var loading: Job? = null
 
-    fun open(date: LocalDate) {
-        period = ChartPeriod.Week
-        anchor = date
+    fun open(day: LocalDate) {
+        date = day
         _state.value = HealthMetricsUiState.Loading
         load()
     }
 
-    fun selectPeriod(selected: ChartPeriod) {
-        if (selected == period) return
-        period = selected
-        load()
-    }
-
-    fun shift(steps: Long) {
-        anchor = shiftPeriod(period, anchor, steps).coerceAtMost(LocalDate.now())
+    fun shift(days: Long) {
+        date = date.plusDays(days).coerceAtMost(LocalDate.now())
         load()
     }
 
@@ -68,22 +57,15 @@ class HealthMetricsViewModel(gateway: HealthConnectGateway, private val profileS
         loading?.cancel()
         loading = viewModelScope.launch {
             _state.value = try {
-                val today = LocalDate.now()
-                val days = periodDays(period, anchor).filter { it <= today }
-                // Each day's personal range looks back 30 days.
-                val values = vitals.daily(HealthMetric.entries.toSet(), days.first().minusDays(BASELINE_LEAD_DAYS), days.last())
+                // The personal range looks back 30 days.
+                val values = vitals.daily(HealthMetric.entries.toSet(), date.minusDays(BASELINE_LEAD_DAYS), date)
                 HealthMetricsUiState.Ready(
-                    period = period,
-                    anchor = anchor,
-                    today = today,
+                    date = date,
+                    today = LocalDate.now(),
                     profile = profileStore.load(),
-                    series = HealthMetric.entries.map { metric ->
+                    rows = FITBIT_ORDER.map { metric ->
                         val daily = values[metric].orEmpty()
-                        MetricSeries(
-                            metric = metric,
-                            values = daily.filterKeys { it in days },
-                            ranges = days.mapNotNull { day -> personalRange(day, daily)?.let { day to it } }.toMap(),
-                        )
+                        MetricRow(metric, daily[date], personalRange(date, daily))
                     },
                 )
             } catch (error: CancellationException) {

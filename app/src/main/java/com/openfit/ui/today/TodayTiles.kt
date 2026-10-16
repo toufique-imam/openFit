@@ -454,28 +454,30 @@ private fun HealthMetricsTile(readings: List<MetricReading>, onClick: () -> Unit
 @Composable
 private fun HealthMetricsSummary(readings: List<MetricReading>, onClick: () -> Unit) {
     Surface(shape = RoundedCornerShape(16.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
-        Column(Modifier.padding(16.dp)) {
-            Text(
-                readings.map { stringResource(abbreviation(it.metric)) }.joinToString(", "),
-                style = MaterialTheme.typography.titleSmall,
-                color = OpenFitColors.OnSurface,
-            )
-            val outside = readings.filter { it.inRange == false }
+        // Fitbit: a check beside "BR, RHR, HRV" over "In personal range", or a line per metric out of range.
+        val outside = readings.filter { it.inRange == false }
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
             if (outside.isEmpty()) {
-                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Filled.Check, contentDescription = null, tint = OpenFitColors.Blue.accent, modifier = Modifier.size(18.dp))
-                    Spacer(Modifier.width(8.dp))
+                Icon(Icons.Filled.Check, contentDescription = null, tint = OpenFitColors.Blue.accent, modifier = Modifier.size(24.dp))
+                Spacer(Modifier.width(24.dp))
+            }
+            Column {
+                Text(
+                    readings.map { stringResource(abbreviation(it.metric)) }.joinToString(", "),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = OpenFitColors.OnSurface,
+                )
+                if (outside.isEmpty()) {
                     Text(stringResource(R.string.hm_in_personal_range), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
-                }
-            } else {
-                outside.forEach { reading ->
-                    val above = reading.range?.let { reading.value > it.high } == true
-                    Text(
-                        stringResource(R.string.hm_value_out_of_range, stringResource(abbreviation(reading.metric)), stringResource(if (above) R.string.hm_above_range else R.string.hm_below_range)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = OpenFitColors.OnSurfaceVariant,
-                        modifier = Modifier.padding(top = 8.dp),
-                    )
+                } else {
+                    outside.forEach { reading ->
+                        val above = reading.range?.let { reading.value > it.high } == true
+                        Text(
+                            stringResource(R.string.hm_value_out_of_range, stringResource(abbreviation(reading.metric)), stringResource(if (above) R.string.hm_above_range else R.string.hm_below_range)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OpenFitColors.OnSurfaceVariant,
+                        )
+                    }
                 }
             }
         }

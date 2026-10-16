@@ -173,3 +173,25 @@ Shared frame (`ui/detail/DetailScaffold.kt`); values from the decompiled Cardio 
   - Solid goal line in the accent; bars that reach it carry a check (16dp bars) or a small dot (thin bars).
   - Axis labels: 0, goal/2, goal (in the accent), plus a rounded-up top only when it clears the goal by 15 %.
   - Hourly chart top: two significant figures with an even last digit (3,050 → 3.2k).
+
+## Health metrics (rechecked on the phone, 16 Oct 2026)
+
+Fitbit's Health metrics is two levels, and openFit now matches both:
+
+- **Day page** ("Health metrics"):
+  - Day navigator; "3 of 3" over "In personal range" with a segmented gauge.
+  - Then all five metrics in Fitbit's order, each as a grouped row: "Breathing rate (BR) 17 brpm", "Blood oxygen (SpO2) No data", "Resting heart rate (RHR) 61 bpm", "Heart rate variability (HRV) 54 ms", "Skin temp variation".
+  - Values are whole numbers.
+- **Metric page** (Week / Month / Year):
+  - "17 brpm (avg)" over "All in personal range" or "Out of range N times".
+  - A line through the daily points over the personal-range band. Points sit at the left edge of each slot, and the band runs to the right edge.
+  - Legend: "Personal range · In range" / "Out of range".
+  - "About breathing rate" cut to three lines, with Learn more.
+  - A list: "This week | Breathing rate (avg)" with days ("Today", "Yesterday", "14 Oct"), weeks ("This week", "4-10 Oct") or months ("This month", "September", plus "Out of range 2 times").
+  - A disclaimer at the end.
+  - With no data: "No data" over "Blood oxygen unavailable" and an empty 90/95/100 chart.
+- **Today tile summary:** a check beside "BR, RHR, HRV" over "In personal range".
+- **Resting heart rate** is one value a day (the latest record), not an average of every record.
+- **Known difference:** Health Connect has skin temperature that the old Fitbit app shows as "No data", so openFit counts 4 of 4 where Fitbit counts 3 of 3.
+- **Personal range width:** Fitbit's HRV band this week was about 41-78 ms against openFit's +/- 2 SD of 47-75. Breathing rate is closer (15.5-19.0 against 15.8-18.9). It is not a simple wider multiplier, so the rule is unchanged.
+

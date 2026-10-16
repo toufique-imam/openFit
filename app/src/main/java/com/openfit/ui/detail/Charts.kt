@@ -450,6 +450,51 @@ fun RangeDotsChart(
     }
 }
 
+/**
+ * Fitbit's health-metric chart: a point per slot at the slot's left edge joined by a line, over the personal range,
+ * which steps from slot to slot as one continuous band. Points outside their range take [outColor].
+ */
+@Composable
+fun RangeLineChart(
+    values: List<Double?>,
+    ranges: List<ClosedFloatingPointRange<Double>?>,
+    color: Color,
+    outColor: Color,
+    axisMin: Double,
+    axisMax: Double,
+    axisLabels: List<AxisLabel>,
+    xLabels: List<Pair<Int, String>>,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
+        val left = PLOT_LEFT.toPx()
+        val slot = PLOT_WIDTH.toPx() / values.size.coerceAtLeast(1)
+        val bottom = PLOT_HEIGHT.toPx()
+        fun x(index: Int): Float = left + index * slot
+        fun y(value: Double): Float = bottom - ((value - axisMin) / (axisMax - axisMin)).coerceIn(0.0, 1.0).toFloat() * bottom
+        ranges.forEachIndexed { index, range ->
+            range ?: return@forEachIndexed
+            rangeBox(x(index), x(index) + slot, y(range.endInclusive), y(range.start), color)
+        }
+        val points = values.mapIndexedNotNull { index, value -> value?.let { index to Offset(x(index), y(it)) } }
+        points.zipWithNext().forEach { (a, b) -> drawLine(color, a.second, b.second, strokeWidth = LINE_WIDTH.toPx()) }
+        points.forEach { (index, point) ->
+            val value = values[index] ?: return@forEach
+            val inRange = ranges.getOrNull(index)?.let { value in it } ?: true
+            drawCircle(OpenFitColors.Background, (DOT_RADIUS + DOT_RING).toPx(), point)
+            drawCircle(if (inRange) color else outColor, DOT_RADIUS.toPx(), point)
+        }
+        val labelX = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
+        axisLabels.forEach { label ->
+            val layout = measurer.measure(label.text, labelStyle)
+            drawText(layout, topLeft = Offset(labelX, y(label.value) - layout.size.height / 2f))
+        }
+        xLabels(measurer, labelStyle, xLabels.map { (index, label) -> x(index) to label }, bottom, centered = true)
+    }
+}
+
 /** Legend whose markers are dots in each item's color: one dot for the first item, two for the second, and so on. */
 @Composable
 fun DotLegend(items: List<Pair<Color, String>>, modifier: Modifier = Modifier) {
