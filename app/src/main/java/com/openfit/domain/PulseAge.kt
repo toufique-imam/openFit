@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.ln
@@ -24,10 +28,12 @@ enum class AgeFactor(val group: AgeGroup) {
 enum class AgeGroup { Sleep, Activity, Fitness }
 
 /** One factor's part: its value (in the factor's units: hours, SRI, minutes a week, steps, mL/kg/min, bpm, %). */
+@Serializable
 data class AgeEffect(val factor: AgeFactor, val value: Double, val reference: Double, val years: Double, val estimated: Boolean = false)
 
 private const val ESTIMATE_WEIGHT = 0.5
 
+@Serializable
 data class PulseAge(val age: Double, val chronologicalAge: Int, val effects: List<AgeEffect>) {
     val difference: Double get() = age - chronologicalAge
     val missing: List<AgeFactor> get() = AgeFactor.entries - effects.map { it.factor }.toSet()

@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.min
 
@@ -47,6 +51,7 @@ fun displayedStress(rank: Int): Int = (rank * DISPLAY_SCALE).toInt()
 private const val DISPLAY_SCALE = 0.75
 
 /** A day of stress: each slot's 0-100 (null when not worn or in a workout), asleep or not. */
+@Serializable
 data class StressDay(val date: LocalDate, val slots: List<Int?>, val asleep: List<Boolean>) {
     val latest: Int? get() = slots.lastOrNull { it != null }
     val latestSlot: Int? get() = slots.indexOfLast { it != null }.takeIf { it >= 0 }
@@ -68,16 +73,20 @@ fun stressDays(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): Li
     }
 
 /** A stretch that drained the bank most: a workout by name, or an hour of stress. */
+@Serializable
 sealed interface EnergyDrain {
     val points: Double
 
+    @Serializable
     data class Workout(val slot: Int, override val points: Double) : EnergyDrain
 
     /** Stress in the hour starting at [hour]. */
+    @Serializable
     data class Stress(val hour: Int, override val points: Double) : EnergyDrain
 }
 
 /** A day of Energy Bank: the level after each slot (null before the bank has settled), and what charged and drained it. */
+@Serializable
 data class EnergyDay(
     val date: LocalDate,
     val levels: List<Double?>,

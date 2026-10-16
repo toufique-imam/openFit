@@ -5,6 +5,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -12,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.shape.CircleShape
@@ -22,6 +22,7 @@ import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.AccessTime
 import androidx.compose.material.icons.outlined.SelfImprovement
+import androidx.compose.material.icons.outlined.Spa
 import com.openfit.domain.stressBand
 import com.openfit.ui.stress.stressBandName
 import androidx.compose.ui.graphics.Shape
@@ -53,6 +54,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
@@ -69,9 +71,7 @@ import com.openfit.domain.MetricReading
 import com.openfit.ui.vitals.abbreviation
 import com.openfit.ui.weight.goalText
 import com.openfit.ui.goals.hourText
-import com.openfit.domain.DailyMetrics
 import com.openfit.domain.LoadRange
-import com.openfit.domain.Reading
 import com.openfit.domain.Readiness
 import com.openfit.domain.ReadinessLevel
 import com.openfit.domain.hourlyActivity
@@ -100,84 +100,107 @@ private val TILE_GAUGE: Dp = 66.dp
 private val MINI_GAUGE: Dp = 66.dp
 private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
 
+/**
+ * Today's focus area. Fitbit's cardio preset puts Cardio load and Daily Readiness on one split ring; the others show
+ * their first metric on a large ring. The rest sit small beneath it.
+ */
 @Composable
-fun FocusSection(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
-    val metrics = state.metrics
-    val profile = state.profile
-    val asleep = metrics.sleep?.asleep
-    val load = metrics.cardioLoad
-    val range = state.cardioRange
-    val readiness = state.readiness
+fun FocusSection(state: TodayUiState.Ready, layout: TodayLayout, onOpen: (MetricPage) -> Unit) {
+    val metrics = layout.focusMetrics
+    if (metrics.isEmpty()) return
+    val first = metrics.first()
+    val paired = layout.focus.paired.takeIf { layout.focus != FocusPreset.Custom }
     Column(Modifier.fillMaxWidth().padding(top = 6.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-        FocusRing(
-            onTopClick = { onOpen(MetricPage.CardioLoad) },
-            onBottomClick = { onOpen(MetricPage.Readiness) },
-            top = FocusMetric(
-                label = stringResource(R.string.cardio_load),
-                icon = Icons.Outlined.MonitorHeart,
-                value = AnnotatedString(
-                    when {
-                        load == null -> stringResource(if (profile.age == null) R.string.focus_needs_age else R.string.no_data)
-                        range == null -> stringResource(R.string.cardio_value_no_target, truncated(load))
-                        else -> stringResource(R.string.cardio_value_range, truncated(load), truncated(range.low), truncated(range.high))
-                    },
-                ),
-                progress = range?.progress(load),
-                color = OpenFitColors.Mint,
-                range = range?.fractions(),
-            ),
-            bottom = FocusMetric(
-                label = stringResource(R.string.readiness),
-                icon = Icons.AutoMirrored.Outlined.DirectionsRun,
-                value = AnnotatedString(
-                    readiness?.let { stringResource(R.string.readiness_value, it.score, stringResource(readinessLabel(it))) }
-                        ?: stringResource(R.string.no_score),
-                ),
-                progress = readiness?.let { it.score / 100f },
-                color = OpenFitColors.Lavender,
-            ),
-        )
-        Spacer(Modifier.height(27.dp))
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
-            MiniMetric(
-                label = stringResource(R.string.tile_exercise_days),
-                value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal, smallTotal = true) },
-                onClick = { onOpen(MetricPage.Exercise) },
-            ) {
-                val goal = profile.weeklyExerciseDaysGoal
-                if (goal == null) {
-                    IconBadge(Icons.Outlined.FitnessCenter, OpenFitColors.Mint, MINI_GAUGE)
-                } else {
-                    SegmentedGauge(Icons.Outlined.FitnessCenter, OpenFitColors.Mint, goal, state.exerciseDays.size, iconRotation = 90f)
+        if (paired != null) {
+            CardioReadinessRing(state, onOpen)
+        } else {
+            BigFocus(focusValue(first, state), onClick = first.page?.let { page -> { onOpen(page) } })
+        }
+        val small = metrics.drop(1).take(TodayLayout.CUSTOM_SLOTS - 1)
+        if (small.isNotEmpty()) {
+            Spacer(Modifier.height(27.dp))
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                val width = maxWidth / (TodayLayout.CUSTOM_SLOTS - 1)
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.Top) {
+                    small.forEach { tile ->
+                        MiniMetric(focusValue(tile, state), Modifier.width(width), onClick = tile.page?.let { page -> { onOpen(page) } })
+                    }
                 }
-            }
-            MiniMetric(
-                label = stringResource(R.string.focus_sleep),
-                value = asleep?.let { valueText { duration(it) } },
-                onClick = { onOpen(MetricPage.Sleep) },
-            ) {
-                GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
-            }
-            MiniMetric(
-                label = stringResource(R.string.tile_steps),
-                value = AnnotatedString(whole(metrics.steps ?: 0)),
-                onClick = { onOpen(MetricPage.Steps) },
-            ) {
-                GoalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal)
             }
         }
     }
 }
 
 @Composable
-private fun RowScope.MiniMetric(label: String, value: AnnotatedString?, onClick: (() -> Unit)? = null, gauge: @Composable () -> Unit) {
+private fun CardioReadinessRing(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
+    val load = state.metrics.cardioLoad
+    val range = state.cardioRange
+    val readiness = state.readiness
+    FocusRing(
+        onTopClick = { onOpen(MetricPage.CardioLoad) },
+        onBottomClick = { onOpen(MetricPage.Readiness) },
+        top = FocusMetric(
+            label = stringResource(R.string.cardio_load),
+            icon = Icons.Outlined.MonitorHeart,
+            value = AnnotatedString(
+                when {
+                    load == null -> stringResource(if (state.profile.age == null) R.string.focus_needs_age else R.string.no_data)
+                    range == null -> stringResource(R.string.cardio_value_no_target, truncated(load))
+                    else -> stringResource(R.string.cardio_value_range, truncated(load), truncated(range.low), truncated(range.high))
+                },
+            ),
+            progress = range?.progress(load),
+            color = OpenFitColors.Mint,
+            range = range?.fractions(),
+        ),
+        bottom = FocusMetric(
+            label = stringResource(R.string.readiness),
+            icon = Icons.AutoMirrored.Outlined.DirectionsRun,
+            value = AnnotatedString(
+                readiness?.let { stringResource(R.string.readiness_value, it.score, stringResource(readinessLabel(it))) }
+                    ?: stringResource(R.string.no_score),
+            ),
+            progress = readiness?.let { it.score / 100f },
+            color = OpenFitColors.Lavender,
+        ),
+    )
+}
+
+/** A metric as the focus area draws it: a gauge, the value, and under it the unit or the metric's short name. */
+class FocusValue(val value: AnnotatedString?, val caption: String, val gauge: @Composable (size: Dp, stroke: Dp, icon: Dp) -> Unit)
+
+private val BIG_GAUGE = 164.dp
+private val BIG_STROKE = 10.dp
+private val BIG_ICON = 64.dp
+
+/** Fitbit's single focus metric: a large ring around the icon, the value large beneath it, then its name. */
+@Composable
+private fun BigFocus(focus: FocusValue, onClick: (() -> Unit)?) {
     Column(
-        Modifier.weight(1f).then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        Modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        gauge()
+        focus.gauge(BIG_GAUGE, BIG_STROKE, BIG_ICON)
+        Spacer(Modifier.height(12.dp))
+        Text(
+            focus.value ?: AnnotatedString(stringResource(R.string.no_data)),
+            style = if (focus.value == null) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.displayLarge,
+            color = OpenFitColors.OnSurface,
+            maxLines = 1,
+        )
+        Text(focus.caption, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurfaceVariant)
+    }
+}
+
+@Composable
+private fun MiniMetric(focus: FocusValue, modifier: Modifier, onClick: (() -> Unit)? = null) {
+    Column(
+        modifier.then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        focus.gauge(MINI_GAUGE, 6.dp, 24.dp)
         Box(Modifier.padding(top = 4.dp).height(34.dp), contentAlignment = Alignment.TopCenter) {
-            if (value == null) {
+            if (focus.value == null) {
                 Text(
                     stringResource(R.string.no_data),
                     modifier = Modifier.padding(top = 10.dp),
@@ -185,284 +208,472 @@ private fun RowScope.MiniMetric(label: String, value: AnnotatedString?, onClick:
                     color = OpenFitColors.OnSurface,
                 )
             } else {
-                Text(value, style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 36.sp), color = OpenFitColors.OnSurface, maxLines = 1)
+                Text(focus.value, style = MaterialTheme.typography.headlineSmall.copy(lineHeight = 36.sp), color = OpenFitColors.OnSurface, maxLines = 1)
             }
         }
-        Text(label, style = MaterialTheme.typography.titleSmall, color = OpenFitColors.OnSurfaceVariant, textAlign = TextAlign.Center, maxLines = 3)
+        Text(focus.caption, style = MaterialTheme.typography.titleSmall, color = OpenFitColors.OnSurfaceVariant, textAlign = TextAlign.Center, maxLines = 3)
     }
 }
 
-fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
+/** A goal's ring, or the icon alone without a goal, at any size. */
+private fun goalGauge(icon: ImageVector, color: MetricColor, value: Double?, goal: Number?): @Composable (Dp, Dp, Dp) -> Unit = { size, stroke, iconSize ->
+    if (value == null || goal == null) {
+        IconBadge(icon, color, size)
+    } else {
+        ArcGauge(icon, color, (value / goal.toDouble()).toFloat(), size = size, stroke = stroke, iconSize = iconSize)
+    }
+}
+
+private fun arcGauge(icon: ImageVector, color: MetricColor, progress: Float?, from: Float = 0f, range: ClosedFloatingPointRange<Float>? = null): @Composable (Dp, Dp, Dp) -> Unit =
+    { size, stroke, iconSize ->
+        if (progress == null) {
+            IconBadge(icon, color, size)
+        } else {
+            ArcGauge(icon, color, progress, from = from, range = range, background = OpenFitColors.Background, size = size, stroke = stroke, iconSize = iconSize)
+        }
+    }
+
+private fun segmentGauge(icon: ImageVector, color: MetricColor, goal: Int?, done: Int, iconRotation: Float = 0f): @Composable (Dp, Dp, Dp) -> Unit =
+    { size, stroke, iconSize ->
+        if (goal == null) IconBadge(icon, color, size) else SegmentedGauge(icon, color, goal, done, size = size, stroke = stroke, iconSize = iconSize, iconRotation = iconRotation)
+    }
+
+@Composable
+fun focusValue(tile: TodayTile, state: TodayUiState.Ready): FocusValue {
     val metrics = state.metrics
     val profile = state.profile
+    val label = stringResource(tile.focusLabel)
+    val imperial = profile.units == UnitSystem.Imperial
+    return when (tile) {
+        TodayTile.SleepDuration -> {
+            val asleep = metrics.sleep?.asleep
+            FocusValue(asleep?.let { valueText { duration(it) } }, label, goalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes))
+        }
+        TodayTile.Readiness -> {
+            val readiness = state.readiness
+            FocusValue(readiness?.let { AnnotatedString(it.score.toString()) }, label, arcGauge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Lavender, readiness?.let { it.score / 100f }))
+        }
+        TodayTile.EnergyBank -> {
+            val level = state.energy?.latest
+            FocusValue(level?.let { quantityText(it.roundToInt().toString(), "%") }, label, arcGauge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender, level?.let { (it / 100).toFloat() }))
+        }
+        TodayTile.CardioLoad -> {
+            val range = state.cardioRange
+            FocusValue(
+                metrics.cardioLoad?.let { AnnotatedString(truncated(it)) },
+                label,
+                arcGauge(Icons.Outlined.MonitorHeart, OpenFitColors.Mint, range?.progress(metrics.cardioLoad) ?: 0f, range = range?.fractions()),
+            )
+        }
+        TodayTile.ExerciseDays -> FocusValue(
+            valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal, smallTotal = true) },
+            label,
+            segmentGauge(Icons.Outlined.FitnessCenter, OpenFitColors.Mint, profile.weeklyExerciseDaysGoal, state.exerciseDays.size, iconRotation = 90f),
+        )
+        TodayTile.ZoneMinutes -> {
+            val zone = metrics.zoneMinutes?.total
+            FocusValue(
+                zone?.let { AnnotatedString(whole(it)) },
+                label,
+                arcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zone ?: 0) / kotlin.math.ceil(profile.fitnessGoal.weeklyZoneMinutes / 7.0).toFloat()),
+            )
+        }
+        TodayTile.Steps -> FocusValue(
+            AnnotatedString(whole(metrics.steps ?: 0)),
+            label,
+            goalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal),
+        )
+        TodayTile.HourlyActivity -> {
+            val hourly = profile.activeHours?.let { hourlyActivity(metrics.hourlySteps, currentHour = if (state.isToday) LocalTime.now().hour else null, window = it) }
+            FocusValue(
+                hourly?.let { valueText { count(it.met, it.hours.size, smallTotal = true) } },
+                label,
+                segmentGauge(Icons.Outlined.AccessTime, OpenFitColors.Mint, hourly?.hours?.size, hourly?.met ?: 0),
+            )
+        }
+        TodayTile.Distance -> {
+            val meters = metrics.distanceMeters ?: 0.0
+            FocusValue(
+                AnnotatedString(twoDecimals(if (imperial) meters / METERS_PER_MILE else meters / 1_000)),
+                stringResource(if (imperial) R.string.unit_mi else R.string.unit_km),
+                goalGauge(Icons.Outlined.LocationOn, OpenFitColors.Mint, meters, profile.dailyDistanceGoalMeters),
+            )
+        }
+        TodayTile.EnergyBurned -> {
+            val calories = metrics.caloriesOutKcal ?: 0.0
+            FocusValue(AnnotatedString(whole(calories)), stringResource(R.string.unit_cal), goalGauge(Icons.Outlined.LocalFireDepartment, OpenFitColors.Mint, calories, profile.dailyCaloriesOutGoal))
+        }
+        TodayTile.Floors -> {
+            val floors = metrics.floors ?: 0.0
+            FocusValue(AnnotatedString(whole(floors.toInt())), label, goalGauge(Icons.Outlined.Stairs, OpenFitColors.Mint, floors, profile.dailyFloorsGoal))
+        }
+        TodayTile.HealthMetrics -> {
+            val readings = state.healthMetrics
+            val inRange = readings.count { it.inRange == true }
+            FocusValue(
+                readings.takeIf { it.isNotEmpty() }?.let { valueText { count(inRange, it.size, smallTotal = true) } },
+                label,
+                segmentGauge(Icons.Outlined.BarChart, OpenFitColors.Blue, readings.size.takeIf { it > 0 }, inRange),
+            )
+        }
+        TodayTile.Heart -> {
+            val range = metrics.heartRateRange
+            val latest = metrics.latestHeartRate?.takeIf { state.isToday }
+            val resting = metrics.restingBpm?.value
+            val span = HEART_RANGE_CEILING - HEART_RANGE_FLOOR
+            val low = latest?.value ?: range?.first ?: resting
+            val high = latest?.value ?: range?.last ?: low
+            FocusValue(
+                (latest?.value?.toString() ?: range?.let { "${it.first}–${it.last}" } ?: resting?.toString())?.let(::AnnotatedString),
+                stringResource(R.string.unit_bpm),
+                arcGauge(
+                    Icons.Outlined.FavoriteBorder,
+                    OpenFitColors.Blue,
+                    high?.let { (it - HEART_RANGE_FLOOR) / span },
+                    from = low?.let { (it - HEART_RANGE_FLOOR) / span } ?: 0f,
+                ),
+            )
+        }
+        TodayTile.Vo2Max -> {
+            val fitness = state.fitness
+            FocusValue(
+                fitness?.let { AnnotatedString(oneDecimal(it.vo2Max)) },
+                label,
+                arcGauge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Blue, fitness?.let { (it.percentile / 100).toFloat() }),
+            )
+        }
+        TodayTile.PulseAge -> FocusValue(state.pulseAge?.let { AnnotatedString(fixed(it.age)) }, label, { size, _, _ -> IconBadge(Icons.Outlined.Timelapse, OpenFitColors.Blue, size) })
+        TodayTile.Weight -> {
+            val weight = metrics.weightKg?.value
+            val pounds = profile.weightUnit == WeightUnit.Pounds
+            FocusValue(
+                weight?.let { AnnotatedString(oneDecimal(if (pounds) it * POUNDS_PER_KG else it)) },
+                stringResource(if (pounds) R.string.unit_lb else R.string.unit_kg),
+                { size, _, _ -> IconBadge(Icons.Outlined.MonitorWeight, OpenFitColors.Blue, size) },
+            )
+        }
+        TodayTile.Stress -> {
+            val value = if (state.isToday) state.stress?.latest else state.stress?.average
+            FocusValue(value?.let { AnnotatedString(it.toString()) }, label, arcGauge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender, value?.let { it / 100f }))
+        }
+        TodayTile.MindfulDays -> FocusValue(
+            valueText { exerciseCount(state.mindfulDays.size, profile.weeklyMindfulDaysGoal, smallTotal = true) },
+            label,
+            segmentGauge(Icons.Outlined.Spa, OpenFitColors.Lavender, profile.weeklyMindfulDaysGoal, state.mindfulDays.size),
+        )
+        TodayTile.Food -> {
+            val eaten = metrics.caloriesInKcal ?: 0.0
+            FocusValue(AnnotatedString(whole(eaten)), stringResource(R.string.unit_cal), goalGauge(Icons.Outlined.Restaurant, OpenFitColors.Pink, eaten, profile.dailyCaloriesInGoal))
+        }
+        TodayTile.Water -> {
+            val liters = metrics.waterLiters ?: 0.0
+            FocusValue(
+                AnnotatedString(if (imperial) oneDecimal(liters * FL_OZ_PER_LITER) else whole(liters * 1_000)),
+                stringResource(if (imperial) R.string.unit_fl_oz else R.string.unit_ml),
+                goalGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, liters, profile.dailyWaterGoalLiters),
+            )
+        }
+    }
+}
 
-    section(if (state.readiness != null || state.isToday) R.string.section_recovery else R.string.section_sleep)
-    item {
-        val asleep = metrics.sleep?.asleep
-        MetricTile(
-            title = stringResource(R.string.tile_sleep_duration),
-            value = asleep?.let { valueText { duration(it) } } ?: noValue(stringResource(R.string.no_data)),
-            subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" • "),
-            onClick = { onOpen(MetricPage.Sleep) },
-        ) {
-            GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
-        }
+/** Whether a card has anything to show: Health Metrics, Heart, VO2 max and Weight appear once there is data. */
+fun tileHasData(tile: TodayTile, state: TodayUiState.Ready): Boolean {
+    val metrics = state.metrics
+    return when (tile) {
+        TodayTile.HealthMetrics -> state.healthMetrics.isNotEmpty()
+        TodayTile.Heart -> metrics.latestHeartRate != null || metrics.heartRateRange != null || metrics.restingBpm != null
+        TodayTile.Vo2Max -> state.fitness != null
+        TodayTile.Weight -> metrics.weightKg != null
+        else -> true
     }
-    item {
-        val readiness = state.readiness
-        MetricTile(
-            title = stringResource(R.string.readiness),
-            value = readiness?.let { AnnotatedString(it.score.toString()) } ?: noValue(stringResource(R.string.no_score)),
-            subtitle = listOfNotNull(dayLabel(state), readiness?.let { stringResource(readinessLabel(it)) }).joinToString(" • "),
-            onClick = { onOpen(MetricPage.Readiness) },
-        ) {
-            if (readiness == null) {
-                IconBadge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Lavender)
-            } else {
-                ArcGauge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Lavender, readiness.score / 100f)
-            }
-        }
-    }
+}
 
-    item {
-        val level = state.energy?.latest
-        MetricTile(
-            title = stringResource(R.string.energy_title),
-            value = level?.let { quantityText(it.roundToInt().toString(), "%") }
-                ?: noValue(stringResource(if (state.energyLoading) R.string.energy_loading else R.string.energy_calibrating_short)),
-            subtitle = listOfNotNull(dayLabel(state), level?.let { stringResource(energyBandText(energyBand(it))) }).joinToString(" · "),
-            onClick = { onOpen(MetricPage.EnergyBank) },
-        ) {
-            if (level == null) {
-                IconBadge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender)
-            } else {
-                ArcGauge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender, (level / 100).toFloat())
-            }
-        }
-    }
+/** Today's sections in the user's order, without the cards they hid. */
+fun LazyListScope.todaySections(state: TodayUiState.Ready, layout: TodayLayout, onOpen: (MetricPage) -> Unit, faded: Boolean = false) {
+    layout.order.forEach { section -> sectionTiles(state, section, onOpen, hidden = layout.hidden, faded = faded) }
+}
 
-    section(R.string.section_activity)
-    item {
-        val range = state.cardioRange
-        MetricTile(
-            title = stringResource(R.string.cardio_load),
-            value = AnnotatedString(truncated(metrics.cardioLoad ?: 0.0)),
-            subtitle = listOfNotNull(
-                dayLabel(state),
-                when {
-                    range == null -> stringResource(R.string.no_target)
-                    else -> stringResource(R.string.target_range, truncated(range.low), truncated(range.high))
-                },
-            ).joinToString(" • "),
-            onClick = { onOpen(MetricPage.CardioLoad) },
-        ) {
-            ArcGauge(Icons.Outlined.MonitorHeart, OpenFitColors.Mint, range?.progress(metrics.cardioLoad) ?: 0f, range = range?.fractions())
-        }
+/** One section's cards; a section tab shows them all, under its own title instead of a header. */
+fun LazyListScope.sectionTiles(
+    state: TodayUiState.Ready,
+    section: TodaySection,
+    onOpen: (MetricPage) -> Unit,
+    hidden: Set<TodayTile> = emptySet(),
+    header: Boolean = true,
+    /** The cards are an older day's, shown while the picked one loads. */
+    faded: Boolean = false,
+) {
+    val tiles = TodayTile.entries.filter { it.section == section && it !in hidden }
+    if (tiles.isEmpty()) return
+    if (header) section(sectionTitle(section, state), key = "header:${section.name}")
+    tiles.filter { tileHasData(it, state) }.forEach { tile ->
+        item(key = tile.name) { Box(Modifier.alpha(if (faded) FADED_ALPHA else 1f)) { TileCard(tile, state, onOpen) } }
     }
-    item {
-        val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
-        val workout = state.latestExercise
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+}
+
+const val FADED_ALPHA = 0.4f
+
+/** Without a readiness score, a past day's Recovery is just its sleep, as on Fitbit. */
+@StringRes
+fun sectionTitle(section: TodaySection, state: TodayUiState.Ready): Int =
+    if (section == TodaySection.Recovery && state.readiness == null && !state.isToday) R.string.section_sleep else section.title
+
+@Composable
+private fun TileCard(tile: TodayTile, state: TodayUiState.Ready, onOpen: (MetricPage) -> Unit) {
+    val metrics = state.metrics
+    val profile = state.profile
+    val open: (() -> Unit)? = tile.page?.let { page -> { onOpen(page) } }
+    when (tile) {
+        TodayTile.SleepDuration -> {
+            val asleep = metrics.sleep?.asleep
             MetricTile(
-                title = stringResource(R.string.tile_exercise_days),
-                value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
-                subtitle = weekLabel(state),
-                onClick = { onOpen(MetricPage.Exercise) },
-                shape = if (workout == null) TILE_SHAPE else GROUP_TOP,
+                title = stringResource(R.string.tile_sleep_duration),
+                value = asleep?.let { valueText { duration(it) } } ?: noValue(stringResource(R.string.no_data)),
+                subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" • "),
+                onClick = open,
             ) {
-                WeekBars(labels, state.week.map { it in state.exerciseDays }, OpenFitColors.Mint, todayIndex = state.week.indexOf(LocalDate.now()).takeIf { it >= 0 })
+                GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
             }
-            if (workout != null) WorkoutRow(workout, profile, onClick = { onOpen(MetricPage.Exercise) })
         }
-    }
-    item {
-        val zoneMinutes = metrics.zoneMinutes?.total
-        val target = state.zoneTarget
-        MetricTile(
-            title = stringResource(R.string.tile_zone_minutes),
-            value = zoneMinutes?.let { AnnotatedString(whole(it)) } ?: noValue(stringResource(R.string.no_data)),
-            subtitle = if (zoneMinutes == null && profile.age == null) stringResource(R.string.zone_minutes_needs_age) else dayLabel(state),
-            onClick = { onOpen(MetricPage.ZoneMinutes) },
-        ) {
-            // Fitbit's ring fills against the daily goal, the weekly one over seven days (150 -> 22), not what is left of the week.
-            ArcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zoneMinutes ?: 0) / kotlin.math.ceil(profile.fitnessGoal.weeklyZoneMinutes / 7.0).toFloat())
+        TodayTile.Readiness -> {
+            val readiness = state.readiness
+            MetricTile(
+                title = stringResource(R.string.readiness),
+                value = readiness?.let { AnnotatedString(it.score.toString()) } ?: noValue(stringResource(R.string.no_score)),
+                subtitle = listOfNotNull(dayLabel(state), readiness?.let { stringResource(readinessLabel(it)) }).joinToString(" • "),
+                onClick = open,
+            ) {
+                if (readiness == null) {
+                    IconBadge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Lavender)
+                } else {
+                    ArcGauge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Lavender, readiness.score / 100f)
+                }
+            }
         }
-    }
-    item {
-        MetricTile(stringResource(R.string.tile_steps), AnnotatedString(whole(metrics.steps ?: 0)), dayLabel(state), onClick = { onOpen(MetricPage.Steps) }) {
+        TodayTile.EnergyBank -> {
+            val level = state.energy?.latest
+            MetricTile(
+                title = stringResource(R.string.energy_title),
+                value = level?.let { quantityText(it.roundToInt().toString(), "%") }
+                    ?: noValue(stringResource(if (state.energyLoading) R.string.energy_loading else R.string.energy_calibrating_short)),
+                subtitle = listOfNotNull(dayLabel(state), level?.let { stringResource(energyBandText(energyBand(it))) }).joinToString(" · "),
+                onClick = open,
+            ) {
+                if (level == null) {
+                    IconBadge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender)
+                } else {
+                    ArcGauge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender, (level / 100).toFloat())
+                }
+            }
+        }
+        TodayTile.CardioLoad -> {
+            val range = state.cardioRange
+            MetricTile(
+                title = stringResource(R.string.cardio_load),
+                value = AnnotatedString(truncated(metrics.cardioLoad ?: 0.0)),
+                subtitle = listOfNotNull(
+                    dayLabel(state),
+                    when {
+                        range == null -> stringResource(R.string.no_target)
+                        else -> stringResource(R.string.target_range, truncated(range.low), truncated(range.high))
+                    },
+                ).joinToString(" • "),
+                onClick = open,
+            ) {
+                ArcGauge(Icons.Outlined.MonitorHeart, OpenFitColors.Mint, range?.progress(metrics.cardioLoad) ?: 0f, range = range?.fractions())
+            }
+        }
+        TodayTile.ExerciseDays -> {
+            val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+            val workout = state.latestExercise
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                MetricTile(
+                    title = stringResource(R.string.tile_exercise_days),
+                    value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
+                    subtitle = weekLabel(state),
+                    onClick = open,
+                    shape = if (workout == null) TILE_SHAPE else GROUP_TOP,
+                ) {
+                    WeekBars(labels, state.week.map { it in state.exerciseDays }, OpenFitColors.Mint, todayIndex = state.week.indexOf(LocalDate.now()).takeIf { it >= 0 })
+                }
+                if (workout != null) WorkoutRow(workout, profile, onClick = { onOpen(MetricPage.Exercise) })
+            }
+        }
+        TodayTile.ZoneMinutes -> {
+            val zoneMinutes = metrics.zoneMinutes?.total
+            MetricTile(
+                title = stringResource(R.string.tile_zone_minutes),
+                value = zoneMinutes?.let { AnnotatedString(whole(it)) } ?: noValue(stringResource(R.string.no_data)),
+                subtitle = if (zoneMinutes == null && profile.age == null) stringResource(R.string.zone_minutes_needs_age) else dayLabel(state),
+                onClick = open,
+            ) {
+                // Fitbit's ring fills against the daily goal, the weekly one over seven days (150 -> 22), not what is left of the week.
+                ArcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zoneMinutes ?: 0) / kotlin.math.ceil(profile.fitnessGoal.weeklyZoneMinutes / 7.0).toFloat())
+            }
+        }
+        TodayTile.Steps -> MetricTile(stringResource(R.string.tile_steps), AnnotatedString(whole(metrics.steps ?: 0)), dayLabel(state), onClick = open) {
             GoalGauge(Icons.AutoMirrored.Outlined.DirectionsWalk, OpenFitColors.Mint, (metrics.steps ?: 0).toDouble(), profile.dailyStepGoal)
         }
-    }
-    item {
-        val window = profile.activeHours
-        val hourly = window?.let { hourlyActivity(metrics.hourlySteps, currentHour = if (state.isToday) LocalTime.now().hour else null, window = it) }
-        MetricTile(
-            title = stringResource(R.string.tile_hourly_activity),
-            value = hourly?.let { valueText { count(it.met, it.hours.size) } } ?: noValue(stringResource(R.string.goal_no_goal)),
-            subtitle = dayLabel(state),
-            onClick = { onOpen(MetricPage.Hourly) },
-        ) {
-            if (hourly == null) {
-                IconBadge(Icons.Outlined.AccessTime, OpenFitColors.Mint)
-            } else {
-                HourlyBars(hourly.hours, hourText(hourly.window.first), hourText(hourly.window.last), OpenFitColors.Mint)
+        TodayTile.HourlyActivity -> {
+            val window = profile.activeHours
+            val hourly = window?.let { hourlyActivity(metrics.hourlySteps, currentHour = if (state.isToday) LocalTime.now().hour else null, window = it) }
+            MetricTile(
+                title = stringResource(R.string.tile_hourly_activity),
+                value = hourly?.let { valueText { count(it.met, it.hours.size) } } ?: noValue(stringResource(R.string.goal_no_goal)),
+                subtitle = dayLabel(state),
+                onClick = open,
+            ) {
+                if (hourly == null) {
+                    IconBadge(Icons.Outlined.AccessTime, OpenFitColors.Mint)
+                } else {
+                    HourlyBars(hourly.hours, hourText(hourly.window.first), hourText(hourly.window.last), OpenFitColors.Mint)
+                }
             }
         }
-    }
-    item {
-        val meters = metrics.distanceMeters ?: 0.0
-        val imperial = profile.units == UnitSystem.Imperial
-        MetricTile(
-            title = stringResource(R.string.tile_distance),
-            value = quantityText(
-                twoDecimals(if (imperial) meters / METERS_PER_MILE else meters / 1_000),
-                stringResource(if (imperial) R.string.unit_mi else R.string.unit_km),
-            ),
-            subtitle = dayLabel(state),
-            onClick = { onOpen(MetricPage.Distance) },
-        ) {
-            GoalGauge(Icons.Outlined.LocationOn, OpenFitColors.Mint, meters, profile.dailyDistanceGoalMeters)
-        }
-    }
-    item {
-        val calories = metrics.caloriesOutKcal ?: 0.0
-        MetricTile(
-            title = stringResource(R.string.tile_energy_burned),
-            value = quantityText(whole(calories), stringResource(R.string.unit_cal)),
-            subtitle = dayLabel(state),
-            onClick = { onOpen(MetricPage.Energy) },
-        ) {
-            GoalGauge(Icons.Outlined.LocalFireDepartment, OpenFitColors.Mint, calories, profile.dailyCaloriesOutGoal)
-        }
-    }
-    item {
-        val floors = metrics.floors ?: 0.0
-        MetricTile(stringResource(R.string.tile_floors), AnnotatedString(whole(floors.toInt())), dayLabel(state), onClick = { onOpen(MetricPage.Floors) }) {
-            GoalGauge(Icons.Outlined.Stairs, OpenFitColors.Mint, floors, profile.dailyFloorsGoal)
-        }
-    }
-
-    val health = healthTiles(metrics, profile)
-    val showHeart = metrics.latestHeartRate != null || metrics.heartRateRange != null || metrics.restingBpm != null
-    val readings = state.healthMetrics
-    section(R.string.section_health)
-    if (readings.isNotEmpty()) {
-        item { HealthMetricsTile(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
-        item { HealthMetricsSummary(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
-    }
-    if (showHeart) item { HeartTile(state, onClick = { onOpen(MetricPage.Heart) }) }
-    state.fitness?.let { fitness ->
-        item {
+        TodayTile.Distance -> {
+            val meters = metrics.distanceMeters ?: 0.0
+            val imperial = profile.units == UnitSystem.Imperial
             MetricTile(
-                title = stringResource(R.string.tile_cardio_fitness),
-                value = quantityText(oneDecimal(fitness.vo2Max), stringResource(R.string.unit_vo2)),
-                subtitle = listOfNotNull(
+                title = stringResource(R.string.tile_distance),
+                value = quantityText(
+                    twoDecimals(if (imperial) meters / METERS_PER_MILE else meters / 1_000),
+                    stringResource(if (imperial) R.string.unit_mi else R.string.unit_km),
+                ),
+                subtitle = dayLabel(state),
+                onClick = open,
+            ) {
+                GoalGauge(Icons.Outlined.LocationOn, OpenFitColors.Mint, meters, profile.dailyDistanceGoalMeters)
+            }
+        }
+        TodayTile.EnergyBurned -> {
+            val calories = metrics.caloriesOutKcal ?: 0.0
+            MetricTile(
+                title = stringResource(R.string.tile_energy_burned),
+                value = quantityText(whole(calories), stringResource(R.string.unit_cal)),
+                subtitle = dayLabel(state),
+                onClick = open,
+            ) {
+                GoalGauge(Icons.Outlined.LocalFireDepartment, OpenFitColors.Mint, calories, profile.dailyCaloriesOutGoal)
+            }
+        }
+        TodayTile.Floors -> {
+            val floors = metrics.floors ?: 0.0
+            MetricTile(stringResource(R.string.tile_floors), AnnotatedString(whole(floors.toInt())), dayLabel(state), onClick = open) {
+                GoalGauge(Icons.Outlined.Stairs, OpenFitColors.Mint, floors, profile.dailyFloorsGoal)
+            }
+        }
+        TodayTile.HealthMetrics -> Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            HealthMetricsTile(state.healthMetrics, onClick = { onOpen(MetricPage.HealthMetrics) })
+            HealthMetricsSummary(state.healthMetrics, onClick = { onOpen(MetricPage.HealthMetrics) })
+        }
+        TodayTile.Heart -> HeartTile(state, onClick = { onOpen(MetricPage.Heart) })
+        TodayTile.Vo2Max -> {
+            val fitness = state.fitness ?: return
+            MetricTile(
+                title = stringResource(R.string.vo2_title),
+                value = AnnotatedString(oneDecimal(fitness.vo2Max)),
+                // One line: whether it was estimated shows on the VO2 max page.
+                subtitle = listOf(
                     stringResource(fitnessBandName(fitness.band)),
                     stringResource(R.string.fitness_percentile, ordinal(fitness.percentile.toInt())),
-                    if (fitness.estimated) stringResource(R.string.fitness_estimated) else null,
                 ).joinToString(" · "),
-                onClick = { onOpen(MetricPage.PulseAge) },
+                onClick = open,
             ) {
                 ArcGauge(Icons.AutoMirrored.Outlined.DirectionsRun, OpenFitColors.Blue, (fitness.percentile / 100).toFloat())
             }
         }
-    }
-    item {
-        val age = state.pulseAge
-        MetricTile(
-            title = stringResource(R.string.age_title),
-            value = age?.let { AnnotatedString(fixed(it.age)) } ?: noValue(
-                stringResource(
-                    when {
-                        profile.age == null || profile.sex == null -> R.string.age_tile_needs_profile
-                        state.pulseAgeLoading -> R.string.energy_loading
-                        else -> R.string.no_data
-                    },
-                ),
-            ),
-            subtitle = age?.let { ageDifferenceShort(it.difference) } ?: stringResource(R.string.age_tile_window),
-            onClick = { onOpen(MetricPage.PulseAge) },
-        ) {
-            IconBadge(Icons.Outlined.Timelapse, OpenFitColors.Blue)
-        }
-    }
-    health.forEach { tile ->
-        item {
-            val weight = tile.title == R.string.tile_weight
+        TodayTile.PulseAge -> {
+            val age = state.pulseAge
             MetricTile(
-                title = stringResource(tile.title),
-                value = quantityText(tile.value, stringResource(tile.unit)),
-                subtitle = listOfNotNull(
-                    readingDayLabel(state, tile.reading.time),
-                    tile.bodyFat?.let { stringResource(R.string.body_fat_detail, it) },
-                    if (weight) metrics.weightKg?.let { goalText(it.value, profile) } else null,
-                ).joinToString(" · "),
-                onClick = if (weight) ({ onOpen(MetricPage.Weight) }) else null,
+                title = stringResource(R.string.age_title),
+                value = age?.let { AnnotatedString(fixed(it.age)) } ?: noValue(
+                    stringResource(
+                        when {
+                            profile.age == null || profile.sex == null -> R.string.age_tile_needs_profile
+                            state.pulseAgeLoading -> R.string.energy_loading
+                            else -> R.string.no_data
+                        },
+                    ),
+                ),
+                subtitle = age?.let { ageDifferenceShort(it.difference) } ?: stringResource(R.string.age_tile_window),
+                onClick = open,
             ) {
-                IconBadge(tile.icon, OpenFitColors.Blue)
+                IconBadge(Icons.Outlined.Timelapse, OpenFitColors.Blue)
             }
         }
-    }
-
-    section(R.string.section_stress_mindfulness)
-    item {
-        val stress = state.stress
-        // Today: the latest reading; past days: the day's average (Pulse).
-        val value = if (state.isToday) stress?.latest else stress?.average
-        MetricTile(
-            title = stringResource(R.string.stress_title),
-            value = value?.let { AnnotatedString(it.toString()) }
-                ?: noValue(stringResource(if (state.energyLoading) R.string.energy_loading else R.string.energy_calibrating_short)),
-            subtitle = listOfNotNull(dayLabel(state), value?.let { stringResource(stressBandName(stressBand(it))) }).joinToString(" • "),
-            onClick = { onOpen(MetricPage.Stress) },
-        ) {
-            if (value == null) {
-                IconBadge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender)
-            } else {
-                ArcGauge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender, value / 100f)
+        TodayTile.Weight -> {
+            val weight = metrics.weightKg ?: return
+            val pounds = profile.weightUnit == WeightUnit.Pounds
+            MetricTile(
+                title = stringResource(R.string.tile_weight),
+                value = quantityText(oneDecimal(if (pounds) weight.value * POUNDS_PER_KG else weight.value), stringResource(if (pounds) R.string.unit_lb else R.string.unit_kg)),
+                subtitle = listOfNotNull(
+                    readingDayLabel(state, weight.time),
+                    metrics.bodyFatPercent?.let { stringResource(R.string.body_fat_detail, oneDecimal(it.value)) },
+                    goalText(weight.value, profile),
+                ).joinToString(" · "),
+                onClick = open,
+            ) {
+                IconBadge(Icons.Outlined.MonitorWeight, OpenFitColors.Blue)
             }
         }
-    }
-    item {
-        val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
-        MetricTile(
-            title = stringResource(R.string.tile_mindful_days),
-            value = valueText { exerciseCount(state.mindfulDays.size, profile.weeklyMindfulDaysGoal) },
-            subtitle = weekLabel(state),
-        ) {
-            WeekBars(labels, state.week.map { it in state.mindfulDays }, OpenFitColors.Lavender, todayIndex = state.week.indexOf(LocalDate.now()).takeIf { it >= 0 })
+        TodayTile.Stress -> {
+            val stress = state.stress
+            // Today: the latest reading; past days: the day's average (Pulse).
+            val value = if (state.isToday) stress?.latest else stress?.average
+            MetricTile(
+                title = stringResource(R.string.stress_title),
+                value = value?.let { AnnotatedString(it.toString()) }
+                    ?: noValue(stringResource(if (state.energyLoading) R.string.energy_loading else R.string.energy_calibrating_short)),
+                subtitle = listOfNotNull(dayLabel(state), value?.let { stringResource(stressBandName(stressBand(it))) }).joinToString(" • "),
+                onClick = open,
+            ) {
+                if (value == null) {
+                    IconBadge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender)
+                } else {
+                    ArcGauge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender, value / 100f)
+                }
+            }
         }
-    }
-
-    section(R.string.section_nutrition)
-    item {
-        val eaten = metrics.caloriesInKcal ?: 0.0
-        val difference = profile.dailyCaloriesInGoal?.let { it - eaten }
-        MetricTile(
-            title = stringResource(R.string.tile_food),
-            value = quantityText(whole(eaten), stringResource(R.string.unit_cal)),
-            subtitle = listOfNotNull(
-                dayLabel(state),
-                difference?.let { stringResource(if (it >= 0) R.string.food_below_target else R.string.food_above_target, whole(abs(it))) },
-            ).joinToString(" · "),
-            onClick = { onOpen(MetricPage.Food) },
-        ) {
-            GoalGauge(Icons.Outlined.Restaurant, OpenFitColors.Pink, eaten, profile.dailyCaloriesInGoal)
+        TodayTile.MindfulDays -> {
+            val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+            MetricTile(
+                title = stringResource(R.string.tile_mindful_days),
+                value = valueText { exerciseCount(state.mindfulDays.size, profile.weeklyMindfulDaysGoal) },
+                subtitle = weekLabel(state),
+            ) {
+                WeekBars(labels, state.week.map { it in state.mindfulDays }, OpenFitColors.Lavender, todayIndex = state.week.indexOf(LocalDate.now()).takeIf { it >= 0 })
+            }
         }
-    }
-    item {
-        val liters = metrics.waterLiters ?: 0.0
-        val imperial = profile.units == UnitSystem.Imperial
-        MetricTile(
-            title = stringResource(R.string.tile_water),
-            value = quantityText(
-                if (imperial) oneDecimal(liters * FL_OZ_PER_LITER) else whole(liters * 1_000),
-                stringResource(if (imperial) R.string.unit_fl_oz else R.string.unit_ml),
-            ),
-            subtitle = dayLabel(state),
-            onClick = { onOpen(MetricPage.Water) },
-        ) {
-            GoalGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, liters, profile.dailyWaterGoalLiters)
+        TodayTile.Food -> {
+            val eaten = metrics.caloriesInKcal ?: 0.0
+            val difference = profile.dailyCaloriesInGoal?.let { it - eaten }
+            MetricTile(
+                title = stringResource(R.string.tile_food),
+                value = quantityText(whole(eaten), stringResource(R.string.unit_cal)),
+                subtitle = listOfNotNull(
+                    dayLabel(state),
+                    difference?.let { stringResource(if (it >= 0) R.string.food_below_target else R.string.food_above_target, whole(abs(it))) },
+                ).joinToString(" · "),
+                onClick = open,
+            ) {
+                GoalGauge(Icons.Outlined.Restaurant, OpenFitColors.Pink, eaten, profile.dailyCaloriesInGoal)
+            }
+        }
+        TodayTile.Water -> {
+            val liters = metrics.waterLiters ?: 0.0
+            val imperial = profile.units == UnitSystem.Imperial
+            MetricTile(
+                title = stringResource(R.string.tile_water),
+                value = quantityText(
+                    if (imperial) oneDecimal(liters * FL_OZ_PER_LITER) else whole(liters * 1_000),
+                    stringResource(if (imperial) R.string.unit_fl_oz else R.string.unit_ml),
+                ),
+                subtitle = dayLabel(state),
+                onClick = open,
+            ) {
+                GoalGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, liters, profile.dailyWaterGoalLiters)
+            }
         }
     }
 }
@@ -551,32 +762,8 @@ private fun HeartTile(state: TodayUiState.Ready, onClick: () -> Unit) {
     }
 }
 
-private class HealthTile(
-    @StringRes val title: Int,
-    val reading: Reading<Double>,
-    val value: String,
-    @StringRes val unit: Int,
-    val icon: ImageVector,
-    val bodyFat: String? = null,
-)
-
-/** Health tiles besides Heart: Fitbit shows HRV, SpO2, breathing rate and skin temperature inside Health Metrics instead. */
-private fun healthTiles(metrics: DailyMetrics, profile: Profile): List<HealthTile> = listOfNotNull(
-    metrics.weightKg?.let { weight ->
-        val pounds = profile.weightUnit == WeightUnit.Pounds
-        HealthTile(
-            title = R.string.tile_weight,
-            reading = weight,
-            value = oneDecimal(if (pounds) weight.value * POUNDS_PER_KG else weight.value),
-            unit = if (pounds) R.string.unit_lb else R.string.unit_kg,
-            icon = Icons.Outlined.MonitorWeight,
-            bodyFat = metrics.bodyFatPercent?.let { oneDecimal(it.value) },
-        )
-    },
-)
-
-private fun LazyListScope.section(@StringRes title: Int) {
-    item {
+private fun LazyListScope.section(@StringRes title: Int, key: String) {
+    item(key = key) {
         Text(
             stringResource(title),
             style = SectionHeaderStyle,
@@ -698,7 +885,7 @@ private fun readinessLabel(readiness: Readiness): Int = when {
     else -> R.string.readiness_moderate
 }
 
-private fun fitnessBandName(band: com.openfit.domain.FitnessBand): Int = when (band) {
+fun fitnessBandName(band: com.openfit.domain.FitnessBand): Int = when (band) {
     com.openfit.domain.FitnessBand.Poor -> R.string.fitness_poor
     com.openfit.domain.FitnessBand.Fair -> R.string.fitness_fair
     com.openfit.domain.FitnessBand.Good -> R.string.fitness_good

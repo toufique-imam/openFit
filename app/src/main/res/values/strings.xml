@@ -34,7 +34,6 @@
     <string name="tile_spo2">Oxygen saturation</string>
     <string name="tile_breathing_rate">Breathing rate</string>
     <string name="tile_skin_temperature">Skin temperature</string>
-    <string name="tile_cardio_fitness">Cardio fitness</string>
     <string name="tile_weight">Weight</string>
     <string name="tile_food">Food</string>
     <string name="tile_water">Water</string>
@@ -74,7 +73,6 @@
     <string name="unit_percent">%</string>
     <string name="unit_breaths">br/min</string>
     <string name="unit_celsius_delta">°C</string>
-    <string name="unit_vo2">VO2 max</string>
 
     <string name="age">Age</string>
     <string name="fitness_goal_maintain">Maintain · 150/wk</string>
@@ -719,6 +717,92 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
     <string name="fitness_excellent">Excellent</string>
     <string name="fitness_superior">Superior</string>
     <string name="fitness_percentile">%s percentile</string>
-    <string name="fitness_estimated">Estimated</string>
     <string name="age_estimated">Estimated from heart rate: %s</string>
+
+    <!-- Customize Today -->
+    <string name="customize_title">Customize Today</string>
+    <string name="customize_focus">Set your focus</string>
+    <string name="customize_show_hide">Show/hide other metrics</string>
+    <string name="customize_move_up">Move %s up</string>
+    <string name="customize_move_down">Move %s down</string>
+    <string name="customize_tabs">Bottom bar</string>
+    <string name="customize_tabs_body">Add up to %d tabs between Today and You. A section tab shows all of its cards.</string>
+    <string name="customize_note">Hiding a card only takes it off Today. Its page, data and goals stay as they are.</string>
+    <string name="customize_health_connect">Health Connect settings</string>
+    <string name="customize_health_connect_body">Choose which data openFit can read</string>
+    <string name="close">Close</string>
+    <string name="focus_build_cardio">Build cardio fitness</string>
+    <string name="focus_get_active">Get more active</string>
+    <string name="focus_sleep_better">Sleep better</string>
+    <string name="focus_manage_weight">Manage weight</string>
+    <string name="focus_manage_stress">Manage stress</string>
+    <string name="focus_heart_health">Improve heart health</string>
+    <string name="focus_custom">Custom focus</string>
+    <string name="focus_add_metrics">Add metrics</string>
+    <string name="focus_readiness">Readiness</string>
+    <string name="focus_zone_min_short">Zone Min</string>
+    <string name="custom_metric">Metric #%d</string>
+    <string name="custom_off">Off</string>
+    <string name="tab_recovery">Recovery</string>
+    <string name="tab_activity">Activity</string>
+    <string name="tab_health">Health</string>
+    <string name="tab_stress">Stress</string>
+    <string name="tab_nutrition">Nutrition</string>
+    <string name="you_customize">Customize Today</string>
+    <string name="you_customize_body">Focus metrics, cards and bottom-bar tabs</string>
+
+    <!-- VO2 max -->
+    <string name="vo2_title">VO2 max</string>
+    <string name="vo2_unit">mL/kg/min</string>
+    <string name="vo2_band_line">%1$s · %2$s percentile for your age and sex</string>
+    <string name="vo2_estimated_note">Estimated from your resting heart rate. A watch that measures VO2 max on runs gives a better value.</string>
+    <string name="vo2_needs_profile">Add your age and sex in your profile to see VO2 max.</string>
+    <string name="vo2_no_data">No resting heart rate or VO2 max in this period.</string>
+    <string name="vo2_band_edges">Band edges for your age and sex: %s</string>
+    <string name="vo2_about">About VO2 max</string>
+    <string name="vo2_about_body">VO2 max is the most oxygen your body can use in hard exercise, in millilitres per kilogram of body weight per minute. The higher it is, the fitter your heart and lungs.
+
+openFit uses a measured value when a watch or app has written one to Health Connect. Otherwise it estimates one from your resting heart rate over the last 30 days: 15.3 × maximum heart rate ÷ resting heart rate, with maximum heart rate 220 − age (Uth et al. 2004).
+
+The bands compare you with people of your age and sex in the FRIEND treadmill registry (Kaminsky et al. 2015): Poor below the 20th percentile, then Fair, Good, Excellent, and Superior from the 80th.</string>
+    <string name="hc_rate_limited">Health Connect is limiting how often openFit can read your data. Try again in a few minutes.</string>
+    <string name="hc_busy_saved">Health Connect is busy, so you\'re seeing saved data.</string>
+    <string name="hc_failed_saved">Couldn\'t update from Health Connect. Showing saved data.</string>
+    <string name="you_journal_body">Log your day and see what changes your sleep and readiness</string>
+
+    <!-- Onboarding -->
+    <string name="onboarding_welcome_title">Your day, scored on your phone</string>
+    <string name="onboarding_welcome_body">Cardio load, readiness, sleep and more, worked out from Health Connect right here.</string>
+    <string name="onboarding_get_started">Get started</string>
+    <string name="onboarding_private">Stays on this phone. No account needed.</string>
+    <string name="onboarding_profile_title">A few details for your scores</string>
+    <string name="onboarding_profile_body">Health Connect doesn\'t share your age or sex, and heart rate zones depend on both. You can change these later in You.</string>
+    <string name="onboarding_name">Name</string>
+    <string name="onboarding_optional">Optional</string>
+    <string name="onboarding_name_hint">Your name</string>
+    <string name="onboarding_name_help">Shown on the You tab. Stays on this phone.</string>
+    <string name="onboarding_birth_date">Birth date</string>
+    <string name="onboarding_birth_date_hint">Choose your birth date</string>
+    <string name="onboarding_birth_date_help">For heart rate zones, cardio load and VO2 max.</string>
+    <string name="onboarding_sex_help">Sex at birth. Reference ranges differ by sex.</string>
+    <string name="onboarding_sex">Sex</string>
+    <string name="onboarding_units">Units</string>
+    <string name="onboarding_units_help">For distance and weight.</string>
+    <string name="onboarding_save_continue">Save and continue</string>
+    <string name="onboarding_reads_title">What openFit reads</string>
+    <string name="onboarding_reads_body">From Health Connect, kept on this phone. Nothing is uploaded.</string>
+    <string name="onboarding_reads_activity">Steps, distance, floors and workouts</string>
+    <string name="onboarding_reads_heart">Heart rate, resting heart rate and HRV</string>
+    <string name="onboarding_reads_sleep">Sleep and its stages</string>
+    <string name="onboarding_reads_vitals">Breathing rate, blood oxygen and skin temperature</string>
+    <string name="onboarding_reads_nutrition">Food and water you log</string>
+    <string name="onboarding_reads_weight">Weight, body fat and VO2 max</string>
+    <string name="onboarding_reads_mindfulness">Mindfulness sessions</string>
+    <string name="onboarding_connect">Connect Health Connect</string>
+    <string name="onboarding_not_now">Not now</string>
+    <string name="onboarding_import_title">Getting your data ready</string>
+    <string name="onboarding_import_body">Reading recent weeks from Health Connect and working out your scores. The first time takes a minute.</string>
+    <string name="onboarding_import_reading">Reading Health Connect…</string>
+    <string name="onboarding_import_scoring">Working out your scores…</string>
+    <string name="onboarding_import_finishing">Almost done…</string>
 </resources>

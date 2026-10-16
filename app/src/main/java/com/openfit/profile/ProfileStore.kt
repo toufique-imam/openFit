@@ -3,7 +3,9 @@ package com.openfit.profile
 import android.content.Context
 import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
+import java.time.LocalDate
 import java.time.LocalTime
+import java.time.Period
 import java.util.Locale
 
 enum class UnitSystem { Metric, Imperial }
@@ -16,7 +18,9 @@ enum class WeightUnit { Kilograms, Pounds }
  */
 data class Profile(
     val name: String = "",
+    /** Age in years: from [birthDate] when the user gave one (so it moves on with birthdays), else as entered. */
     val age: Int? = null,
+    val birthDate: LocalDate? = null,
     val sex: Sex? = null,
     val units: UnitSystem = UnitSystem.Metric,
     val weightUnit: WeightUnit = WeightUnit.Kilograms,
@@ -43,9 +47,11 @@ class ProfileStore(context: Context) {
 
     fun load(): Profile {
         val imperial = Locale.getDefault().country in IMPERIAL_COUNTRIES
+        val birthDate = prefs.getLong(KEY_BIRTH_DATE, 0L).takeIf { it > 0 }?.let { LocalDate.ofEpochDay(it - 1) }
         return Profile(
             name = prefs.getString(KEY_NAME, null).orEmpty(),
-            age = int(KEY_AGE),
+            age = birthDate?.let(::ageOn) ?: int(KEY_AGE),
+            birthDate = birthDate,
             sex = prefs.getString(KEY_SEX, null)?.let(Sex::valueOf),
             units = prefs.getString(KEY_UNITS, null)?.let(UnitSystem::valueOf) ?: if (imperial) UnitSystem.Imperial else UnitSystem.Metric,
             weightUnit = prefs.getString(KEY_WEIGHT_UNIT, null)?.let(WeightUnit::valueOf) ?: if (imperial) WeightUnit.Pounds else WeightUnit.Kilograms,
@@ -74,6 +80,9 @@ class ProfileStore(context: Context) {
             putString(KEY_WEIGHT_UNIT, profile.weightUnit.name)
             putString(KEY_FITNESS_GOAL, profile.fitnessGoal.name)
             putInt(KEY_AGE, profile.age ?: 0)
+            // An age typed over a birth date's (in the profile dialog) replaces the birth date.
+            val birthDate = profile.birthDate?.takeIf { ageOn(it) == profile.age }
+            putLong(KEY_BIRTH_DATE, birthDate?.toEpochDay()?.plus(1) ?: 0L)
             putInt(KEY_STEP_GOAL, profile.dailyStepGoal ?: 0)
             putFloat(KEY_DISTANCE_GOAL, profile.dailyDistanceGoalMeters?.toFloat() ?: 0f)
             putInt(KEY_FLOORS_GOAL, profile.dailyFloorsGoal ?: 0)
@@ -90,6 +99,8 @@ class ProfileStore(context: Context) {
             putFloat(KEY_WEIGHT_GOAL, profile.weightGoalKg?.toFloat() ?: 0f)
         }.apply()
     }
+
+    private fun ageOn(birthDate: LocalDate): Int = Period.between(birthDate, LocalDate.now()).years
 
     /** Zero means "not set" for every stored number. */
     private fun int(key: String): Int? = prefs.getInt(key, 0).takeIf { it > 0 }
@@ -109,6 +120,7 @@ class ProfileStore(context: Context) {
     private companion object {
         const val KEY_NAME = "name"
         const val KEY_AGE = "age"
+        const val KEY_BIRTH_DATE = "birth_date_epoch_day"
         const val KEY_SEX = "sex"
         const val KEY_UNITS = "units"
         const val KEY_WEIGHT_UNIT = "weight_unit"

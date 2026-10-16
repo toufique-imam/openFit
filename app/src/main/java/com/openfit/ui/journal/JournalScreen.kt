@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Check
@@ -62,7 +63,7 @@ private val CHIP_SELECTED = Color(0xFF1F3D37)
 
 /** The Journal tab: the day's check-in, then how each behaviour goes with the next day's scores. */
 @Composable
-fun JournalRoute(viewModel: JournalViewModel, onEditBehaviours: () -> Unit) {
+fun JournalRoute(viewModel: JournalViewModel, onEditBehaviours: () -> Unit, onBack: (() -> Unit)? = null) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     LifecycleResumeEffect(Unit) {
         viewModel.refresh()
@@ -73,13 +74,23 @@ fun JournalRoute(viewModel: JournalViewModel, onEditBehaviours: () -> Unit) {
         contentPadding = PaddingValues(bottom = 32.dp),
     ) {
         item {
-            Text(
-                stringResource(R.string.app_name),
-                fontSize = 26.sp,
-                color = OpenFitColors.OnSurface,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
-            )
+            if (onBack == null) {
+                Text(
+                    stringResource(R.string.app_name),
+                    fontSize = 26.sp,
+                    color = OpenFitColors.OnSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(top = 16.dp, bottom = 8.dp),
+                )
+            } else {
+                // Opened from You while Journal is not on the bottom bar.
+                Row(Modifier.fillMaxWidth().padding(start = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = OpenFitColors.OnSurface)
+                    }
+                    Text(stringResource(R.string.tab_journal), style = MaterialTheme.typography.headlineSmall, color = OpenFitColors.OnSurface, modifier = Modifier.padding(start = 12.dp))
+                }
+            }
         }
         item { DateBar(state, onPrevious = { viewModel.showDate(state.date.minusDays(1)) }, onNext = { viewModel.showDate(state.date.plusDays(1)) }) }
         if (state.asked.isEmpty()) {

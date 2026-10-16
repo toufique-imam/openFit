@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.max
 import kotlin.math.min
@@ -10,6 +14,7 @@ enum class FitnessGoal(val weeklyZoneMinutes: Int, val lowLoadRatio: Double, val
     Improve(300, lowLoadRatio = 1.139, highLoadRatio = 1.244),
 }
 
+@Serializable
 data class LoadTarget(val weekly: Double, val daily: Double, val doneThisWeek: Double) {
     val weeklyMet: Boolean get() = doneThisWeek >= weekly
 }

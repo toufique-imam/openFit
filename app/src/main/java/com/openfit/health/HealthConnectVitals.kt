@@ -6,6 +6,7 @@ import androidx.health.connect.client.records.Record
 import androidx.health.connect.client.records.RespiratoryRateRecord
 import androidx.health.connect.client.records.RestingHeartRateRecord
 import androidx.health.connect.client.records.SkinTemperatureRecord
+import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
@@ -34,6 +35,12 @@ class HealthConnectVitals(private val gateway: HealthConnectGateway, private val
                 }.filterValues { !it.isNaN() }
             }
         }
+    }
+
+    /** Measured VO2 max per day (the day's last reading), from a watch or app that writes it to Health Connect. */
+    suspend fun vo2Max(from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
+        val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
+        return byDay(Vo2MaxRecord::class, gateway.grantedPermissions(), range, { it.time }, latest = true) { it.vo2MillilitersPerMinuteKilogram }
     }
 
     /** Weight in kilograms per day (the day's last reading). */

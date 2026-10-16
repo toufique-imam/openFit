@@ -9,6 +9,9 @@ junit = "4.13.2"
 playServicesAuth = "22.0.0"
 orgJson = "20260814"
 materialIcons = "1.7.8"
+room = "2.8.4"
+ksp = "2.3.11"
+serialization = "1.11.0"
 
 [libraries]
 androidx-compose-bom = { group = "androidx.compose", name = "compose-bom", version.ref = "composeBom" }
@@ -23,8 +26,14 @@ androidx-lifecycle-runtime-compose = { group = "androidx.lifecycle", name = "lif
 androidx-health-connect = { group = "androidx.health.connect", name = "connect-client", version.ref = "healthConnect" }
 play-services-auth = { group = "com.google.android.gms", name = "play-services-auth", version.ref = "playServicesAuth" }
 org-json = { group = "org.json", name = "json", version.ref = "orgJson" }
+androidx-room-runtime = { group = "androidx.room", name = "room-runtime", version.ref = "room" }
+androidx-room-ktx = { group = "androidx.room", name = "room-ktx", version.ref = "room" }
+androidx-room-compiler = { group = "androidx.room", name = "room-compiler", version.ref = "room" }
+kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-serialization-json", version.ref = "serialization" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }

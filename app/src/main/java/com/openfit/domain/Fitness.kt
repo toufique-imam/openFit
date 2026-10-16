@@ -1,4 +1,10 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
+
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import java.time.LocalDate
 
 /**
  * VO2 max from heart rate alone (Uth et al. 2004, Eur J Appl Physiol): 15.3 x max heart rate / resting heart rate,
@@ -10,6 +16,7 @@ private const val UTH_FACTOR = 15.3
 
 enum class FitnessBand { Poor, Fair, Good, Excellent, Superior }
 
+@Serializable
 data class FitnessLevel(val vo2Max: Double, val estimated: Boolean, val percentile: Double) {
     val band: FitnessBand
         get() = when {
@@ -62,3 +69,31 @@ fun fitnessLevel(age: Int, sex: Sex, measured: Double?, averageRestingBpm: Doubl
     val vo2 = measured ?: averageRestingBpm?.let { estimateVo2Max(age, it) } ?: return null
     return FitnessLevel(vo2, estimated = measured == null, percentile = fitnessPercentile(vo2, age, sex))
 }
+
+/** The VO2 max at [percentile] in the user's FRIEND row (the inverse of [fitnessPercentile]), clamped to the 5th-95th. */
+fun vo2AtPercentile(percentile: Double, age: Int, sex: Sex): Double {
+    val row = FRIEND.getValue(sex)[((age - 20) / 10).coerceIn(0, 5)]
+    val p = percentile.coerceIn(PERCENTILES.first(), PERCENTILES.last())
+    val upper = PERCENTILES.indexOfFirst { it >= p }.coerceAtLeast(1)
+    val (p0, p1) = PERCENTILES[upper - 1] to PERCENTILES[upper]
+    val (v0, v1) = row[upper - 1] to row[upper]
+    return v0 + (v1 - v0) * (p - p0) / (p1 - p0)
+}
+
+/** Where each band above Poor starts, in mL/kg/min: the 20th, 40th, 60th and 80th percentiles. */
+fun fitnessBandEdges(age: Int, sex: Sex): List<Double> = BAND_EDGES.map { vo2AtPercentile(it, age, sex) }
+
+private val BAND_EDGES = listOf(20.0, 40.0, 60.0, 80.0)
+
+/**
+ * VO2 max per day in [days]: the day's measurement if there is one, else the estimate from the average resting heart
+ * rate over the [ESTIMATE_DAYS] days to that day (as on Today). Days with neither are left out.
+ */
+fun dailyVo2Max(age: Int, days: List<LocalDate>, measured: Map<LocalDate, Double>, resting: Map<LocalDate, Double>): Map<LocalDate, Pair<Double, Boolean>> =
+    days.mapNotNull { day ->
+        measured[day]?.let { return@mapNotNull day to (it to false) }
+        val window = (0 until ESTIMATE_DAYS).mapNotNull { resting[day.minusDays(it.toLong())] }
+        window.takeIf { it.isNotEmpty() }?.let { day to (estimateVo2Max(age, it.average()) to true) }
+    }.toMap()
+
+const val ESTIMATE_DAYS = 30

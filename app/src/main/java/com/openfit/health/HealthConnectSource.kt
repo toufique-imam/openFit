@@ -49,6 +49,10 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.reflect.KClass
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withPermit
 
 class HealthConnectSource(
     private val gateway: HealthConnectGateway,
@@ -58,44 +62,59 @@ class HealthConnectSource(
 
     private val client: HealthConnectClient get() = gateway.client
 
-    override suspend fun load(date: LocalDate, profile: Profile): DailyMetrics {
+    override suspend fun load(date: LocalDate, profile: Profile): DailyMetrics = coroutineScope {
         val granted = gateway.grantedPermissions()
         val start = date.atStartOfDay(zone).toInstant()
         val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
         val window = Window(start, end, granted)
+        val age = profile.age
 
-        val totals = aggregate(window)
-        val heartRate = window.records(HeartRateRecord::class, start)
-            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
-        val restingBpm = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
+        // Each read is a round trip to Health Connect, so they all run at once.
+        val totals = async { aggregate(window) }
+        val hourly = async { hourlySteps(window) }
+        val heartRecords = async { window.records(HeartRateRecord::class, start) }
+        val restingRecords = async { window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK) }
+        val moving = async { if (age != null) movingMinutes(start, end, granted) else null }
+        val sleep = async { window.records(SleepSessionRecord::class, start - SLEEP_LOOKBACK) }
+        val exercises = async { window.records(ExerciseSessionRecord::class, start) }
+        val hrv = async { window.records(HeartRateVariabilityRmssdRecord::class, start - SLEEP_LOOKBACK) }
+        val spo2 = async { window.records(OxygenSaturationRecord::class, start - SLEEP_LOOKBACK) }
+        val breathing = async { window.records(RespiratoryRateRecord::class, start - SLEEP_LOOKBACK) }
+        val skin = async { window.records(SkinTemperatureRecord::class, start - SLEEP_LOOKBACK) }
+        val vo2 = async { window.records(Vo2MaxRecord::class, start - MEASUREMENT_LOOKBACK) }
+        val weight = async { window.records(WeightRecord::class, start - MEASUREMENT_LOOKBACK) }
+        val bodyFat = async { window.records(BodyFatRecord::class, start - MEASUREMENT_LOOKBACK) }
+
+        val heartRate = heartRecords.await().flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val restingBpm = restingRecords.await()
             .maxByOrNull { it.time }
             ?.let { Reading(it.beatsPerMinute.toInt(), it.time) }
             ?: estimateRestingBpm(heartRate)?.let { Reading(it, end) }
-        val age = profile.age
+        val sums = totals.await()
 
-        return DailyMetrics(
-            steps = totals?.get(StepsRecord.COUNT_TOTAL),
-            hourlySteps = hourlySteps(window),
-            distanceMeters = totals?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters,
-            floors = totals?.get(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL),
-            caloriesOutKcal = totals?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories,
-            caloriesInKcal = totals?.get(NutritionRecord.ENERGY_TOTAL)?.inKilocalories,
-            waterLiters = totals?.get(HydrationRecord.VOLUME_TOTAL)?.inLiters,
+        DailyMetrics(
+            steps = sums?.get(StepsRecord.COUNT_TOTAL),
+            hourlySteps = hourly.await(),
+            distanceMeters = sums?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters,
+            floors = sums?.get(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL),
+            caloriesOutKcal = sums?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories,
+            caloriesInKcal = sums?.get(NutritionRecord.ENERGY_TOTAL)?.inKilocalories,
+            waterLiters = sums?.get(HydrationRecord.VOLUME_TOTAL)?.inLiters,
             zoneMinutes = if (age != null && restingBpm != null && heartRate.isNotEmpty()) {
                 zoneMinutes(heartRate, heartRateZones(age, restingBpm.value))
             } else {
                 null
             },
             cardioLoad = if (age != null && restingBpm != null && heartRate.isNotEmpty()) {
-                cardioLoad(heartRate, restingBpm.value, cardioMaxHeartRate(age), profile.sex, movingMinutes(start, end, granted))
+                cardioLoad(heartRate, restingBpm.value, cardioMaxHeartRate(age), profile.sex, moving.await())
             } else {
                 null
             },
-            sleep = window.records(SleepSessionRecord::class, start - SLEEP_LOOKBACK)
+            sleep = sleep.await()
                 .filter { it.endTime > start && it.endTime <= end }
                 .takeIf { it.isNotEmpty() }
                 ?.let { sessions -> SleepSummary(sessions.sumDurations(::asleepDuration), sessions.maxOf { it.endTime }) },
-            exercises = window.records(ExerciseSessionRecord::class, start).map { it.toExercise() },
+            exercises = exercises.await().map { it.toExercise() },
             // Fitbit's day range is the lowest and highest minute average (15 Oct 2026: 49-188 from minutes, 46-190
             // from raw samples).
             heartRateRange = averageBpmByMinute(heartRate).values.takeIf { it.isNotEmpty() }?.let { minutes ->
@@ -103,25 +122,16 @@ class HealthConnectSource(
             },
             latestHeartRate = heartRate.maxByOrNull { it.time }?.let { Reading(it.bpm.toInt(), it.time) },
             restingBpm = restingBpm,
-            hrvMs = window.records(HeartRateVariabilityRmssdRecord::class, start - SLEEP_LOOKBACK)
-                .latestAverage({ it.time }) { it.heartRateVariabilityMillis },
-            spo2Percent = window.records(OxygenSaturationRecord::class, start - SLEEP_LOOKBACK)
-                .latestAverage({ it.time }) { it.percentage.value },
-            breathsPerMinute = window.records(RespiratoryRateRecord::class, start - SLEEP_LOOKBACK)
-                .latestAverage({ it.time }) { it.rate },
-            skinTempDeltaCelsius = window.records(SkinTemperatureRecord::class, start - SLEEP_LOOKBACK)
+            hrvMs = hrv.await().latestAverage({ it.time }) { it.heartRateVariabilityMillis },
+            spo2Percent = spo2.await().latestAverage({ it.time }) { it.percentage.value },
+            breathsPerMinute = breathing.await().latestAverage({ it.time }) { it.rate },
+            skinTempDeltaCelsius = skin.await()
                 .filter { it.deltas.isNotEmpty() }
                 .maxByOrNull { it.endTime }
                 ?.let { record -> Reading(record.deltas.map { it.delta.inCelsius }.average(), record.endTime) },
-            vo2Max = window.records(Vo2MaxRecord::class, start - MEASUREMENT_LOOKBACK)
-                .maxByOrNull { it.time }
-                ?.let { Reading(it.vo2MillilitersPerMinuteKilogram, it.time) },
-            weightKg = window.records(WeightRecord::class, start - MEASUREMENT_LOOKBACK)
-                .maxByOrNull { it.time }
-                ?.let { Reading(it.weight.inKilograms, it.time) },
-            bodyFatPercent = window.records(BodyFatRecord::class, start - MEASUREMENT_LOOKBACK)
-                .maxByOrNull { it.time }
-                ?.let { Reading(it.percentage.value, it.time) },
+            vo2Max = vo2.await().maxByOrNull { it.time }?.let { Reading(it.vo2MillilitersPerMinuteKilogram, it.time) },
+            weightKg = weight.await().maxByOrNull { it.time }?.let { Reading(it.weight.inKilograms, it.time) },
+            bodyFatPercent = bodyFat.await().maxByOrNull { it.time }?.let { Reading(it.percentage.value, it.time) },
         )
     }
 
@@ -133,13 +143,15 @@ class HealthConnectSource(
             .toSet()
     }
 
-    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile, backfillDays: Int): DailyHistory {
+    override suspend fun history(from: LocalDate, until: LocalDate, profile: Profile, backfillDays: Int): DailyHistory = coroutineScope {
         val granted = gateway.grantedPermissions()
         val start = from.atStartOfDay(zone).toInstant()
         val window = Window(start, until.plusDays(1).atStartOfDay(zone).toInstant(), granted)
+        val hrv = async { window.records(HeartRateVariabilityRmssdRecord::class, start) }
+        val sleep = async { window.records(SleepSessionRecord::class, start - SLEEP_LOOKBACK) }
         val resting = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
         val (loads, pending) = dayLoads(from, until, profile, window, resting, backfillDays)
-        return DailyHistory(
+        DailyHistory(
             zoneMinutes = loads.mapValues { it.value.zoneMinutes },
             cardioLoad = loads.mapValues { it.value.cardioLoad },
             heartZoneMinutes = loads.mapValues { it.value.minutes },
@@ -147,10 +159,10 @@ class HealthConnectSource(
                 .filter { it.time >= start }
                 .groupBy { localDate(it.time) }
                 .mapValues { (_, readings) -> readings.maxBy { it.time }.beatsPerMinute.toInt() },
-            hrvMs = window.records(HeartRateVariabilityRmssdRecord::class, start)
+            hrvMs = hrv.await()
                 .groupBy { localDate(it.time) }
                 .mapValues { (_, readings) -> readings.map { it.heartRateVariabilityMillis }.average() },
-            sleepMinutes = window.records(SleepSessionRecord::class, start - SLEEP_LOOKBACK)
+            sleepMinutes = sleep.await()
                 .filter { it.endTime > start }
                 .groupBy { localDate(it.endTime) }
                 .mapValues { (_, sessions) -> sessions.sumDurations(::asleepDuration).toMinutes().toInt() },
@@ -186,10 +198,15 @@ class HealthConnectSource(
         val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
         val cached = days.associateWith { dayLoadCache.get(profileKey, it) }
         val uncached = days.filter { cached[it] == null }
-        val computed = uncached
-            .sortedDescending()
-            .take(backfillDays)
-            .associateWith { day -> dayLoad(day, age, profile, resting, window.granted) }
+        // A few days at a time: each reads a day of heart rate, and Health Connect throttles bursts.
+        val permits = Semaphore(PARALLEL_DAYS)
+        val computed = coroutineScope {
+            uncached
+                .sortedDescending()
+                .take(backfillDays)
+                .map { day -> day to async { permits.withPermit { dayLoad(day, age, profile, resting, window.granted) } } }
+                .associate { (day, load) -> day to load.await() }
+        }
         val settled = LocalDate.now(zone).minusDays(1)
         dayLoadCache.putAll(profileKey, computed.filterKeys { it < settled })
         val loads = (cached + computed)
@@ -264,18 +281,22 @@ class HealthConnectSource(
         val exercise = read(ExerciseSessionRecord::class) in granted
         if (!steps && !exercise) return null
         val range = TimeRangeFilter.between(start, end)
-        val moving = mutableSetOf<Long>()
-        if (steps) {
-            client.aggregateGroupByDuration(AggregateGroupByDurationRequest(setOf(StepsRecord.COUNT_TOTAL), range, Duration.ofMinutes(1)))
-                .filter { (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) > 0L }
-                .forEach { moving += it.startTime.epochSecond / 60 }
-        }
-        if (exercise) {
-            readAll(ExerciseSessionRecord::class, range).forEach { session ->
-                moving += session.startTime.epochSecond / 60..session.endTime.epochSecond / 60
+        return coroutineScope {
+            val stepMinutes = async {
+                if (!steps) {
+                    emptyList()
+                } else {
+                    client.aggregateGroupByDuration(AggregateGroupByDurationRequest(setOf(StepsRecord.COUNT_TOTAL), range, Duration.ofMinutes(1)))
+                        .filter { (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) > 0L }
+                        .map { it.startTime.epochSecond / 60 }
+                }
+            }
+            val sessions = async { if (exercise) readAll(ExerciseSessionRecord::class, range) else emptyList() }
+            buildSet {
+                addAll(stepMinutes.await())
+                sessions.await().forEach { session -> addAll(session.startTime.epochSecond / 60..session.endTime.epochSecond / 60) }
             }
         }
-        return moving
     }
 
     private fun localDate(time: Instant): LocalDate = time.atZone(zone).toLocalDate()
@@ -331,6 +352,7 @@ class HealthConnectSource(
 
         /** Bump when the day-load formula changes so cached days are recalculated. */
         const val LOAD_FORMULA = "v4"
+        const val PARALLEL_DAYS = 4
 
 
         val AGGREGATES: Map<KClass<out Record>, AggregateMetric<*>> = mapOf(

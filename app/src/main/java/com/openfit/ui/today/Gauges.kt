@@ -175,13 +175,14 @@ fun ArcGauge(
     background: Color = OpenFitColors.Card,
     size: Dp = 66.dp,
     stroke: Dp = 6.dp,
+    iconSize: Dp = GAUGE_ICON,
 ) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
         Canvas(Modifier.fillMaxSize()) {
             val band = Band(outline = 1.dp.toPx(), halo = 1.dp.toPx(), background = background)
             gauge(color, ArcFrame(GAUGE_START, GAUGE_SWEEP, inset = 0f), stroke.toPx(), progress, range, band, from)
         }
-        Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(GAUGE_ICON))
+        Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(iconSize))
         if (from == 0f && progress >= 1f) {
             Icon(
                 Icons.Filled.Check,
@@ -202,6 +203,7 @@ fun SegmentedGauge(
     modifier: Modifier = Modifier,
     size: Dp = 66.dp,
     stroke: Dp = 6.dp,
+    iconSize: Dp = GAUGE_ICON,
     iconRotation: Float = 0f,
 ) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
@@ -220,7 +222,7 @@ fun SegmentedGauge(
                 )
             }
         }
-        Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(GAUGE_ICON).rotate(iconRotation))
+        Icon(icon, contentDescription = null, tint = color.accent, modifier = Modifier.size(iconSize).rotate(iconRotation))
     }
 }
 

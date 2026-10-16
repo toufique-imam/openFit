@@ -1,6 +1,9 @@
 package com.openfit.ui.today
 
 import android.app.PendingIntent
+import android.widget.Toast
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.platform.LocalContext
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -26,6 +29,10 @@ import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.outlined.CalendarToday
 import androidx.compose.material.icons.outlined.AccountCircle
+import androidx.compose.material.icons.outlined.Edit
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.foundation.layout.Box
+import androidx.compose.ui.draw.alpha
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
@@ -74,7 +81,14 @@ import java.time.LocalDate
 import java.time.ZoneOffset
 
 @Composable
-fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, onOpen: (MetricPage, LocalDate) -> Unit) {
+fun TodayRoute(
+    viewModel: TodayViewModel,
+    layout: TodayLayout,
+    onOpenHealthConnectStore: () -> Unit,
+    onOpen: (MetricPage, LocalDate) -> Unit,
+    /** A section tab: that section's cards under its title, without the focus area. */
+    section: TodaySection? = null,
+) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val permissionLauncher = rememberLauncherForActivityResult(
         PermissionController.createRequestPermissionResultContract(),
@@ -93,6 +107,10 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, 
         viewModel.refreshIfStale()
         onPauseOrDispose { }
     }
+    val context = LocalContext.current
+    LaunchedEffect(viewModel) {
+        viewModel.messages.collect { Toast.makeText(context, it, Toast.LENGTH_SHORT).show() }
+    }
 
     Scaffold(containerColor = OpenFitColors.Background) { padding ->
         Column(Modifier.padding(padding)) {
@@ -107,11 +125,14 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, 
                     action = stringResource(R.string.permissions_grant) to { requestPermissions(current.permissions) },
                 )
                 is TodayUiState.Failed -> CenteredMessage(
-                    text = current.message,
+                    // Health Connect caps how many reads an app makes in a while; its own message reads like a crash.
+                    text = if (current.message.contains("quota", ignoreCase = true)) stringResource(R.string.hc_rate_limited) else current.message,
                     action = stringResource(R.string.retry) to viewModel::refresh,
                 )
                 is TodayUiState.Ready -> TodayScreen(
                     state = current,
+                    layout = layout,
+                    section = section,
                     onRefresh = viewModel::refresh,
                     onShowDate = viewModel::showDate,
                     onRequestPermissions = { requestPermissions(current.missingPermissions) },
@@ -129,6 +150,8 @@ fun TodayRoute(viewModel: TodayViewModel, onOpenHealthConnectStore: () -> Unit, 
 @Composable
 private fun TodayScreen(
     state: TodayUiState.Ready,
+    layout: TodayLayout,
+    section: TodaySection?,
     onRefresh: () -> Unit,
     onShowDate: (LocalDate) -> Unit,
     onRequestPermissions: () -> Unit,
@@ -140,33 +163,44 @@ private fun TodayScreen(
     var editingProfile by rememberSaveable { mutableStateOf(false) }
     var pickingDate by rememberSaveable { mutableStateOf(false) }
 
+    // While a date with no snapshot loads, the bar already names it and the old day's cards fade.
+    val shownDate = state.pendingDate ?: state.date
     PullToRefreshBox(isRefreshing = state.refreshing, onRefresh = onRefresh, modifier = Modifier.fillMaxSize()) {
         LazyColumn(
             contentPadding = PaddingValues(start = 16.dp, end = 16.dp, bottom = 32.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
             modifier = Modifier.fillMaxSize(),
         ) {
-            item { Header(onOpenProfile = { editingProfile = true }) }
-            item {
-                DateBar(
-                    state = state,
-                    onPrevious = { onShowDate(state.date.minusDays(1)) },
-                    onNext = { onShowDate(state.date.plusDays(1)) },
-                    onToday = { onShowDate(LocalDate.now()) },
-                    onPick = { pickingDate = true },
-                )
+            item(key = "header") { Header(title = section?.let { stringResource(it.title) }, onOpenProfile = { editingProfile = true }) }
+            item(key = "date") {
+                Column {
+                    DateBar(
+                        date = shownDate,
+                        onPrevious = { onShowDate(shownDate.minusDays(1)) },
+                        onNext = { onShowDate(shownDate.plusDays(1)) },
+                        onToday = { onShowDate(LocalDate.now()) },
+                        onPick = { pickingDate = true },
+                        onCustomize = if (section == null) ({ onOpen(MetricPage.CustomizeToday) }) else null,
+                    )
+                    UpdatingLine(state.updating || state.pendingDate != null)
+                }
             }
             if (state.missingPermissions.isNotEmpty()) {
-                item { Notice(stringResource(R.string.permissions_partial), stringResource(R.string.permissions_grant), onRequestPermissions) }
+                item(key = "permissions") { Notice(stringResource(R.string.permissions_partial), stringResource(R.string.permissions_grant), onRequestPermissions) }
             }
-            item { FocusSection(state, onOpen) }
-            todaySections(state, onOpen)
+            val faded = state.pendingDate != null
+            if (section == null) {
+                item(key = "focus") { Box(Modifier.alpha(if (faded) FADED_ALPHA else 1f)) { FocusSection(state, layout, onOpen) } }
+                todaySections(state, layout, onOpen, faded)
+            } else {
+                sectionTiles(state, section, onOpen, header = false, faded = faded)
+            }
         }
     }
 
     if (pickingDate) {
         DatePickerSheet(
-            selected = state.date,
+            selected = shownDate,
             onDismiss = { pickingDate = false },
             onPick = {
                 pickingDate = false
@@ -198,11 +232,11 @@ private fun TodayScreen(
 }
 
 @Composable
-private fun Header(onOpenProfile: () -> Unit) {
+private fun Header(title: String?, onOpenProfile: () -> Unit) {
     Row(Modifier.fillMaxWidth().padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         Spacer(Modifier.size(48.dp))
         Text(
-            stringResource(R.string.app_name),
+            title ?: stringResource(R.string.app_name),
             fontSize = 26.sp,
             color = OpenFitColors.OnSurface,
             textAlign = TextAlign.Center,
@@ -215,7 +249,15 @@ private fun Header(onOpenProfile: () -> Unit) {
 }
 
 @Composable
-private fun DateBar(state: TodayUiState.Ready, onPrevious: () -> Unit, onNext: () -> Unit, onToday: () -> Unit, onPick: () -> Unit) {
+private fun DateBar(
+    date: LocalDate,
+    onPrevious: () -> Unit,
+    onNext: () -> Unit,
+    onToday: () -> Unit,
+    onPick: () -> Unit,
+    onCustomize: (() -> Unit)?,
+) {
+    val isToday = date >= LocalDate.now()
     Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
         Row(Modifier.width(DATE_BAR_SLOT)) {
             IconButton(onClick = onPrevious) {
@@ -223,7 +265,7 @@ private fun DateBar(state: TodayUiState.Ready, onPrevious: () -> Unit, onNext: (
             }
         }
         Text(
-            relativeDay(state.date),
+            relativeDay(date),
             style = MaterialTheme.typography.titleMedium,
             color = OpenFitColors.OnSurface,
             textAlign = TextAlign.Center,
@@ -232,12 +274,17 @@ private fun DateBar(state: TodayUiState.Ready, onPrevious: () -> Unit, onNext: (
             modifier = Modifier.weight(1f).clickable(onClickLabel = stringResource(R.string.pick_date), onClick = onPick).padding(vertical = 12.dp),
         )
         Row(Modifier.width(DATE_BAR_SLOT), horizontalArrangement = Arrangement.End) {
-            if (!state.isToday) {
+            if (!isToday) {
                 IconButton(onClick = onToday) {
                     Icon(Icons.Outlined.CalendarToday, stringResource(R.string.jump_to_today), tint = OpenFitColors.OnSurface)
                 }
                 IconButton(onClick = onNext) {
                     Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, stringResource(R.string.next_day), tint = OpenFitColors.OnSurface)
+                }
+            } else if (onCustomize != null) {
+                // Fitbit's pencil beside "Today" opens Customize Today.
+                IconButton(onClick = onCustomize) {
+                    Icon(Icons.Outlined.Edit, stringResource(R.string.customize_title), tint = OpenFitColors.OnSurface)
                 }
             }
         }
@@ -245,6 +292,14 @@ private fun DateBar(state: TodayUiState.Ready, onPrevious: () -> Unit, onNext: (
 }
 
 private val DATE_BAR_SLOT = 96.dp
+
+/** A thin line under the date while the cards on screen are being reloaded. */
+@Composable
+private fun UpdatingLine(visible: Boolean) {
+    Box(Modifier.fillMaxWidth().height(2.dp)) {
+        if (visible) LinearProgressIndicator(Modifier.fillMaxWidth(), color = OpenFitColors.Mint.accent, trackColor = OpenFitColors.Mint.track)
+    }
+}
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

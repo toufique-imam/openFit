@@ -1,5 +1,13 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.health
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
+import com.openfit.domain.DurationSerializer
+import com.openfit.domain.InstantSerializer
+import com.openfit.domain.IntRangeSerializer
+import com.openfit.domain.LocalDateSerializer
 import androidx.health.connect.client.records.DistanceRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
@@ -13,6 +21,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 
 /** A logged or auto-detected workout with what Fitbit shows under its name: distance, or calories when it has none. */
+@Serializable
 data class ExerciseSession(
     val name: String,
     val type: Int,

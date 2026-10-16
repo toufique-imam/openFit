@@ -1,16 +1,24 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Duration
 import java.time.Instant
 
+@Serializable
 data class Reading<T>(val value: T, val time: Instant)
 
+@Serializable
 data class SleepSummary(val asleep: Duration, val end: Instant)
 
+@Serializable
 data class Exercise(val name: String, val start: Instant, val end: Instant) {
     val duration: Duration get() = Duration.between(start, end)
 }
 
+@Serializable
 data class DailyMetrics(
     val steps: Long? = null,
     val hourlySteps: Map<Int, Long> = emptyMap(),

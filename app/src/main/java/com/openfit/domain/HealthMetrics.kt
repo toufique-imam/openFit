@@ -1,11 +1,16 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.sqrt
 
 /** Fitbit's health metrics: the overnight vitals it compares with a personal range. */
 enum class HealthMetric { BreathingRate, RestingHeartRate, HeartRateVariability, BloodOxygen, SkinTemperature }
 
+@Serializable
 data class PersonalRange(val low: Double, val high: Double) {
     operator fun contains(value: Double): Boolean = value in low..high
 }
@@ -27,6 +32,7 @@ fun personalRange(date: LocalDate, values: Map<LocalDate, Double>): PersonalRang
 }
 
 /** One metric's value on a day against its personal range (null range while there is too little history). */
+@Serializable
 data class MetricReading(val metric: HealthMetric, val value: Double, val range: PersonalRange?) {
     val inRange: Boolean? get() = range?.let { value in it }
 }

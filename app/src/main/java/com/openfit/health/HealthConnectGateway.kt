@@ -1,6 +1,9 @@
 package com.openfit.health
 
 import android.content.Context
+import android.os.SystemClock
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
@@ -36,7 +39,21 @@ class HealthConnectGateway(private val context: Context) {
         else -> HealthConnectAvailability.Unavailable
     }
 
-    suspend fun grantedPermissions(): Set<String> = client.permissionController.getGrantedPermissions()
+    private val permissionsLock = Mutex()
+    @Volatile private var granted: Pair<Long, Set<String>>? = null
+
+    /**
+     * The granted permissions, asked of Health Connect at most every [PERMISSIONS_TTL_MS]: every source checks them, and
+     * each ask is a round trip. [invalidatePermissions] after the user changes them.
+     */
+    suspend fun grantedPermissions(): Set<String> = permissionsLock.withLock {
+        granted?.takeIf { SystemClock.elapsedRealtime() - it.first < PERMISSIONS_TTL_MS }?.second
+            ?: client.permissionController.getGrantedPermissions().also { granted = SystemClock.elapsedRealtime() to it }
+    }
+
+    fun invalidatePermissions() {
+        granted = null
+    }
 
     fun requestablePermissions(): Set<String> = buildSet {
         addAll(READ_PERMISSIONS)
@@ -52,6 +69,7 @@ class HealthConnectGateway(private val context: Context) {
 
     companion object {
         const val PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
+        private const val PERMISSIONS_TTL_MS = 30_000L
 
         val OPTIONAL_PERMISSIONS = setOf(
             HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,

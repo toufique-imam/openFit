@@ -3,6 +3,11 @@ package com.openfit.ui.today
 import android.app.PendingIntent
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.openfit.R
+import com.openfit.data.SnapshotStore
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.DailyHistory
 import com.openfit.domain.LoadRange
@@ -34,6 +39,7 @@ import com.openfit.domain.EnergyDay
 import com.openfit.domain.StressDay
 import com.openfit.domain.FitnessLevel
 import com.openfit.domain.fitnessLevel
+import com.openfit.domain.ESTIMATE_DAYS
 import com.openfit.health.EnergySource
 import com.openfit.health.ExerciseSession
 import com.openfit.health.HealthConnectExercises
@@ -45,6 +51,8 @@ import com.openfit.health.DayLoadCache
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -54,6 +62,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
@@ -90,103 +99,95 @@ sealed interface TodayUiState {
         val googleHealth: GoogleHealthStatus,
         val healthMetrics: List<MetricReading> = emptyList(),
         val sleepScore: Int? = null,
-        /** The day's Energy Bank; loaded after the rest, since its first run reads weeks of heart rate. */
+        /** The day's Energy Bank; loaded beside the rest, since its first run reads weeks of heart rate. */
         val energy: EnergyDay? = null,
         val energyLoading: Boolean = true,
         val stress: StressDay? = null,
         /** VO2 max (measured, or estimated from resting heart rate) against people of the same age and sex. */
         val fitness: FitnessLevel? = null,
-        /** Pulse Age over the 28 days before the date; loaded after the rest. */
+        /** Pulse Age over the 28 days before the date; loaded beside the rest. */
         val pulseAge: PulseAge? = null,
         val pulseAgeLoading: Boolean = true,
+        /** The pull-to-refresh spinner: only for a refresh the user asked for. */
         val refreshing: Boolean = false,
+        /** A quiet reload of what is on screen (a cached snapshot, or values a few minutes old). */
+        val updating: Boolean = false,
+        /** The date being loaded while this one, with no snapshot of the new date, stays on screen. */
+        val pendingDate: LocalDate? = null,
     ) : TodayUiState
 }
 
+/**
+ * Today's state. A date shows its last snapshot ([SnapshotStore]) at once and reloads from Health Connect only when the
+ * snapshot is stale: today's after a minute, a past day's until it was taken well after the day ended.
+ */
 class TodayViewModel(
     private val gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
     private val googleHealthAuth: GoogleHealthAuth,
     dayLoadCache: DayLoadCache,
     slotCache: SlotCache,
+    private val snapshots: SnapshotStore,
 ) : ViewModel() {
 
     private val healthConnect = HealthConnectSource(gateway, dayLoadCache)
     private val energySource = EnergySource(gateway, slotCache)
-    private var energyJob: Job? = null
     private val pulseAgeSource = PulseAgeSource(gateway, dayLoadCache)
-    private var pulseAgeJob: Job? = null
     private val vitals = HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<TodayUiState>(TodayUiState.Loading)
     val state: StateFlow<TodayUiState> = _state.asStateFlow()
 
+    /** A past date the user picked; null follows today across midnight. */
     private var selectedDate: LocalDate? = null
-    private var loading: Job? = null
-    private var loadedAt: Instant? = null
+    private var showing: Job? = null
+    private var showingDate: LocalDate? = null
+    /** When the values on screen were computed, and with which profile. */
+    private var shownAt: Instant? = null
+    private var shownProfileKey: String? = null
+    /** False while the values on screen come from a snapshot of an older format. */
+    private var shownCurrent = false
+    /** After Health Connect rate-limits a read, quiet reloads and prefetches wait until then. */
+    private var backoffUntil: Instant = Instant.EPOCH
 
+    private val _messages = MutableSharedFlow<Int>(extraBufferCapacity = 1)
+    /** One-off notices for a toast: a reload failed and saved data stays on screen. */
+    val messages: SharedFlow<Int> = _messages.asSharedFlow()
+    /** Loads in flight by date; touched on the main thread only. */
+    private val fetches = mutableMapOf<LocalDate, Fetch>()
+    private var missingPermissions: Set<String> = emptySet()
+    private var googleHealth: GoogleHealthStatus = GoogleHealthStatus.Off
+
+    private enum class Reload { IfStale, Always, Pull }
+
+    init {
+        viewModelScope.launch(Dispatchers.Default) { snapshots.prune(LocalDate.now().minusDays(SNAPSHOT_DAYS)) }
+    }
+
+    private fun currentDate(): LocalDate = selectedDate ?: LocalDate.now()
+
+    /** On resume or on returning to Today: reloads only what is stale (or follows the date past midnight). */
     fun refreshIfStale() {
-        val last = loadedAt
-        if (_state.value !is TodayUiState.Ready || last == null || Duration.between(last, Instant.now()) > STALE_AFTER) refresh()
+        val date = currentDate()
+        if (showing?.isActive == true && showingDate == date) return
+        show(date, Reload.IfStale)
     }
 
+    /** A refresh the user asked for, or after permissions or the data sources changed. */
     fun refresh() {
-        _state.update { if (it is TodayUiState.Ready) it.copy(refreshing = true) else it }
-        loading?.cancel()
-        loading = viewModelScope.launch {
-            _state.value = try {
-                load().also { if (it is TodayUiState.Ready) loadedAt = Instant.now() }
-            } catch (error: CancellationException) {
-                throw error
-            } catch (error: Exception) {
-                TodayUiState.Failed(error.message ?: error.javaClass.simpleName)
-            }
-            (_state.value as? TodayUiState.Ready)?.let {
-                loadEnergy(it.date)
-                loadPulseAge(it.date, it.profile)
-            }
-        }
-    }
-
-    private fun loadPulseAge(date: LocalDate, profile: Profile) {
-        pulseAgeJob?.cancel()
-        pulseAgeJob = viewModelScope.launch {
-            val age = try {
-                pulseAgeSource.pulseAge(date.minusDays(1), profile)
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                null
-            }
-            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(pulseAge = age, pulseAgeLoading = false) else it }
-        }
-    }
-
-    private fun loadEnergy(date: LocalDate) {
-        energyJob?.cancel()
-        energyJob = viewModelScope.launch {
-            val day = try {
-                energySource.days(date, date).singleOrNull()
-            } catch (error: CancellationException) {
-                throw error
-            } catch (_: Exception) {
-                null
-            }
-            // The slots are cached by now, so stress costs little extra.
-            val stress = runCatching { energySource.stress(date, date).singleOrNull() }.getOrNull()
-            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(energy = day, energyLoading = false, stress = stress) else it }
-        }
+        gateway.invalidatePermissions()
+        show(currentDate(), Reload.Pull)
     }
 
     fun showDate(date: LocalDate) {
         val today = LocalDate.now()
         selectedDate = date.takeIf { it < today }
-        refresh()
+        show(currentDate(), Reload.IfStale)
     }
 
     fun saveProfile(profile: Profile) {
         profileStore.save(profile)
-        refresh()
+        show(currentDate(), Reload.Always)
     }
 
     suspend fun connectGoogleHealth(): PendingIntent? {
@@ -202,21 +203,194 @@ class TodayViewModel(
         refresh()
     }
 
-    private suspend fun load(): TodayUiState {
+    private fun show(date: LocalDate, reload: Reload) {
+        showing?.cancel()
+        // A run of taps through the days should not queue a load per day: drop loads that have not reached the screen.
+        fetches.entries.removeAll { (day, fetch) -> (day != date && !fetch.main.isCompleted).also { if (it) fetch.cancel() } }
+        showingDate = date
+        showing = viewModelScope.launch {
+            val profile = profileStore.load()
+            val profileKey = profile.snapshotKey()
+            val onScreen = _state.value as? TodayUiState.Ready
+            if (onScreen?.date != date) {
+                val cached = withContext(Dispatchers.IO) { snapshots.get(TodaySnapshot.KIND, date, TodaySnapshot.VERSION, TodaySnapshot.serializer()) }
+                if (cached != null) {
+                    _state.value = cached.value.toReady(profile, missingPermissions, googleHealth)
+                    shownAt = cached.savedAt
+                    shownProfileKey = cached.profileKey
+                    shownCurrent = cached.current
+                } else if (onScreen != null) {
+                    _state.value = onScreen.copy(pendingDate = date, refreshing = false, updating = false)
+                }
+            } else if (onScreen.profile != profile) {
+                // New goals show at once; values that depend on the profile follow from the reload.
+                _state.value = onScreen.copy(profile = profile)
+            }
+
+            val shown = _state.value as? TodayUiState.Ready
+            val backingOff = Instant.now() < backoffUntil
+            if (reload == Reload.IfStale && shown?.date == date && shown.pendingDate == null && (backingOff || isFresh(shown, profileKey))) {
+                prefetch(date.minusDays(1), profile)
+                return@launch
+            }
+            _state.update {
+                when {
+                    it !is TodayUiState.Ready -> it
+                    reload == Reload.Pull -> it.copy(refreshing = true)
+                    it.date == date -> it.copy(updating = true)
+                    else -> it
+                }
+            }
+            val fetch = fetches[date]?.takeIf { reload != Reload.Pull && it.profileKey == profileKey } ?: startFetch(date, profile)
+            val main = fetch.main.await()
+            if (main !is TodayUiState.Ready) {
+                val failed = main as? TodayUiState.Failed
+                val rateLimited = failed?.message?.contains("quota", ignoreCase = true) == true
+                if (rateLimited) backoffUntil = Instant.now() + BACKOFF
+                val kept = _state.value as? TodayUiState.Ready
+                if (failed != null && kept != null) {
+                    // A failed reload keeps what is on screen (the saved day, or the day before a new one was picked);
+                    // losing access to Health Connect does not.
+                    if (kept.pendingDate != null) selectedDate = kept.date.takeIf { it < LocalDate.now() }
+                    _state.value = kept.copy(refreshing = false, updating = false, pendingDate = null)
+                    _messages.tryEmit(if (rateLimited) R.string.hc_busy_saved else R.string.hc_failed_saved)
+                } else {
+                    _state.value = main
+                }
+                return@launch
+            }
+            missingPermissions = main.missingPermissions
+            googleHealth = main.googleHealth
+            _state.update { current ->
+                // Until the new Energy Bank and Pulse Age arrive, the ones on screen for this date stay.
+                val previous = (current as? TodayUiState.Ready)?.takeIf { it.date == date && it.pendingDate == null }
+                main.copy(
+                    energy = previous?.energy,
+                    energyLoading = previous?.energyLoading ?: true,
+                    stress = previous?.stress,
+                    pulseAge = previous?.pulseAge,
+                    pulseAgeLoading = previous?.pulseAgeLoading ?: true,
+                    updating = true,
+                )
+            }
+            val (energy, stress) = fetch.energy.await()
+            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(energy = energy, stress = stress, energyLoading = false) else it }
+            val age = fetch.pulseAge.await()
+            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(pulseAge = age, pulseAgeLoading = false, updating = false) else it }
+            shownAt = fetch.startedAt
+            shownProfileKey = profileKey
+            shownCurrent = true
+            prefetch(date.minusDays(1), profile)
+        }
+    }
+
+    private fun isFresh(shown: TodayUiState.Ready, profileKey: String): Boolean {
+        val at = shownAt ?: return false
+        if (!shownCurrent || shownProfileKey != profileKey || shown.energyLoading || shown.pulseAgeLoading) return false
+        val now = Instant.now()
+        if (shown.date >= LocalDate.now()) return Duration.between(at, now) < TODAY_FRESH
+        // Watches sync late, so a past day settles only once it has been over for a while.
+        val settled = shown.date.plusDays(1).atStartOfDay(ZoneId.systemDefault()).toInstant() + SETTLE_AFTER
+        return at >= settled || Duration.between(at, now) < PAST_FRESH
+    }
+
+    /** Loads [date] in the background when it has no snapshot, so stepping back a day shows at once. */
+    private fun prefetch(date: LocalDate, profile: Profile) {
+        if (date in fetches || Instant.now() < backoffUntil) return
+        viewModelScope.launch {
+            val cached = withContext(Dispatchers.IO) { snapshots.get(TodaySnapshot.KIND, date, TodaySnapshot.VERSION, TodaySnapshot.serializer()) }
+            if (cached == null && date !in fetches) startFetch(date, profile)
+        }
+    }
+
+    /** One load of a date: the day itself, then Energy Bank and Pulse Age beside it; saved as a snapshot when all three are in. */
+    private inner class Fetch(val date: LocalDate, profile: Profile) {
+        val profileKey = profile.snapshotKey()
+        val startedAt: Instant = Instant.now()
+        val main: Deferred<TodayUiState> = viewModelScope.async(Dispatchers.Default) { loadMain(date, profile) }
+        val energy: Deferred<Pair<EnergyDay?, StressDay?>> = viewModelScope.async(Dispatchers.Default) { loadEnergy(date) }
+        val pulseAge: Deferred<PulseAge?> = viewModelScope.async(Dispatchers.Default) { loadPulseAge(date, profile) }
+        private val save: Job = viewModelScope.launch(Dispatchers.Default) {
+            val ready = main.await() as? TodayUiState.Ready
+            if (ready == null) {
+                energy.cancel()
+                pulseAge.cancel()
+            } else {
+                val (energyDay, stress) = energy.await()
+                val complete = ready.copy(energy = energyDay, stress = stress, energyLoading = false, pulseAge = pulseAge.await(), pulseAgeLoading = false)
+                snapshots.put(TodaySnapshot.KIND, date, TodaySnapshot.VERSION, TodaySnapshot.serializer(), complete.toSnapshot(), profileKey)
+            }
+            withContext(Dispatchers.Main) { if (fetches[date] === this@Fetch) fetches.remove(date) }
+        }
+
+        fun cancel() {
+            main.cancel()
+            energy.cancel()
+            pulseAge.cancel()
+            save.cancel()
+        }
+    }
+
+    private fun startFetch(date: LocalDate, profile: Profile): Fetch {
+        fetches.remove(date)?.cancel()
+        return Fetch(date, profile).also { fetches[date] = it }
+    }
+
+    private suspend fun loadEnergy(date: LocalDate): Pair<EnergyDay?, StressDay?> {
+        val day = try {
+            energySource.days(date, date).singleOrNull()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        // The slots are cached by now, so stress costs little extra.
+        val stress = try {
+            energySource.stress(date, date).singleOrNull()
+        } catch (error: CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
+        return day to stress
+    }
+
+    private suspend fun loadPulseAge(date: LocalDate, profile: Profile): PulseAge? = try {
+        pulseAgeSource.pulseAge(date.minusDays(1), profile)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (_: Exception) {
+        null
+    }
+
+    private suspend fun loadMain(date: LocalDate, profile: Profile): TodayUiState = try {
+        loadDay(date, profile)
+    } catch (error: CancellationException) {
+        throw error
+    } catch (error: Exception) {
+        TodayUiState.Failed(error.message ?: error.javaClass.simpleName)
+    }
+
+    private suspend fun loadDay(date: LocalDate, profile: Profile): TodayUiState = coroutineScope {
         when (gateway.availability()) {
-            HealthConnectAvailability.Unavailable -> return TodayUiState.Unavailable(updateRequired = false)
-            HealthConnectAvailability.UpdateRequired -> return TodayUiState.Unavailable(updateRequired = true)
+            HealthConnectAvailability.Unavailable -> return@coroutineScope TodayUiState.Unavailable(updateRequired = false)
+            HealthConnectAvailability.UpdateRequired -> return@coroutineScope TodayUiState.Unavailable(updateRequired = true)
             HealthConnectAvailability.Available -> Unit
         }
         val requestable = gateway.requestablePermissions()
         val dataTypes = requestable - HealthConnectGateway.OPTIONAL_PERMISSIONS
         val missing = dataTypes - gateway.grantedPermissions()
-        if (missing == dataTypes) return TodayUiState.PermissionsRequired(requestable)
+        if (missing == dataTypes) return@coroutineScope TodayUiState.PermissionsRequired(requestable)
 
         val today = LocalDate.now()
-        val date = selectedDate ?: today
         val week = weekOf(date)
-        val profile = profileStore.load()
+        // The smaller reads run beside the day and its history.
+        val latestExercise = async { runCatching { HealthConnectExercises(gateway).sessions(date, date).maxByOrNull { it.start } }.getOrNull() }
+        val mindfulDays = async { runCatching { HealthConnectMindfulness(gateway).mindfulDays(week.first(), week.last()) }.getOrDefault(emptySet()) }
+        val sleepScore = async { runCatching { HealthConnectSleep(gateway).nights(date, date)[date]?.let(::sleepScore) }.getOrNull() }
+        val healthMetrics = async {
+            runCatching { metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date)) }.getOrDefault(emptyList())
+        }
         var (googleHealth, remote) = googleHealthSource()
         val loaded = try {
             load(listOfNotNull(remote, healthConnect), date, week, profile)
@@ -225,18 +399,19 @@ class TodayViewModel(
             load(listOf(healthConnect), date, week, profile)
         }
         val metrics = loaded.metrics
-        val readiness = readiness(date, loaded.history.withToday(date, metrics))
+        val history = loaded.history.withToday(date, metrics)
+        val readiness = readiness(date, history)
         val zoneMinutes = loaded.history.zoneMinutes.mapValues { it.value.toDouble() }
         val zoneWeeks = completedWeeks(zoneMinutes, week.first())
         val dayIndex = week.indexOf(date)
-        return TodayUiState.Ready(
+        TodayUiState.Ready(
             date = date,
             isToday = date == today,
             metrics = metrics,
             week = week,
             exerciseDays = loaded.exerciseDays,
-            latestExercise = runCatching { HealthConnectExercises(gateway).sessions(date, date).maxByOrNull { it.start } }.getOrNull(),
-            mindfulDays = runCatching { HealthConnectMindfulness(gateway).mindfulDays(week.first(), week.last()) }.getOrDefault(emptySet()),
+            latestExercise = latestExercise.await(),
+            mindfulDays = mindfulDays.await(),
             readiness = readiness,
             cardioRange = dailyCardioRange(date, profile.fitnessGoal, loaded.history.cardioLoad, readiness),
             zoneTarget = dailyTarget(
@@ -251,14 +426,13 @@ class TodayViewModel(
             googleHealth = googleHealth,
             fitness = profile.age?.let { age ->
                 profile.sex?.let { sex ->
-                    val resting = loaded.history.restingBpm.filterKeys { it > date.minusDays(FITNESS_DAYS) }.values
+                    // The same 30 days to the date as the VO2 max page.
+                    val resting = history.restingBpm.filterKeys { it > date.minusDays(ESTIMATE_DAYS.toLong()) }.values
                     fitnessLevel(age, sex, metrics.vo2Max?.value, resting.takeIf { it.isNotEmpty() }?.average())
                 }
             },
-            sleepScore = runCatching { HealthConnectSleep(gateway).nights(date, date)[date]?.let(::sleepScore) }.getOrNull(),
-            healthMetrics = runCatching {
-                metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date))
-            }.getOrDefault(emptyList()),
+            sleepScore = sleepScore.await(),
+            healthMetrics = healthMetrics.await(),
         )
     }
 
@@ -311,9 +485,12 @@ class TodayViewModel(
     }
 
     private companion object {
-        /** The VO2 max estimate uses the average resting heart rate over the last 30 days. */
-        const val FITNESS_DAYS = 30L
-        val STALE_AFTER: Duration = Duration.ofMinutes(1)
+        val TODAY_FRESH: Duration = Duration.ofMinutes(1)
+        val BACKOFF: Duration = Duration.ofMinutes(5)
+        val PAST_FRESH: Duration = Duration.ofMinutes(10)
+        /** A past day's snapshot taken this long after the day ended is final. */
+        val SETTLE_AFTER: Duration = Duration.ofHours(12)
+        const val SNAPSHOT_DAYS = 120L
         const val HISTORY_WEEKS = 4L
         const val HEALTH_METRIC_DAYS = 30L
     }

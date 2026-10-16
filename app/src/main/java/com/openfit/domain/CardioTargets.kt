@@ -1,11 +1,16 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.floor
 import kotlin.math.max
 import kotlin.math.min
 
 /** A day's Cardio Load target range, and the full-scale value of the arc that shows it. */
+@Serializable
 data class LoadRange(val low: Double, val high: Double, val scale: Double) {
     operator fun contains(load: Double): Boolean = load >= low && load <= high
 }

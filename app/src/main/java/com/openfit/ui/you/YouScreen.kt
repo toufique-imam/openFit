@@ -22,6 +22,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.material.icons.outlined.Bedtime
+import androidx.compose.material.icons.outlined.Dashboard
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.Hub
 import androidx.compose.material3.Icon
@@ -69,7 +71,7 @@ private data class GoalGroup(val title: Int, val icon: ImageVector, val active: 
  * Premium and badges depend on Fitbit's services.
  */
 @Composable
-fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenGoals: () -> Unit) {
+fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenGoals: () -> Unit, onOpenCustomize: () -> Unit, onOpenJournal: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? TodayUiState.Ready
     val profile = ready?.profile
@@ -130,6 +132,34 @@ fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenG
                     Column {
                         Text(stringResource(R.string.you_health_connect), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
                         Text(stringResource(R.string.you_health_connect_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                    }
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = OpenFitColors.Card,
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpenCustomize),
+            ) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.Dashboard, contentDescription = null, tint = OpenFitColors.OnSurface, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(stringResource(R.string.you_customize), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+                        Text(stringResource(R.string.you_customize_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                    }
+                }
+            }
+            Surface(
+                shape = RoundedCornerShape(16.dp),
+                color = OpenFitColors.Card,
+                modifier = Modifier.fillMaxWidth().padding(start = 16.dp, end = 16.dp, top = 8.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onOpenJournal),
+            ) {
+                Row(Modifier.padding(20.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Outlined.EditNote, contentDescription = null, tint = OpenFitColors.OnSurface, modifier = Modifier.size(24.dp))
+                    Spacer(Modifier.width(16.dp))
+                    Column {
+                        Text(stringResource(R.string.tab_journal), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+                        Text(stringResource(R.string.you_journal_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
                     }
                 }
             }

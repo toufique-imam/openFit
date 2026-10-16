@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.LocalDate
 import kotlin.math.ln
 import kotlin.math.roundToInt
@@ -7,6 +11,7 @@ import kotlin.math.sqrt
 
 enum class ReadinessLevel { Low, Moderate, High }
 
+@Serializable
 data class Readiness(val score: Int, val illness: Boolean) {
     val level: ReadinessLevel
         get() = when {

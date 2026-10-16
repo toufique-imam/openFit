@@ -1,5 +1,9 @@
+@file:UseSerializers(InstantSerializer::class, DurationSerializer::class, LocalDateSerializer::class, IntRangeSerializer::class)
+
 package com.openfit.domain
 
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.UseSerializers
 import java.time.Instant
 import kotlin.math.ceil
 import kotlin.math.roundToInt
@@ -8,6 +12,7 @@ data class HeartRateSample(val time: Instant, val bpm: Long)
 
 data class HeartRateZones(val fatBurnFrom: Int, val cardioFrom: Int, val peakFrom: Int)
 
+@Serializable
 data class ZoneMinutes(val fatBurn: Int, val cardio: Int, val peak: Int) {
     val total: Int get() = fatBurn + 2 * (cardio + peak)
 }

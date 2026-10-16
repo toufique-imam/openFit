@@ -14,7 +14,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Scaffold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
+import androidx.compose.runtime.setValue
+import com.openfit.data.SnapshotStore
+import com.openfit.ui.today.CustomizeTodayRoute
+import com.openfit.ui.today.TodayLayout
+import com.openfit.ui.today.TodayLayoutStore
+import com.openfit.ui.onboarding.OnboardingRoute
+import com.openfit.ui.onboarding.OnboardingStore
+import com.openfit.ui.vo2.Vo2MaxRoute
+import com.openfit.ui.vo2.Vo2MaxViewModel
+import java.util.UUID
 import androidx.compose.runtime.saveable.listSaver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -70,6 +84,9 @@ import com.openfit.ui.today.TodayViewModel
 import com.openfit.ui.you.YouRoute
 import java.time.LocalDate
 
+/** Tells this process apart from an earlier one whose saved state was restored. */
+private val PROCESS = UUID.randomUUID().toString()
+
 private sealed interface Screen {
     data class Tab(val tab: RootTab) : Screen
     data class Metric(val page: MetricPage, val date: LocalDate) : Screen
@@ -105,6 +122,9 @@ class MainActivity : ComponentActivity() {
     private lateinit var dayLoadCache: DayLoadCache
     private lateinit var journalStore: JournalStore
     private lateinit var slotCache: SlotCache
+    private lateinit var snapshotStore: SnapshotStore
+    private lateinit var layoutStore: TodayLayoutStore
+    private lateinit var onboardingStore: OnboardingStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -114,32 +134,68 @@ class MainActivity : ComponentActivity() {
         dayLoadCache = DayLoadCache(applicationContext)
         journalStore = JournalStore(applicationContext)
         slotCache = SlotCache(applicationContext)
+        snapshotStore = SnapshotStore(applicationContext)
+        layoutStore = TodayLayoutStore(applicationContext)
+        onboardingStore = OnboardingStore(applicationContext)
         setContent {
             OpenFitTheme {
                 val backStack = rememberSaveable(saver = BackStackSaver) { mutableStateListOf<Screen>(Screen.Tab(RootTab.Today)) }
-                val todayViewModel = viewModel { TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache) }
+                var layout by remember { mutableStateOf(layoutStore.load()) }
+                // Each screen keeps its saved state (scroll position, selected period) while it is on the back stack.
+                val screenStates = rememberSaveableStateHolder()
+                val todayViewModel = viewModel {
+                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore)
+                }
+                var onboarded by remember { mutableStateOf(onboardingStore.done) }
+                if (!onboarded) {
+                    OnboardingRoute(todayViewModel, profileStore, gateway, onOpenHealthConnectStore = ::openHealthConnectStore) {
+                        onboardingStore.done = true
+                        onboarded = true
+                    }
+                    return@OpenFitTheme
+                }
                 val top = backStack.last()
                 val showTab: (RootTab) -> Unit = { tab ->
+                    backStack.forEachIndexed { index, screen -> if (screen is Screen.Metric) screenStates.removeState(stateKey(index, screen)) }
                     backStack.clear()
                     backStack.add(Screen.Tab(tab))
                 }
                 val pop = {
+                    screenStates.removeState(stateKey(backStack.lastIndex, backStack.last()))
                     backStack.removeAt(backStack.lastIndex)
-                    todayViewModel.refresh()
+                    // Today keeps what it showed; it reloads only if that is stale or a goal changed.
+                    todayViewModel.refreshIfStale()
                 }
-                // Back closes a metric screen, and from Journal or You returns to Today, as in Fitbit.
+                val open: (MetricPage, LocalDate) -> Unit = { page, date -> backStack.add(Screen.Metric(page, date)) }
+                // A tab taken off the bottom bar in Customize Today.
+                if (top is Screen.Tab && top.tab !in layout.bar) {
+                    LaunchedEffect(top) { showTab(RootTab.Today) }
+                }
+                // Back closes a metric screen, and from another tab returns to Today, as in Fitbit.
                 BackHandler(enabled = backStack.size > 1 || top != Screen.Tab(RootTab.Today)) {
                     if (backStack.size > 1) pop() else showTab(RootTab.Today)
                 }
                 Scaffold(
                     containerColor = OpenFitColors.Background,
                     contentWindowInsets = WindowInsets(0),
-                    bottomBar = { if (top is Screen.Tab) BottomBar(top.tab, showTab) },
+                    bottomBar = { if (top is Screen.Tab) BottomBar(layout.bar, top.tab, showTab) },
                 ) { padding ->
                     Box(Modifier.padding(padding).consumeWindowInsets(padding)) {
-                        when (top) {
-                            is Screen.Tab -> TabScreen(top.tab, todayViewModel) { page, date -> backStack.add(Screen.Metric(page, date)) }
-                            is Screen.Metric -> MetricScreen(top, pop) { page, date -> backStack.add(Screen.Metric(page, date)) }
+                        screenStates.SaveableStateProvider(stateKey(backStack.lastIndex, top)) {
+                            when (top) {
+                                is Screen.Tab -> TabScreen(top.tab, todayViewModel, layout, open)
+                                is Screen.Metric -> MetricScreen(
+                                    screen = top,
+                                    onBack = pop,
+                                    onOpen = open,
+                                    layout = layout,
+                                    onSaveLayout = {
+                                        layoutStore.save(it)
+                                        layout = it
+                                        pop()
+                                    },
+                                )
+                            }
                         }
                     }
                 }
@@ -147,95 +203,138 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    /** Back-stack entries are unique by position, so the same page opened twice keeps two states. */
+    private fun stateKey(index: Int, screen: Screen): String = when (screen) {
+        is Screen.Tab -> "tab:${screen.tab.name}"
+        is Screen.Metric -> "$index:${screen.page.name}:${screen.date}"
+    }
+
     @Composable
-    private fun TabScreen(tab: RootTab, todayViewModel: TodayViewModel, onOpen: (MetricPage, LocalDate) -> Unit) {
+    private fun TabScreen(tab: RootTab, todayViewModel: TodayViewModel, layout: TodayLayout, onOpen: (MetricPage, LocalDate) -> Unit) {
         when (tab) {
-            RootTab.Today -> TodayRoute(viewModel = todayViewModel, onOpenHealthConnectStore = ::openHealthConnectStore, onOpen = onOpen)
-            RootTab.Journal -> JournalRoute(journalViewModel()) { onOpen(MetricPage.JournalBehaviours, LocalDate.now()) }
+            RootTab.Journal -> JournalRoute(journalViewModel(), onEditBehaviours = { onOpen(MetricPage.JournalBehaviours, LocalDate.now()) })
             RootTab.You -> YouRoute(
                 todayViewModel,
                 onOpenHealthConnect = ::openHealthConnectSettings,
                 onOpenGoals = { onOpen(MetricPage.Goals, LocalDate.now()) },
+                onOpenCustomize = { onOpen(MetricPage.CustomizeToday, LocalDate.now()) },
+                onOpenJournal = { onOpen(MetricPage.Journal, LocalDate.now()) },
+            )
+            // Today, and the section tabs: one section of Today on its own.
+            else -> TodayRoute(
+                viewModel = todayViewModel,
+                layout = layout,
+                onOpenHealthConnectStore = ::openHealthConnectStore,
+                onOpen = onOpen,
+                section = tab.section,
             )
         }
     }
 
     @Composable
-    private fun MetricScreen(screen: Screen.Metric, onBack: () -> Unit, onOpen: (MetricPage, LocalDate) -> Unit) {
+    private fun MetricScreen(
+        screen: Screen.Metric,
+        onBack: () -> Unit,
+        onOpen: (MetricPage, LocalDate) -> Unit,
+        layout: TodayLayout,
+        onSaveLayout: (TodayLayout) -> Unit,
+    ) {
         when (screen.page) {
+            MetricPage.CustomizeToday -> CustomizeTodayRoute(layout, onSave = onSaveLayout, onClose = onBack, onOpenHealthConnect = ::openHealthConnectSettings)
             MetricPage.CardioLoad -> {
                 val model = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 CardioLoadRoute(model, onBack)
             }
             MetricPage.Readiness -> {
                 val model = viewModel { ReadinessViewModel(gateway, profileStore, dayLoadCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 ReadinessRoute(model, onBack)
             }
             MetricPage.Steps, MetricPage.Distance, MetricPage.Floors, MetricPage.Energy, MetricPage.ZoneMinutes, MetricPage.Food, MetricPage.Water -> {
                 val metric = GoalMetric.valueOf(screen.page.name)
                 val model = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore, dayLoadCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 GoalMetricRoute(model, onBack)
             }
             MetricPage.Heart -> {
                 val model = viewModel { HeartViewModel(gateway, profileStore, dayLoadCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 HeartRoute(model, onBack)
             }
             MetricPage.Exercise -> {
                 val model = viewModel { ExerciseViewModel(gateway, profileStore) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 ExerciseRoute(model, onBack)
             }
             MetricPage.Hourly -> {
                 val model = viewModel { HourlyViewModel(gateway, profileStore) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 HourlyRoute(model, onBack)
             }
             MetricPage.HealthMetrics -> {
                 val model = viewModel { HealthMetricsViewModel(gateway, profileStore) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 HealthMetricsRoute(model, onBack, onOpenMetric = { metric -> onOpen(page(metric), screen.date) })
             }
             MetricPage.MetricBreathingRate, MetricPage.MetricRestingHeartRate, MetricPage.MetricHrv, MetricPage.MetricBloodOxygen,
             MetricPage.MetricSkinTemperature -> {
                 val metric = metricOf(screen.page) ?: return
                 val model = viewModel(key = metric.name) { MetricDetailViewModel(metric, gateway, profileStore) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 MetricDetailRoute(model, metric, onBack)
             }
             MetricPage.Weight -> {
                 val model = viewModel { WeightViewModel(gateway, profileStore) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 WeightRoute(model, onBack)
             }
             MetricPage.Sleep -> {
                 val model = viewModel { SleepViewModel(gateway, profileStore) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 SleepRoute(model, onBack)
             }
             MetricPage.JournalBehaviours -> BehavioursRoute(journalViewModel(), onBack)
+            MetricPage.Journal -> JournalRoute(journalViewModel(), onEditBehaviours = { onOpen(MetricPage.JournalBehaviours, LocalDate.now()) }, onBack = onBack)
+            MetricPage.Vo2Max -> {
+                val model = viewModel { Vo2MaxViewModel(gateway, profileStore) }
+                OpenOnce { model.open(screen.date) }
+                Vo2MaxRoute(model, onBack)
+            }
             MetricPage.PulseAge -> {
                 val model = viewModel { PulseAgeViewModel(gateway, profileStore, dayLoadCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 PulseAgeRoute(model, onBack)
             }
             MetricPage.Stress -> {
                 val model = viewModel { StressViewModel(gateway, slotCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 StressRoute(model, onBack)
             }
             MetricPage.EnergyBank -> {
                 val model = viewModel { EnergyViewModel(gateway, slotCache) }
-                LaunchedEffect(screen) { model.open(screen.date) }
+                OpenOnce { model.open(screen.date) }
                 EnergyRoute(model, onBack)
             }
             MetricPage.Goals -> {
                 val model = viewModel { GoalsViewModel(profileStore) }
-                LaunchedEffect(screen) { model.reload() }
+                OpenOnce { model.reload() }
                 GoalsRoute(model, onBack)
+            }
+        }
+    }
+
+    /**
+     * Loads a screen when it is pushed, but not again when the user comes back to it from a screen above: its model still
+     * holds what it showed. A new process (or a fresh visit) has an empty model, so it loads.
+     */
+    @Composable
+    private fun OpenOnce(open: () -> Unit) {
+        var openedIn by rememberSaveable { mutableStateOf<String?>(null) }
+        LaunchedEffect(Unit) {
+            if (openedIn != PROCESS) {
+                open()
+                openedIn = PROCESS
             }
         }
     }

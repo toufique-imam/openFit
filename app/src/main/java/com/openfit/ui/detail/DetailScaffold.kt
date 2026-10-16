@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
@@ -144,14 +145,29 @@ private fun PeriodTabs(periods: List<ChartPeriod>, selected: ChartPeriod, accent
     val index = periods.indexOf(selected).coerceAtLeast(0)
     val tabs: @Composable () -> Unit = {
         periods.forEach { period ->
-            Tab(
-                selected = period == selected,
-                onClick = { onSelect(period) },
-                selectedContentColor = accent,
-                unselectedContentColor = OpenFitColors.OnSurfaceVariant,
-                modifier = if (periods.size > DEFAULT_PERIODS.size) Modifier.widthIn(min = 90.dp) else Modifier,
-                text = { Text(stringResource(periodTabLabel(period)), style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false) },
-            )
+            val label = stringResource(periodTabLabel(period))
+            if (periods.size > DEFAULT_PERIODS.size) {
+                Tab(
+                    selected = period == selected,
+                    onClick = { onSelect(period) },
+                    selectedContentColor = accent,
+                    unselectedContentColor = OpenFitColors.OnSurfaceVariant,
+                    modifier = Modifier.widthIn(min = 90.dp),
+                    text = { Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false) },
+                )
+            } else {
+                // Material's text tab pads 16dp a side, which cuts "3 months" in a quarter of a 360dp screen.
+                Tab(
+                    selected = period == selected,
+                    onClick = { onSelect(period) },
+                    selectedContentColor = accent,
+                    unselectedContentColor = OpenFitColors.OnSurfaceVariant,
+                ) {
+                    Box(Modifier.height(TAB_HEIGHT).padding(horizontal = 4.dp), contentAlignment = Alignment.Center) {
+                        Text(label, style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false)
+                    }
+                }
+            }
         }
     }
     val indicator: @Composable TabIndicatorScope.() -> Unit = {
@@ -178,6 +194,8 @@ private fun PeriodTabs(periods: List<ChartPeriod>, selected: ChartPeriod, accent
         )
     }
 }
+
+private val TAB_HEIGHT = 48.dp
 
 private fun periodTabLabel(period: ChartPeriod): Int = when (period) {
     ChartPeriod.Day -> R.string.cardio_tab_day
