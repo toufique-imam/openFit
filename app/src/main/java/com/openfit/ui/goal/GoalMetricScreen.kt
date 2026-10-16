@@ -71,11 +71,12 @@ private val HOUR_LABELS = listOf(0 to "12am", 4 to "4am", 8 to "8am", 12 to "12p
 fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? GoalMetricUiState.Ready
-    val accent = ready?.metric?.color ?: OpenFitColors.Mint
+    // The page's own metric, not the loaded state's: the title stays while loading or after an error.
+    val accent = viewModel.metric.color
     var editingGoal by rememberSaveable { mutableStateOf(false) }
     val setGoal = { editingGoal = true }
     DetailScaffold(
-        title = stringResource(ready?.metric?.title ?: R.string.tile_steps),
+        title = stringResource(viewModel.metric.title),
         accent = accent.accent,
         period = ready?.period ?: ChartPeriod.Day,
         onPeriod = viewModel::selectPeriod,

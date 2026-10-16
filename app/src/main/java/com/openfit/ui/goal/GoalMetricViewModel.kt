@@ -105,7 +105,7 @@ sealed interface GoalMetricUiState {
 }
 
 class GoalMetricViewModel(
-    private val metric: GoalMetric,
+    val metric: GoalMetric,
     gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
     dayLoadCache: DayLoadCache,

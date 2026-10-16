@@ -24,6 +24,8 @@ import androidx.health.connect.client.time.TimeRangeFilter
 import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Length
 import androidx.health.connect.client.units.Volume
+import com.openfit.R
+import com.openfit.ui.Notices
 import com.openfit.data.AggregateEntity
 import com.openfit.data.OpenFitDatabase
 import com.openfit.data.RecordDayEntity
@@ -130,8 +132,10 @@ class HealthStore(
                 } catch (error: CancellationException) {
                     throw error
                 } catch (error: Exception) {
-                    // Days read before stand in for the ones Health Connect would not give now.
-                    if (stale.any { it !in saved }) throw error
+                    // Days read before stand in for the ones Health Connect would not give now; with some never read,
+                    // the saved ones still show (a year chart with gaps beats an error), with a note why.
+                    if (saved.isEmpty()) throw error
+                    if (stale.any { it !in saved }) Notices.postOnce(R.string.hc_partial)
                     budget.savedRead()
                     saved
                 }
@@ -149,6 +153,56 @@ class HealthStore(
             encode(metrics, client().aggregate(AggregateRequest(metrics, TimeRangeFilter.between(start, until))))
         }
         return AggregateValues(values)
+    }
+
+    /**
+     * [metric]'s total for each day in [from]..[until], saved per day so any range reuses them: the days not saved (or
+     * still changing) are asked in one request. Values in [AggregateValues]' units (count, metres, kcal, litres).
+     */
+    suspend fun dailyTotals(metric: AggregateMetric<*>, from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
+        val codec = METRICS[metric] ?: error("Unsupported metric $metric")
+        val last = minOf(until, LocalDate.now(zone))
+        if (last < from) return emptyMap()
+        val prefix = "day|${codec.name}|"
+        return lock("daily:${codec.name}").withLock {
+            val saved = dao.dailyTotals(prefix, from.toString(), last.toString()).associateBy { LocalDate.parse(it.firstDay) }
+            val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= last }.toList()
+            val stale = days.filter { day -> saved[day]?.let { isFresh(it.fetchedAt, it.rangeEnd) } != true }
+            val rows = if (stale.isEmpty()) {
+                budget.savedRead()
+                saved
+            } else {
+                try {
+                    val start = stale.first()
+                    val end = stale.last().plusDays(1)
+                    val request = AggregateGroupByPeriodRequest(setOf(metric), TimeRangeFilter.between(start.atStartOfDay(), end.atStartOfDay()), Period.ofDays(1))
+                    val buckets = budget.call("totals") { client().aggregateGroupByPeriod(request) }
+                        .associate { bucket -> bucket.startTime.toLocalDate() to bucket.result[metric]?.let(codec.encode) }
+                    val fetchedAt = System.currentTimeMillis()
+                    // Every day asked about is saved, a day without data too, so it is not asked again.
+                    val fresh = generateSequence(start) { it.plusDays(1) }.takeWhile { it < end }.map { day ->
+                        AggregateEntity(
+                            key = prefix + day,
+                            fetchedAt = fetchedAt,
+                            rangeEnd = dayEnd(day),
+                            firstDay = day.toString(),
+                            lastDay = day.toString(),
+                            types = ",${codec.type},",
+                            json = buckets[day]?.toString() ?: "",
+                        )
+                    }.toList()
+                    dao.putAggregates(fresh)
+                    saved + fresh.associateBy { LocalDate.parse(it.firstDay) }
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    if (saved.isEmpty()) throw error
+                    Notices.postOnce(R.string.hc_partial)
+                    saved
+                }
+            }
+            rows.mapNotNull { (day, row) -> row.json.toDoubleOrNull()?.let { day to it } }.toMap()
+        }
     }
 
     suspend fun aggregateByDuration(metrics: Set<AggregateMetric<*>>, start: Instant, end: Instant, slicer: Duration): List<DurationBucket> {

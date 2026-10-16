@@ -34,9 +34,8 @@ class HealthConnectTotals(private val gateway: HealthConnectGateway, private val
 
     suspend fun daily(total: DailyTotal, from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
         if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
-        return gateway.store.aggregateByPeriod(setOf(metric(total)), from.atStartOfDay(), until.plusDays(1).atStartOfDay(), Period.ofDays(1))
-            .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.toLocalDate() to it } }
-            .toMap()
+        // Saved per day; the stored units are the ones DailyTotal names (count, metres, kcal, litres).
+        return gateway.store.dailyTotals(metric(total), from, until)
     }
 
     suspend fun hourly(total: DailyTotal, date: LocalDate): Map<Int, Double> {

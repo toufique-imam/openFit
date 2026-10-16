@@ -78,6 +78,13 @@ interface HealthCacheDao {
     @Query("DELETE FROM record_days WHERE day >= :from")
     suspend fun forgetDaysFrom(from: String)
 
+    /** A metric's saved daily totals ("day|steps|2026-10-16"), by day. */
+    @Query("SELECT * FROM aggregates WHERE `key` LIKE :prefix || '%' AND firstDay BETWEEN :from AND :until")
+    suspend fun dailyTotals(prefix: String, from: String, until: String): List<AggregateEntity>
+
+    @Upsert
+    suspend fun putAggregates(aggregates: List<AggregateEntity>)
+
     @Query("SELECT * FROM aggregates WHERE `key` = :key")
     suspend fun aggregate(key: String): AggregateEntity?
 

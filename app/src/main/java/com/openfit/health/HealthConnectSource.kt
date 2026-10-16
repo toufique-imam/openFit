@@ -202,8 +202,9 @@ class HealthConnectSource(
             uncached
                 .sortedDescending()
                 .take(backfillDays)
-                .map { day -> day to async { permits.withPermit { dayLoad(day, age, profile, resting, window.granted) } } }
-                .associate { (day, load) -> day to load.await() }
+                .map { day -> day to async { permits.withPermit { dayLoadOrNull(day, age, profile, resting, window.granted) } } }
+                .mapNotNull { (day, load) -> load.await()?.let { day to it } }
+                .toMap()
         }
         val settled = LocalDate.now(zone).minusDays(1)
         dayLoadCache.putAll(profileKey, computed.filterKeys { it < settled })
@@ -212,6 +213,16 @@ class HealthConnectSource(
             .toMap()
         return loads to (uncached.size - computed.size)
     }
+
+    /** A day that cannot be read now (Health Connect's quota) stays pending, rather than failing the whole range. */
+    private suspend fun dayLoadOrNull(day: LocalDate, age: Int, profile: Profile, resting: List<RestingHeartRateRecord>, granted: Set<String>): DayLoad? =
+        try {
+            dayLoad(day, age, profile, resting, granted)
+        } catch (error: kotlinx.coroutines.CancellationException) {
+            throw error
+        } catch (_: Exception) {
+            null
+        }
 
     private suspend fun dayLoad(
         day: LocalDate,

@@ -836,4 +836,5 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="usage_of">%1$,d of %2$,d</string>
     <string name="usage_limited_at">Health Connect limited openFit at %s. Saved data is shown until it allows reads again.</string>
     <string name="onboarding_import_heart">Reading heart rate… (%1$d of %2$d)</string>
+    <string name="hc_partial">Showing saved days. Health Connect is limiting reads, so some are missing for now.</string>
 </resources>
