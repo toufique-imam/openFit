@@ -50,6 +50,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import java.time.format.DateTimeFormatter
+import kotlin.math.ceil
 
 private const val METERS_PER_MILE = 1_609.344
 private const val FL_OZ_PER_LITER = 33.814
@@ -95,7 +96,7 @@ fun GoalsRoute(viewModel: GoalsViewModel, onBack: () -> Unit) {
     ) { padding ->
         LazyColumn(Modifier.padding(padding).fillMaxSize(), contentPadding = PaddingValues(bottom = 48.dp)) {
             GoalCategory.entries.forEach { category ->
-                val goals = Goal.entries.filter { it.category == category }
+                val goals = Goal.entries.filter { it.listed && it.category == category }
                 item(key = category.name) {
                     Text(
                         stringResource(category.title),
@@ -136,7 +137,7 @@ private fun GoalRow(goal: Goal, profile: Profile, index: Int, count: Int, onClic
             } else {
                 Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 16.dp)) {
                     Text(value, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface, textAlign = TextAlign.End)
-                    Text(stringResource(goalMeta(goal)), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                    goalMeta(goal)?.let { Text(stringResource(it), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant) }
                 }
             }
         }
@@ -153,6 +154,9 @@ fun goalValue(goal: Goal, profile: Profile): String? {
             val wake = profile.wakeTime ?: return null
             "${bedtime.format(CLOCK)} – ${wake.format(CLOCK)}"
         }
+        Goal.Bedtime -> profile.bedtime?.format(CLOCK)
+        Goal.WakeTime -> profile.wakeTime?.format(CLOCK)
+        Goal.ZoneMinutes -> ceil(profile.fitnessGoal.weeklyZoneMinutes / 7.0).toInt().toString()
         Goal.SleepDuration -> profile.sleepGoalMinutes?.let(::shortDuration)
         Goal.Steps -> profile.dailyStepGoal?.let { "${whole(it)} ${stringResource(R.string.unit_steps)}" }
         Goal.Distance -> profile.dailyDistanceGoalMeters?.let {
@@ -173,9 +177,10 @@ fun goalValue(goal: Goal, profile: Profile): String? {
     }
 }
 
-/** Fitbit's line under a goal's value: how often it applies. */
-private fun goalMeta(goal: Goal): Int = when (goal) {
-    Goal.ExerciseDays, Goal.Fitness -> R.string.goal_meta_weekly
+/** Fitbit's line under a goal's value: how often it applies ("Daily", "Weekly", "Target value"). */
+private fun goalMeta(goal: Goal): Int? = when (goal) {
+    Goal.ExerciseDays -> R.string.goal_meta_weekly
     Goal.Weight -> R.string.goal_meta_target_value
+    Goal.Fitness -> null
     else -> R.string.goal_meta_daily
 }

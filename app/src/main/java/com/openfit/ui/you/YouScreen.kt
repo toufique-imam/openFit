@@ -45,7 +45,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.profile.Profile
 import com.openfit.ui.goals.GoalCategory
-import com.openfit.ui.goals.activeGoals
+import com.openfit.ui.goals.setGoals
 import androidx.compose.material.icons.outlined.Restaurant
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.SectionHeaderStyle
@@ -110,25 +110,7 @@ fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenG
             )
         }
         item { ProfileCard(profile, onEditProfile) }
-        item {
-            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 40.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-                Text(stringResource(R.string.you_goals), style = SectionHeaderStyle, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
-                Text(
-                    stringResource(R.string.you_see_all),
-                    style = MaterialTheme.typography.titleMedium,
-                    color = OpenFitColors.Mint.accent,
-                    modifier = Modifier.clickable(onClick = onOpenGoals),
-                )
-            }
-        }
-        item {
-            val groups = GoalCategory.entries.map { category ->
-                GoalGroup(category.title, category.icon, profile?.let { activeGoals(it, category) } ?: 0)
-            }
-            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                items(groups) { group -> GoalCard(group, onOpenGoals) }
-            }
-        }
+        // Fitbit's order is profile, Records, Goals; its Premium, Community, assessments and Badges sections are online.
         item {
             Text(
                 stringResource(R.string.you_records),
@@ -149,6 +131,27 @@ fun YouRoute(viewModel: TodayViewModel, onOpenHealthConnect: () -> Unit, onOpenG
                         Text(stringResource(R.string.you_health_connect_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
                     }
                 }
+            }
+        }
+        item {
+            Row(Modifier.fillMaxWidth().padding(start = 24.dp, end = 24.dp, top = 40.dp, bottom = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+                Text(stringResource(R.string.you_goals), style = SectionHeaderStyle, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
+                Text(
+                    stringResource(R.string.you_see_all),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = OpenFitColors.Mint.accent,
+                    modifier = Modifier.clickable(onClick = onOpenGoals),
+                )
+            }
+        }
+        item {
+            val groups = GoalCategory.entries.mapNotNull { category ->
+                val count = profile?.let { setGoals(it, category) } ?: 0
+                if (count == 0) null else GoalGroup(category.title, category.icon, count)
+            }
+            LazyRow(contentPadding = PaddingValues(horizontal = 16.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (groups.isEmpty()) item { SetGoalCard(onOpenGoals) }
+                items(groups) { group -> GoalCard(group, onOpenGoals) }
             }
         }
     }
@@ -189,7 +192,7 @@ private fun GoalCard(group: GoalGroup, onClick: () -> Unit) {
             Icon(group.icon, contentDescription = null, tint = OpenFitColors.OnSurface, modifier = Modifier.size(24.dp))
             Column {
                 Text(stringResource(group.title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
-                Text(stringResource(R.string.you_goal_count, group.active), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                Text(pluralStringResource(R.plurals.you_goal_count, group.active, group.active), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
             }
         }
     }
@@ -202,3 +205,17 @@ private val GoalCategory.icon: ImageVector
         GoalCategory.Nutrition -> Icons.Outlined.Restaurant
         GoalCategory.Health -> Icons.Outlined.BarChart
     }
+
+/** Shown in place of the cards while no goal is set (Fitbit's "Set a goal"). */
+@Composable
+private fun SetGoalCard(onClick: () -> Unit) {
+    Surface(
+        shape = RoundedCornerShape(16.dp),
+        color = OpenFitColors.Card,
+        modifier = Modifier.size(width = 114.dp, height = 154.dp).clip(RoundedCornerShape(16.dp)).clickable(onClick = onClick),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.Bottom) {
+            Text(stringResource(R.string.goals_set_a_goal), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.Mint.accent)
+        }
+    }
+}

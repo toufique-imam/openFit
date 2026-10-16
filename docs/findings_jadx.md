@@ -141,3 +141,12 @@ openFit's models for these are in [findings_algorithms.md](findings_algorithms.m
 - A goal whose state is DISABLED or UNSPECIFIED shows a "Set goal" button (`goal_list_item_set_goal`).
 - A set goal shows its value with a meta line: "Daily" (`goal_list_item_meta_daily`), "Weekly", "Target value" or "Target range" (blood glucose).
 - "Reset goal" asks "Reset %1$s?" and leaves the goal blank until a new one is set (`reset_goal_dialog_message`).
+
+**You tab cards** (`GoalsYouSectionComposerViewModel`, `anwc` case 9):
+- The user's goals are grouped by category; a card shows "N goals" (`goals_you_section_goals_num`), so a category with no goals has no card.
+- Order: sleep 0, fitness ("Activity") 1, body_measurement ("Health") 2, mindfulness 3, nutrition 4. The Goals list (`aoqo`) uses the same order.
+- Icons: `gs_sleep`, `gs_steps` (a shoe), `gs_bar_chart_4_bars`, `gs_mindfulness`, `gs_nutrition` (an apple).
+
+**Row titles by goal:** Bedtime, Wake time, Sleep duration (all "Daily"); Steps, Distance, Energy burned, Floors, Active Zone Minutes, Hourly activity ("Daily"); Exercise days, Running distance, Mindful days ("Weekly"); Weight, Body fat percentage ("Target value"); Food, Water ("Daily"). CARDIO_LOAD shows as "Heart" with "Daily".
+
+The live Goals screens no longer load (the app is discontinued and needs Fitbit's servers), so this section is the reference for openFit's Goals screen.

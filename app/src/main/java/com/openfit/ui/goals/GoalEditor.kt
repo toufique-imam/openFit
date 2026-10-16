@@ -21,6 +21,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TimePicker
 import androidx.compose.material3.rememberTimePickerState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -71,7 +73,7 @@ fun GoalEditor(goal: Goal, profile: Profile, onSave: (Profile) -> Unit, onDismis
         },
         dismissButton = {
             Row {
-                if (goal != Goal.Fitness && goal.isSet(profile)) {
+                if (goal.resettable && goal.isSet(profile)) {
                     TextButton(onClick = { onSave(goal.reset(profile)) }) { Text(stringResource(R.string.goal_reset)) }
                 }
                 TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) }
@@ -121,8 +123,10 @@ private fun GoalInput(goal: Goal, profile: Profile, onChange: (Profile?) -> Unit
         ) { onChange(it?.let { value -> profile.copy(weightGoalKg = if (pounds) value / POUNDS_PER_KG else value) }) }
         Goal.SleepDuration -> SleepDurationInput(profile, onChange)
         Goal.SleepSchedule -> SleepScheduleInput(profile, onChange)
+        Goal.Bedtime -> InlineTime(profile.bedtime) { onChange(profile.copy(bedtime = it)) }
+        Goal.WakeTime -> InlineTime(profile.wakeTime) { onChange(profile.copy(wakeTime = it)) }
         Goal.HourlyActivity -> HourlyInput(profile, onChange)
-        Goal.Fitness -> FitnessInput(profile, onChange)
+        Goal.Fitness, Goal.ZoneMinutes -> FitnessInput(profile, onChange)
     }
 }
 
@@ -186,10 +190,22 @@ private fun SleepScheduleInput(profile: Profile, onChange: (Profile?) -> Unit) {
     }
 }
 
+/** A single time goal (bedtime, wake time): the clock sits in the dialog itself, and Save keeps what it shows. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun InlineTime(initial: LocalTime?, onChange: (LocalTime) -> Unit) {
+    val state = rememberTimePickerState(initialHour = initial?.hour ?: 0, initialMinute = initial?.minute ?: 0, is24Hour = true)
+    LaunchedEffect(state) {
+        snapshotFlow { LocalTime.of(state.hour, state.minute) }.collect(onChange)
+    }
+    TimePicker(state)
+}
+
 /** A labelled time that opens a clock picker. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun TimeField(label: String, time: LocalTime?, onPick: (LocalTime) -> Unit) {
+private fun TimeField(label: String, initial: LocalTime?, onPick: (LocalTime) -> Unit) {
+    var time by remember { mutableStateOf(initial) }
     var picking by remember { mutableStateOf(false) }
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
@@ -203,7 +219,10 @@ private fun TimeField(label: String, time: LocalTime?, onPick: (LocalTime) -> Un
             confirmButton = {
                 TextButton(onClick = {
                     picking = false
-                    onPick(LocalTime.of(state.hour, state.minute))
+                    LocalTime.of(state.hour, state.minute).let {
+                        time = it
+                        onPick(it)
+                    }
                 }) { Text(stringResource(R.string.ok)) }
             },
             dismissButton = { TextButton(onClick = { picking = false }) { Text(stringResource(R.string.cancel)) } },

@@ -422,7 +422,11 @@
     <string name="you_goals_activity">Activity</string>
     <string name="you_goals_health">Health</string>
     <string name="you_goals_nutrition">Nutrition</string>
-    <string name="you_goal_count">%d active</string>
+    <plurals name="you_goal_count">
+        <item quantity="one">%d goal</item>
+        <item quantity="other">%d goals</item>
+    </plurals>
+    <string name="goals_set_a_goal">Set a goal</string>
     <string name="you_records">Records</string>
     <string name="you_health_connect">Health Connect data</string>
     <string name="you_health_connect_body">See health and fitness data from your other apps</string>
@@ -488,12 +492,13 @@
     <string name="goal_adjust">Adjust goal</string>
     <string name="goal_reset">Reset goal</string>
     <string name="goal_sleep_schedule">Sleep schedule</string>
-    <string name="goal_sleep_duration">Time asleep</string>
+    <string name="goal_sleep_duration">Sleep duration</string>
+    <string name="goal_bedtime">Bedtime</string>
+    <string name="goal_wake_time">Wake time</string>
     <string name="goal_fitness">Fitness goal</string>
     <string name="goal_fitness_maintain">Maintain</string>
     <string name="goal_fitness_improve">Improve</string>
     <string name="goal_fitness_body">Sets your daily Cardio Load target and your weekly Active Zone Minutes goal.</string>
-    <string name="goal_food">Calories eaten</string>
     <string name="goal_value_days">%d days</string>
     <string name="goal_meta_daily">Daily</string>
     <string name="goal_meta_weekly">Weekly</string>
