@@ -39,6 +39,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.BarChart
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -53,6 +55,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.openfit.R
 import com.openfit.ui.MetricPage
+import com.openfit.domain.MetricReading
+import com.openfit.ui.vitals.abbreviation
 import com.openfit.domain.DailyMetrics
 import com.openfit.domain.LoadRange
 import com.openfit.domain.Reading
@@ -316,7 +320,12 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
 
     val health = healthTiles(metrics, profile)
     val showHeart = metrics.latestHeartRate != null || metrics.heartRateRange != null || metrics.restingBpm != null
-    if (health.isNotEmpty() || showHeart) section(R.string.section_health)
+    val readings = state.healthMetrics
+    if (health.isNotEmpty() || showHeart || readings.isNotEmpty()) section(R.string.section_health)
+    if (readings.isNotEmpty()) {
+        item { HealthMetricsTile(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
+        item { HealthMetricsSummary(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
+    }
     if (showHeart) item { HeartTile(state, onClick = { onOpen(MetricPage.Heart) }) }
     health.forEach { tile ->
         item {
@@ -360,6 +369,59 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             subtitle = dayLabel(state),
         ) {
             ArcGauge(Icons.Outlined.LocalDrink, OpenFitColors.Blue, (liters / profile.dailyWaterGoalLiters).toFloat())
+        }
+    }
+}
+
+/** Fitbit's "Health Metrics · 3 of 3 · In personal range" tile with a segment per metric. */
+@Composable
+private fun HealthMetricsTile(readings: List<MetricReading>, onClick: () -> Unit) {
+    val ranged = readings.filter { it.inRange != null }
+    val inRange = ranged.count { it.inRange == true }
+    MetricTile(
+        title = stringResource(R.string.hm_title),
+        value = valueText { count(inRange, readings.size) },
+        subtitle = stringResource(
+            when {
+                ranged.isEmpty() -> R.string.hm_keep_wearing
+                inRange == ranged.size -> R.string.hm_in_personal_range
+                else -> R.string.hm_out_of_personal_range
+            },
+        ),
+        onClick = onClick,
+    ) {
+        SegmentedGauge(Icons.Outlined.BarChart, OpenFitColors.Blue, readings.size, inRange)
+    }
+}
+
+/** The card under the tile: the metrics as abbreviations, then whether they are in range or which are not. */
+@Composable
+private fun HealthMetricsSummary(readings: List<MetricReading>, onClick: () -> Unit) {
+    Surface(shape = RoundedCornerShape(16.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Column(Modifier.padding(16.dp)) {
+            Text(
+                readings.map { stringResource(abbreviation(it.metric)) }.joinToString(", "),
+                style = MaterialTheme.typography.titleSmall,
+                color = OpenFitColors.OnSurface,
+            )
+            val outside = readings.filter { it.inRange == false }
+            if (outside.isEmpty()) {
+                Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = OpenFitColors.Blue.accent, modifier = Modifier.size(18.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text(stringResource(R.string.hm_in_personal_range), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                }
+            } else {
+                outside.forEach { reading ->
+                    val above = reading.range?.let { reading.value > it.high } == true
+                    Text(
+                        stringResource(R.string.hm_value_out_of_range, stringResource(abbreviation(reading.metric)), stringResource(if (above) R.string.hm_above_range else R.string.hm_below_range)),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OpenFitColors.OnSurfaceVariant,
+                        modifier = Modifier.padding(top = 8.dp),
+                    )
+                }
+            }
         }
     }
 }

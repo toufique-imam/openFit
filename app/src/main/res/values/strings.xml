@@ -440,4 +440,33 @@
     <string name="coach_low">Your readiness is low. Keep it light with a walk, stretching or yoga.</string>
     <string name="coach_unknown">Wear your device to sleep to get readiness-based guidance.</string>
     <string name="profile_name">Name</string>
+
+    <!-- Health metrics -->
+    <string name="hm_title">Health Metrics</string>
+    <string name="hm_breathing_rate">Breathing rate</string>
+    <string name="hm_resting_heart_rate">Resting heart rate</string>
+    <string name="hm_hrv">Heart rate variability</string>
+    <string name="hm_blood_oxygen">Blood oxygen</string>
+    <string name="hm_skin_temperature">Skin temp variation</string>
+    <string name="hm_breathing_rate_abbr">BR</string>
+    <string name="hm_resting_heart_rate_abbr">RHR</string>
+    <string name="hm_hrv_abbr">HRV</string>
+    <string name="hm_blood_oxygen_abbr">SpO2</string>
+    <string name="hm_skin_temperature_abbr">Skin temp</string>
+    <string name="hm_unit_brpm">brpm</string>
+    <string name="hm_unit_celsius">°C</string>
+    <string name="hm_unit_fahrenheit">°F</string>
+    <string name="hm_in_personal_range">In personal range</string>
+    <string name="hm_out_of_personal_range">Out of personal range</string>
+    <string name="hm_keep_wearing">Keep wearing your device to sleep to view personal ranges</string>
+    <string name="hm_all_in_range">All in personal range</string>
+    <string name="hm_range_this_period">Your personal range was %1$s to %2$s %3$s this period</string>
+    <string name="hm_no_data_period">No %s data this period</string>
+    <string name="hm_range_unavailable">Personal range unavailable</string>
+    <string name="hm_legend_in_range">In range</string>
+    <string name="hm_legend_out_of_range">Out of range</string>
+    <string name="hm_legend_personal_range">Personal range</string>
+    <string name="hm_value_out_of_range">%1$s · %2$s</string>
+    <string name="hm_above_range">Above personal range</string>
+    <string name="hm_below_range">Below personal range</string>
 </resources>

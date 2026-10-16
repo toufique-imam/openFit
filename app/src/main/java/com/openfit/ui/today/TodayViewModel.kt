@@ -8,6 +8,9 @@ import com.openfit.domain.DailyHistory
 import com.openfit.domain.LoadRange
 import com.openfit.domain.LoadTarget
 import com.openfit.domain.Readiness
+import com.openfit.domain.HealthMetric
+import com.openfit.domain.MetricReading
+import com.openfit.domain.metricReadings
 import com.openfit.domain.mergeHistory
 import com.openfit.domain.mergeMetrics
 import com.openfit.domain.completedWeeks
@@ -24,6 +27,7 @@ import com.openfit.health.DailyMetricsSource
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthConnectSource
+import com.openfit.health.HealthConnectVitals
 import com.openfit.health.DayLoadCache
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
@@ -68,6 +72,7 @@ sealed interface TodayUiState {
         val profile: Profile,
         val missingPermissions: Set<String>,
         val googleHealth: GoogleHealthStatus,
+        val healthMetrics: List<MetricReading> = emptyList(),
         val refreshing: Boolean = false,
     ) : TodayUiState
 }
@@ -80,6 +85,7 @@ class TodayViewModel(
 ) : ViewModel() {
 
     private val healthConnect = HealthConnectSource(gateway, dayLoadCache)
+    private val vitals = HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<TodayUiState>(TodayUiState.Loading)
     val state: StateFlow<TodayUiState> = _state.asStateFlow()
@@ -176,6 +182,9 @@ class TodayViewModel(
             profile = profile,
             missingPermissions = missing,
             googleHealth = googleHealth,
+            healthMetrics = runCatching {
+                metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date))
+            }.getOrDefault(emptyList()),
         )
     }
 
@@ -230,5 +239,6 @@ class TodayViewModel(
     private companion object {
         val STALE_AFTER: Duration = Duration.ofMinutes(1)
         const val HISTORY_WEEKS = 4L
+        const val HEALTH_METRIC_DAYS = 30L
     }
 }

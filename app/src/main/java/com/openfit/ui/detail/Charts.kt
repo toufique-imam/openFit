@@ -405,6 +405,49 @@ fun LineDotsChart(
     }
 }
 
+/**
+ * Health-metric charts: a dot per day on an axis that need not start at zero, inside that day's personal-range box;
+ * dots outside their range take [outColor].
+ */
+@Composable
+fun RangeDotsChart(
+    values: List<Double?>,
+    ranges: List<ClosedFloatingPointRange<Double>?>,
+    color: Color,
+    outColor: Color,
+    axisMin: Double,
+    axisMax: Double,
+    axisLabels: List<AxisLabel>,
+    xLabels: List<Pair<Int, String>>,
+    modifier: Modifier = Modifier,
+) {
+    val measurer = rememberTextMeasurer()
+    val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
+        val left = PLOT_LEFT.toPx()
+        val slot = PLOT_WIDTH.toPx() / values.size.coerceAtLeast(1)
+        val bottom = PLOT_HEIGHT.toPx()
+        fun x(index: Int): Float = left + (index + 0.5f) * slot
+        fun y(value: Double): Float = bottom - ((value - axisMin) / (axisMax - axisMin)).coerceIn(0.0, 1.0).toFloat() * bottom
+        ranges.forEachIndexed { index, range ->
+            range ?: return@forEachIndexed
+            rangeBox(x(index) - slot / 2, x(index) + slot / 2, y(range.endInclusive), y(range.start), color)
+        }
+        values.forEachIndexed { index, value ->
+            value ?: return@forEachIndexed
+            val inRange = ranges.getOrNull(index)?.let { value in it } ?: true
+            drawCircle(OpenFitColors.Background, (DOT_RADIUS + DOT_RING).toPx(), Offset(x(index), y(value)))
+            drawCircle(if (inRange) color else outColor, DOT_RADIUS.toPx(), Offset(x(index), y(value)))
+        }
+        val labelX = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
+        axisLabels.forEach { label ->
+            val layout = measurer.measure(label.text, labelStyle)
+            drawText(layout, topLeft = Offset(labelX, y(label.value) - layout.size.height / 2f))
+        }
+        xLabels(measurer, labelStyle, xLabels.map { (index, label) -> x(index) to label }, bottom, centered = true)
+    }
+}
+
 /** Legend whose markers are dots in each item's color: one dot for the first item, two for the second, and so on. */
 @Composable
 fun DotLegend(items: List<Pair<Color, String>>, modifier: Modifier = Modifier) {
