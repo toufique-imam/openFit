@@ -2,7 +2,7 @@ package com.openfit.ui
 
 import androidx.annotation.StringRes
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.Assignment
+import androidx.compose.material.icons.outlined.EditNote
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material.icons.outlined.WbTwilight
 import androidx.compose.material3.Icon
@@ -18,10 +18,10 @@ import androidx.compose.ui.res.stringResource
 import com.openfit.R
 import com.openfit.ui.theme.OpenFitColors
 
-/** Fitbit's three root tabs. */
+/** The root tabs: Fitbit's Today and You, with the Journal where Fitbit's online Coach was. */
 enum class RootTab(@StringRes val label: Int, val icon: ImageVector) {
     Today(R.string.tab_today, Icons.Outlined.WbTwilight),
-    Coach(R.string.tab_coach, Icons.Outlined.Assignment),
+    Journal(R.string.tab_journal, Icons.Outlined.EditNote),
     You(R.string.tab_you, Icons.Outlined.GridView),
 }
 

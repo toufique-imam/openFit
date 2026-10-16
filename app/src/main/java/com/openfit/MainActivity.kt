@@ -29,7 +29,10 @@ import com.openfit.ui.MetricPage
 import com.openfit.ui.RootTab
 import com.openfit.ui.cardio.CardioLoadRoute
 import com.openfit.ui.cardio.CardioLoadViewModel
-import com.openfit.ui.coach.CoachRoute
+import com.openfit.journal.JournalStore
+import com.openfit.ui.journal.BehavioursRoute
+import com.openfit.ui.journal.JournalRoute
+import com.openfit.ui.journal.JournalViewModel
 import com.openfit.ui.exercise.ExerciseRoute
 import com.openfit.ui.exercise.ExerciseViewModel
 import com.openfit.ui.goal.GoalMetric
@@ -72,10 +75,14 @@ private val BackStackSaver = listSaver<SnapshotStateList<Screen>, String>(
     },
     restore = { saved ->
         mutableStateListOf<Screen>().apply {
+            // Entries from an older version (a removed tab or page) are dropped rather than crashing the restore.
             saved.forEach { entry ->
                 val (first, second) = entry.split(':', limit = 2)
-                add(if (first == "tab") Screen.Tab(RootTab.valueOf(second)) else Screen.Metric(MetricPage.valueOf(first), LocalDate.parse(second)))
+                runCatching {
+                    if (first == "tab") Screen.Tab(RootTab.valueOf(second)) else Screen.Metric(MetricPage.valueOf(first), LocalDate.parse(second))
+                }.onSuccess(::add)
             }
+            if (isEmpty()) add(Screen.Tab(RootTab.Today))
         }
     },
 )
@@ -85,6 +92,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var gateway: HealthConnectGateway
     private lateinit var profileStore: ProfileStore
     private lateinit var dayLoadCache: DayLoadCache
+    private lateinit var journalStore: JournalStore
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -92,6 +100,7 @@ class MainActivity : ComponentActivity() {
         gateway = HealthConnectGateway(applicationContext)
         profileStore = ProfileStore(applicationContext)
         dayLoadCache = DayLoadCache(applicationContext)
+        journalStore = JournalStore(applicationContext)
         setContent {
             OpenFitTheme {
                 val backStack = rememberSaveable(saver = BackStackSaver) { mutableStateListOf<Screen>(Screen.Tab(RootTab.Today)) }
@@ -105,7 +114,7 @@ class MainActivity : ComponentActivity() {
                     backStack.removeAt(backStack.lastIndex)
                     todayViewModel.refresh()
                 }
-                // Back closes a metric screen, and from Coach or You returns to Today, as in Fitbit.
+                // Back closes a metric screen, and from Journal or You returns to Today, as in Fitbit.
                 BackHandler(enabled = backStack.size > 1 || top != Screen.Tab(RootTab.Today)) {
                     if (backStack.size > 1) pop() else showTab(RootTab.Today)
                 }
@@ -129,7 +138,7 @@ class MainActivity : ComponentActivity() {
     private fun TabScreen(tab: RootTab, todayViewModel: TodayViewModel, onOpen: (MetricPage, LocalDate) -> Unit) {
         when (tab) {
             RootTab.Today -> TodayRoute(viewModel = todayViewModel, onOpenHealthConnectStore = ::openHealthConnectStore, onOpen = onOpen)
-            RootTab.Coach -> CoachRoute(todayViewModel)
+            RootTab.Journal -> JournalRoute(journalViewModel()) { onOpen(MetricPage.JournalBehaviours, LocalDate.now()) }
             RootTab.You -> YouRoute(
                 todayViewModel,
                 onOpenHealthConnect = ::openHealthConnectSettings,
@@ -187,6 +196,7 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(screen) { model.open(screen.date) }
                 SleepRoute(model, onBack)
             }
+            MetricPage.JournalBehaviours -> BehavioursRoute(journalViewModel(), onBack)
             MetricPage.Goals -> {
                 val model = viewModel { GoalsViewModel(profileStore) }
                 LaunchedEffect(screen) { model.reload() }
@@ -194,6 +204,10 @@ class MainActivity : ComponentActivity() {
             }
         }
     }
+
+    /** One journal model for the tab and its Behaviours page, so a change on one shows on the other. */
+    @Composable
+    private fun journalViewModel(): JournalViewModel = viewModel { JournalViewModel(gateway, profileStore, dayLoadCache, journalStore) }
 
     private fun openHealthConnectSettings() {
         runCatching { startActivity(Intent("androidx.health.ACTION_HEALTH_CONNECT_SETTINGS")) }
