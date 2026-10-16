@@ -608,6 +608,7 @@
     <string name="energy_band_plenty">Plenty in reserve</string>
     <string name="energy_band_pace">Pace yourself</string>
     <string name="energy_band_low">Running low</string>
+    <string name="energy_updated">Last updated %s</string>
     <string name="energy_charged">Charged</string>
     <string name="energy_drained">Drained</string>
     <string name="energy_biggest_drains">Biggest drains</string>

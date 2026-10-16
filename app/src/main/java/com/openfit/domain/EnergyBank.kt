@@ -48,6 +48,9 @@ data class EnergyDay(
     val drains: List<EnergyDrain>,
 ) {
     val latest: Double? get() = levels.lastOrNull { it != null }
+
+    /** The slot of [latest]: the bank only knows heart rate up to the last sync. */
+    val latestSlot: Int? get() = levels.indexOfLast { it != null }.takeIf { it >= 0 }
     val peak: Double? get() = levels.filterNotNull().maxOrNull()
 }
 
