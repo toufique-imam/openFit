@@ -163,13 +163,13 @@ Fitted to the five nights with stages that Fitbit scored:
 
 | Night | Asleep | Deep + REM | Awake | Fitbit | openFit |
 | --- | --- | --- | --- | --- | --- |
-| 24 Sept | 298 m | 122 m | 23 % | 58 | 59 |
-| 12 Oct | 381 m | 171 m | 10 % | 78 | 79 |
-| 13 Oct | 308 m | 131 m | 21 % | 65 | 63 |
-| 14 Oct | 316 m | 140 m | 16 % | 68 | 68 |
-| 15 Oct | 472 m | 196 m | 10 % | 85 | 85 |
+| 24 Sept | 298 m | 122 m | 24 % | 58 | 59 |
+| 12 Oct | 381 m | 171 m | 10 % | 78 | 78 |
+| 13 Oct | 308 m | 131 m | 22 % | 65 | 63 |
+| 14 Oct | 316 m | 140 m | 16 % | 68 | 67 |
+| 15 Oct | 472 m | 196 m | 11 % | 85 | 87 |
 
-Several parameter sets fit within about 1 point, so treat the split between the three parts as unconfirmed.
+Every night is within 2 points. Several parameter sets fit about as well, so treat the split between the three parts as unconfirmed.
 
 Health Connect's stage minutes agree with Fitbit's timeline:
 - 24 Sept: REM 53 vs 54, Deep 69 vs 70, with the same 2:21–9:09 am window.
