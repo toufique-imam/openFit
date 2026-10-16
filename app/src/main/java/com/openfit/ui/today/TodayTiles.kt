@@ -21,6 +21,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.ui.graphics.Shape
+import com.openfit.health.ExerciseSession
 import androidx.compose.material.icons.outlined.BatteryChargingFull
 import androidx.compose.material.icons.outlined.Timelapse
 import com.openfit.ui.age.ageDifferenceShort
@@ -197,7 +199,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         MetricTile(
             title = stringResource(R.string.tile_sleep_duration),
             value = asleep?.let { valueText { duration(it) } } ?: noValue(stringResource(R.string.no_data)),
-            subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" · "),
+            subtitle = listOfNotNull(dayLabel(state), state.sleepScore?.let { stringResource(R.string.sleep_score_subtitle, it) }).joinToString(" • "),
             onClick = { onOpen(MetricPage.Sleep) },
         ) {
             GoalGauge(Icons.Outlined.Bedtime, OpenFitColors.Lavender, asleep?.toMinutes()?.toDouble(), profile.sleepGoalMinutes)
@@ -256,13 +258,18 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     }
     item {
         val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
-        MetricTile(
-            title = stringResource(R.string.tile_exercise_days),
-            value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
-            subtitle = weekLabel(state),
-            onClick = { onOpen(MetricPage.Exercise) },
-        ) {
-            WeekBars(labels, state.week.map { it in state.exerciseDays }, OpenFitColors.Mint)
+        val workout = state.latestExercise
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            MetricTile(
+                title = stringResource(R.string.tile_exercise_days),
+                value = valueText { exerciseCount(state.exerciseDays.size, profile.weeklyExerciseDaysGoal) },
+                subtitle = weekLabel(state),
+                onClick = { onOpen(MetricPage.Exercise) },
+                shape = if (workout == null) TILE_SHAPE else GROUP_TOP,
+            ) {
+                WeekBars(labels, state.week.map { it in state.exerciseDays }, OpenFitColors.Mint, todayIndex = state.week.indexOf(LocalDate.now()).takeIf { it >= 0 })
+            }
+            if (workout != null) WorkoutRow(workout, profile, onClick = { onOpen(MetricPage.Exercise) })
         }
     }
     item {
@@ -271,11 +278,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         MetricTile(
             title = stringResource(R.string.tile_zone_minutes),
             value = zoneMinutes?.let { AnnotatedString(whole(it)) } ?: noValue(stringResource(R.string.no_data)),
-            subtitle = if (zoneMinutes == null && profile.age == null) {
-                stringResource(R.string.zone_minutes_needs_age)
-            } else {
-                listOf(dayLabel(state), stringResource(R.string.week_progress, whole(target.doneThisWeek), whole(target.weekly))).joinToString(" • ")
-            },
+            subtitle = if (zoneMinutes == null && profile.age == null) stringResource(R.string.zone_minutes_needs_age) else dayLabel(state),
             onClick = { onOpen(MetricPage.ZoneMinutes) },
         ) {
             ArcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zoneMinutes ?: 0) / target.daily.coerceAtLeast(1.0).toFloat())
@@ -381,6 +384,18 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         }
     }
 
+    section(R.string.section_stress_mindfulness)
+    item {
+        val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+        MetricTile(
+            title = stringResource(R.string.tile_mindful_days),
+            value = valueText { exerciseCount(state.mindfulDays.size, profile.weeklyMindfulDaysGoal) },
+            subtitle = weekLabel(state),
+        ) {
+            WeekBars(labels, state.week.map { it in state.mindfulDays }, OpenFitColors.Lavender, todayIndex = state.week.indexOf(LocalDate.now()).takeIf { it >= 0 })
+        }
+    }
+
     section(R.string.section_nutrition)
     item {
         val eaten = metrics.caloriesInKcal ?: 0.0
@@ -476,9 +491,10 @@ private fun HeartTile(state: TodayUiState.Ready, onClick: () -> Unit) {
     val restingText = resting?.let { stringResource(R.string.heart_resting, it) }
     MetricTile(
         title = stringResource(R.string.tile_heart),
+        // Fitbit writes a range as "49-188 BPM" and a single reading as "72 bpm".
         value = quantityText(
             latest?.value?.toString() ?: range?.let { "${it.first}–${it.last}" } ?: resting.toString(),
-            stringResource(R.string.unit_bpm),
+            stringResource(if (latest == null && range != null) R.string.unit_bpm_range else R.string.unit_bpm),
         ),
         subtitle = listOfNotNull(latest?.let { sinceLabel(it.time) } ?: dayLabel(state), restingText).joinToString(" · "),
         onClick = onClick,
@@ -531,16 +547,45 @@ private fun LazyListScope.section(@StringRes title: Int) {
     }
 }
 
+private val TILE_SHAPE = RoundedCornerShape(16.dp)
+private val GROUP_TOP = RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp, bottomStart = 4.dp, bottomEnd = 4.dp)
+private val GROUP_BOTTOM = RoundedCornerShape(topStart = 4.dp, topEnd = 4.dp, bottomStart = 16.dp, bottomEnd = 16.dp)
+private val CLOCK_24H = DateTimeFormatter.ofPattern("HH:mm")
+
+/** Fitbit's row under Exercise days: the day's last workout, its start, distance and length. */
+@Composable
+private fun WorkoutRow(workout: ExerciseSession, profile: Profile, onClick: () -> Unit) {
+    val imperial = profile.units == UnitSystem.Imperial
+    val details = listOfNotNull(
+        workout.start.atZone(ZoneId.systemDefault()).format(CLOCK_24H),
+        workout.distanceMeters?.let {
+            "${twoDecimals(if (imperial) it / METERS_PER_MILE else it / 1_000)} ${stringResource(if (imperial) R.string.unit_mi else R.string.unit_km)}"
+        },
+        minutesLabel(workout.duration.toMinutes()),
+    )
+    Surface(shape = GROUP_BOTTOM, color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
+        Row(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+            Icon(exerciseIcon(workout.type), contentDescription = null, tint = OpenFitColors.OnSurfaceVariant, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(20.dp))
+            Column {
+                Text(workout.name, style = MaterialTheme.typography.titleSmall, color = OpenFitColors.OnSurface)
+                Text(details.joinToString(" · "), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+            }
+        }
+    }
+}
+
 @Composable
 fun MetricTile(
     title: String,
     value: AnnotatedString,
     subtitle: String,
     onClick: (() -> Unit)? = null,
+    shape: Shape = TILE_SHAPE,
     trailing: @Composable () -> Unit,
 ) {
     Surface(
-        shape = RoundedCornerShape(16.dp),
+        shape = shape,
         color = OpenFitColors.Card,
         modifier = Modifier.fillMaxWidth().then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier),
     ) {
@@ -585,7 +630,7 @@ private fun noValue(text: String): AnnotatedString = AnnotatedString(text, SpanS
 
 @Composable
 private fun dayLabel(state: TodayUiState.Ready): String =
-    if (state.isToday) stringResource(R.string.today) else state.date.weekdayDayMonth()
+    relativeDay(state.date)
 
 @Composable
 private fun weekLabel(state: TodayUiState.Ready): String =
@@ -594,7 +639,7 @@ private fun weekLabel(state: TodayUiState.Ready): String =
 @Composable
 private fun readingDayLabel(state: TodayUiState.Ready, time: Instant): String {
     val day = time.atZone(ZoneId.systemDefault()).toLocalDate()
-    return if (day == LocalDate.now()) stringResource(R.string.today) else if (day == state.date) dayLabel(state) else day.weekdayDayMonth()
+    return relativeDay(day)
 }
 
 @Composable
@@ -629,4 +674,12 @@ private fun GoalGauge(icon: ImageVector, color: MetricColor, value: Double?, goa
 /** "3 of 5" exercise days, or just "3" without a weekly goal. */
 private fun ValueText.exerciseCount(days: Int, goal: Int?, smallTotal: Boolean = false) {
     if (goal == null) big(days.toString()) else count(days, goal, smallTotal)
+}
+
+/** Fitbit's day words: "Today", "Yesterday", then "Wed, 14 Oct". */
+@Composable
+fun relativeDay(day: LocalDate): String = when (day) {
+    LocalDate.now() -> stringResource(R.string.today)
+    LocalDate.now().minusDays(1) -> stringResource(R.string.yesterday)
+    else -> day.weekdayDayMonth()
 }

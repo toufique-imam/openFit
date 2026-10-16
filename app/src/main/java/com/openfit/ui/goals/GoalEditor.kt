@@ -106,6 +106,9 @@ private fun GoalInput(goal: Goal, profile: Profile, onChange: (Profile?) -> Unit
         Goal.ExerciseDays -> NumberGoal(R.string.goal_input_exercise_days, profile.weeklyExerciseDaysGoal?.toString(), 1.0..7.0) {
             onChange(it?.let { value -> profile.copy(weeklyExerciseDaysGoal = value.roundToInt()) })
         }
+        Goal.MindfulDays -> NumberGoal(R.string.goal_input_mindful_days, profile.weeklyMindfulDaysGoal?.toString(), 1.0..7.0) {
+            onChange(it?.let { value -> profile.copy(weeklyMindfulDaysGoal = value.roundToInt()) })
+        }
         Goal.Food -> NumberGoal(R.string.goal_input_food, profile.dailyCaloriesInGoal?.toString(), 1.0..20_000.0) {
             onChange(it?.let { value -> profile.copy(dailyCaloriesInGoal = value.roundToInt()) })
         }

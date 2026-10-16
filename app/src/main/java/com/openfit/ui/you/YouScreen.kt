@@ -47,6 +47,7 @@ import com.openfit.profile.Profile
 import com.openfit.ui.goals.GoalCategory
 import com.openfit.ui.goals.setGoals
 import androidx.compose.material.icons.outlined.Restaurant
+import androidx.compose.material.icons.outlined.SelfImprovement
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.SectionHeaderStyle
 import com.openfit.ui.today.TodayUiState
@@ -204,6 +205,7 @@ private val GoalCategory.icon: ImageVector
         GoalCategory.Activity -> Icons.AutoMirrored.Outlined.DirectionsWalk
         GoalCategory.Nutrition -> Icons.Outlined.Restaurant
         GoalCategory.Health -> Icons.Outlined.BarChart
+        GoalCategory.Mindfulness -> Icons.Outlined.SelfImprovement
     }
 
 /** Shown in place of the cards while no goal is set (Fitbit's "Set a goal"). */

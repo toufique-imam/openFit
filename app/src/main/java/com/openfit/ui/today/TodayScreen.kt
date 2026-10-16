@@ -223,7 +223,7 @@ private fun DateBar(state: TodayUiState.Ready, onPrevious: () -> Unit, onNext: (
             }
         }
         Text(
-            if (state.isToday) stringResource(R.string.today) else state.date.weekdayDayMonth(),
+            relativeDay(state.date),
             style = MaterialTheme.typography.titleMedium,
             color = OpenFitColors.OnSurface,
             textAlign = TextAlign.Center,

@@ -165,6 +165,7 @@ fun goalValue(goal: Goal, profile: Profile): String? {
         Goal.Energy -> profile.dailyCaloriesOutGoal?.let { "${whole(it)} ${stringResource(R.string.unit_cal)}" }
         Goal.Floors -> profile.dailyFloorsGoal?.let { "${whole(it)} ${stringResource(R.string.unit_floors)}" }
         Goal.ExerciseDays -> profile.weeklyExerciseDaysGoal?.let { stringResource(R.string.goal_value_days, it) }
+        Goal.MindfulDays -> profile.weeklyMindfulDaysGoal?.let { stringResource(R.string.goal_value_days, it) }
         Goal.HourlyActivity -> profile.activeHours?.let { "${hourText(it.first)} – ${hourText(it.last + 1)}" }
         Goal.Fitness -> stringResource(if (profile.fitnessGoal == FitnessGoal.Improve) R.string.goal_fitness_improve else R.string.goal_fitness_maintain)
         Goal.Food -> profile.dailyCaloriesInGoal?.let { "${whole(it)} ${stringResource(R.string.unit_cal)}" }
@@ -179,7 +180,7 @@ fun goalValue(goal: Goal, profile: Profile): String? {
 
 /** Fitbit's line under a goal's value: how often it applies ("Daily", "Weekly", "Target value"). */
 private fun goalMeta(goal: Goal): Int? = when (goal) {
-    Goal.ExerciseDays -> R.string.goal_meta_weekly
+    Goal.ExerciseDays, Goal.MindfulDays -> R.string.goal_meta_weekly
     Goal.Weight -> R.string.goal_meta_target_value
     Goal.Fitness -> null
     else -> R.string.goal_meta_daily

@@ -41,6 +41,8 @@ class HealthConnectGateway(private val context: Context) {
     fun requestablePermissions(): Set<String> = buildSet {
         addAll(READ_PERMISSIONS)
         if (isAvailable(HealthConnectFeatures.FEATURE_SKIN_TEMPERATURE)) add(read(SkinTemperatureRecord::class))
+        @OptIn(androidx.health.connect.client.feature.ExperimentalMindfulnessSessionApi::class)
+        if (isAvailable(HealthConnectFeatures.FEATURE_MINDFULNESS_SESSION)) add(read(androidx.health.connect.client.records.MindfulnessSessionRecord::class))
         if (isAvailable(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY)) add(HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY)
         if (isAvailable(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND)) add(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
     }

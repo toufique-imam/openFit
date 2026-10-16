@@ -31,6 +31,7 @@ data class Profile(
     val sleepGoalMinutes: Int? = null,
     val bedtime: LocalTime? = null,
     val wakeTime: LocalTime? = null,
+    val weeklyMindfulDaysGoal: Int? = null,
     val dailyCaloriesInGoal: Int? = null,
     val dailyWaterGoalLiters: Double? = null,
     val weightGoalKg: Double? = null,
@@ -58,6 +59,7 @@ class ProfileStore(context: Context) {
             sleepGoalMinutes = int(KEY_SLEEP_GOAL),
             bedtime = time(KEY_BEDTIME),
             wakeTime = time(KEY_WAKE_TIME),
+            weeklyMindfulDaysGoal = int(KEY_MINDFUL_DAYS_GOAL),
             dailyCaloriesInGoal = int(KEY_FOOD_GOAL),
             dailyWaterGoalLiters = double(KEY_WATER_GOAL),
             weightGoalKg = double(KEY_WEIGHT_GOAL),
@@ -82,6 +84,7 @@ class ProfileStore(context: Context) {
             putInt(KEY_SLEEP_GOAL, profile.sleepGoalMinutes ?: 0)
             putInt(KEY_BEDTIME, profile.bedtime?.toSecondOfDay()?.div(60)?.plus(1) ?: 0)
             putInt(KEY_WAKE_TIME, profile.wakeTime?.toSecondOfDay()?.div(60)?.plus(1) ?: 0)
+            putInt(KEY_MINDFUL_DAYS_GOAL, profile.weeklyMindfulDaysGoal ?: 0)
             putInt(KEY_FOOD_GOAL, profile.dailyCaloriesInGoal ?: 0)
             putFloat(KEY_WATER_GOAL, profile.dailyWaterGoalLiters?.toFloat() ?: 0f)
             putFloat(KEY_WEIGHT_GOAL, profile.weightGoalKg?.toFloat() ?: 0f)
@@ -120,6 +123,7 @@ class ProfileStore(context: Context) {
         const val KEY_SLEEP_GOAL = "sleep_goal_minutes"
         const val KEY_BEDTIME = "bedtime_minute"
         const val KEY_WAKE_TIME = "wake_time_minute"
+        const val KEY_MINDFUL_DAYS_GOAL = "weekly_mindful_days_goal"
         const val KEY_FOOD_GOAL = "daily_food_goal_kcal"
         const val KEY_WATER_GOAL = "daily_water_goal_l"
         const val KEY_WEIGHT_GOAL = "weight_goal_kg"

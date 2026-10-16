@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.AnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -224,7 +225,7 @@ fun SegmentedGauge(
 }
 
 @Composable
-fun WeekBars(labels: List<String>, done: List<Boolean>, color: MetricColor, modifier: Modifier = Modifier) {
+fun WeekBars(labels: List<String>, done: List<Boolean>, color: MetricColor, modifier: Modifier = Modifier, todayIndex: Int? = null) {
     Column(modifier, horizontalAlignment = Alignment.CenterHorizontally) {
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
             done.forEach { met ->
@@ -238,12 +239,13 @@ fun WeekBars(labels: List<String>, done: List<Boolean>, color: MetricColor, modi
         }
         Spacer(Modifier.height(6.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(5.dp)) {
-            labels.forEach { label ->
+            labels.forEachIndexed { index, label ->
+                val today = index == todayIndex
                 Text(
                     label,
                     modifier = Modifier.width(20.dp),
-                    style = MaterialTheme.typography.labelMedium,
-                    color = OpenFitColors.OnSurfaceVariant,
+                    style = MaterialTheme.typography.labelMedium.copy(fontWeight = if (today) FontWeight.Bold else null),
+                    color = if (today) OpenFitColors.OnSurface else OpenFitColors.OnSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
             }

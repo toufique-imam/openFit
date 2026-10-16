@@ -32,6 +32,9 @@ import com.openfit.health.HealthConnectVitals
 import com.openfit.domain.sleepScore
 import com.openfit.domain.EnergyDay
 import com.openfit.health.EnergySource
+import com.openfit.health.ExerciseSession
+import com.openfit.health.HealthConnectExercises
+import com.openfit.health.HealthConnectMindfulness
 import com.openfit.health.PulseAgeSource
 import com.openfit.domain.PulseAge
 import com.openfit.health.SlotCache
@@ -73,6 +76,9 @@ sealed interface TodayUiState {
         val metrics: DailyMetrics,
         val week: List<LocalDate>,
         val exerciseDays: Set<LocalDate>,
+        /** The date's last workout, shown under Exercise days as on Fitbit. */
+        val latestExercise: ExerciseSession? = null,
+        val mindfulDays: Set<LocalDate> = emptySet(),
         val readiness: Readiness?,
         val cardioRange: LoadRange?,
         val zoneTarget: LoadTarget,
@@ -221,6 +227,8 @@ class TodayViewModel(
             metrics = metrics,
             week = week,
             exerciseDays = loaded.exerciseDays,
+            latestExercise = runCatching { HealthConnectExercises(gateway).sessions(date, date).maxByOrNull { it.start } }.getOrNull(),
+            mindfulDays = runCatching { HealthConnectMindfulness(gateway).mindfulDays(week.first(), week.last()) }.getOrDefault(emptySet()),
             readiness = readiness,
             cardioRange = dailyCardioRange(date, profile.fitnessGoal, loaded.history.cardioLoad, readiness),
             zoneTarget = dailyTarget(

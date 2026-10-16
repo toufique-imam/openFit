@@ -4,11 +4,12 @@ import androidx.annotation.StringRes
 import com.openfit.R
 import com.openfit.profile.Profile
 
-/** Fitbit's goal categories, in the order its Goals list and You tab use (Sleep, Activity, Health, Nutrition). */
+/** Fitbit's goal categories, in the order its Goals list and You tab use. */
 enum class GoalCategory(@StringRes val title: Int) {
     Sleep(R.string.you_goals_sleep),
     Activity(R.string.you_goals_activity),
     Health(R.string.you_goals_health),
+    Mindfulness(R.string.you_goals_mindfulness),
     Nutrition(R.string.you_goals_nutrition),
 }
 
@@ -34,6 +35,7 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
     /** Maintain or improve: drives both the Cardio Load target and the weekly Active Zone Minutes goal. */
     Fitness(GoalCategory.Activity, R.string.goal_fitness),
     Weight(GoalCategory.Health, R.string.tile_weight),
+    MindfulDays(GoalCategory.Mindfulness, R.string.tile_mindful_days),
     Food(GoalCategory.Nutrition, R.string.tile_food),
     Water(GoalCategory.Nutrition, R.string.tile_water),
     ;
@@ -51,6 +53,7 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
         ExerciseDays -> profile.weeklyExerciseDaysGoal != null
         HourlyActivity -> profile.activeHours != null
         Weight -> profile.weightGoalKg != null
+        MindfulDays -> profile.weeklyMindfulDaysGoal != null
         Food -> profile.dailyCaloriesInGoal != null
         Water -> profile.dailyWaterGoalLiters != null
     }
@@ -72,6 +75,7 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
         ExerciseDays -> profile.copy(weeklyExerciseDaysGoal = null)
         HourlyActivity -> profile.copy(activeHours = null)
         Weight -> profile.copy(weightGoalKg = null)
+        MindfulDays -> profile.copy(weeklyMindfulDaysGoal = null)
         Food -> profile.copy(dailyCaloriesInGoal = null)
         Water -> profile.copy(dailyWaterGoalLiters = null)
     }
