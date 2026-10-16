@@ -195,3 +195,22 @@ Fitbit's Health metrics is two levels, and openFit now matches both:
 - **Known difference:** Health Connect has skin temperature that the old Fitbit app shows as "No data", so openFit counts 4 of 4 where Fitbit counts 3 of 3.
 - **Personal range width:** Fitbit's HRV band this week was about 41-78 ms against openFit's +/- 2 SD of 47-75. Breathing rate is closer (15.5-19.0 against 15.8-18.9). It is not a simple wider multiplier, so the rule is unchanged.
 
+## Recheck against the phone (16 Oct 2026)
+
+- **Today:**
+  - The day's last workout sits under Exercise days as one grouped card ("Walk · 20:07 · 0.57 mi · 17 min").
+  - Today's letter in the week bars is bold.
+  - Days read Today / Yesterday.
+  - Stress and mindfulness comes between Health and Nutrition, with Mindful days. Fitbit's Stress Management Score needs its own servers, so openFit leaves it out.
+  - The heart range reads "49-188 BPM"; a live reading reads "72 bpm".
+- **Active Zone Min (Week):**
+  - "Zone min per day (avg)" and the axis 0 / goal / half / top.
+  - Days under the goal draw as short pills.
+  - A "Weekly target" section with the AHA line and "241% · 362 of 150 target minutes · This week".
+  - The list reads Today / Yesterday with ticks on goal days.
+  - Not built: Fitbit's "Time in zones" chip.
+- **Readiness:** resting heart rate is graded like HRV ("About usual"), not in bpm.
+- **Cardio Load:** "You quickly increased your cardio load. Be careful – rapid increases can lead to overtraining." With no target, Fitbit still scales the day chart from recent load (132 / 70 / 0).
+- **Sleep:** stage minutes now match Fitbit's timeline (Awake 1 h 4 m, REM 1 h 56 m, Light 4 h 42 m, Deep 1 h 24 m, against Fitbit's 1 h 3 m, 1 h 55 m, 4 h 42 m and 1 h 24 m).
+- **Fitbit-only, not reproducible:** live heart rate between syncs, the watch battery chip, and targets after 25 Sept (Fitbit's servers stopped sending them).
+
