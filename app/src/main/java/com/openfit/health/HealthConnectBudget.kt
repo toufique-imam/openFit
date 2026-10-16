@@ -1,6 +1,7 @@
 package com.openfit.health
 
 import android.content.Context
+import android.os.SystemClock
 import java.time.LocalDate
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
@@ -113,8 +114,19 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
         editor.apply()
     }
 
-    /** The bucket's level now: what was left, plus what refilled since, up to its capacity. */
+    /**
+     * The bucket's level now: what was left, plus what refilled since, up to its capacity. Health Connect keeps its
+     * buckets in memory, so a restart of the phone gives every app full ones: then so does this model.
+     */
     private fun level(bucket: Bucket, now: Long): Double {
+        val boot = now - SystemClock.elapsedRealtime()
+        if (kotlin.math.abs(boot - prefs.getLong(KEY_BOOT, boot)) > BOOT_SLACK_MS) {
+            val editor = prefs.edit().putLong(KEY_BOOT, boot)
+            BUCKETS.forEach { editor.remove("at:${it.name}").remove("level:${it.name}") }
+            editor.apply()
+        } else if (!prefs.contains(KEY_BOOT)) {
+            prefs.edit().putLong(KEY_BOOT, boot).apply()
+        }
         val at = prefs.getLong("at:${bucket.name}", -1)
         if (at < 0) return bucket.capacity.toDouble()
         val left = prefs.getFloat("level:${bucket.name}", bucket.capacity.toFloat()).toDouble()
@@ -141,5 +153,8 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
         const val KEY_DENIED = "denied"
         const val KEY_LAST_CALL = "last_call"
         const val KEY_LIMITED = "limited_at"
+        const val KEY_BOOT = "boot_at"
+        /** Clock adjustments move the computed boot time a little; a restart moves it by much more. */
+        const val BOOT_SLACK_MS = 60_000L
     }
 }
