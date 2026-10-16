@@ -159,9 +159,11 @@ Fitbit's Sleep Score is computed on its servers. Its published shape is duration
 - **Ratings:** 90+ excellent, 80-89 good, 60-79 fair, below 60 poor.
 - **Fit (31 nights, 9 Sept - 16 Oct):** 3.2 points RMS, 27 nights within 3, against 6.8 for the old formula. Leaving each night out in turn gives 3.7. The worst miss is 28 Sept (Fitbit 70, openFit 60).
 
+**Stage minutes (fixed 16 Oct 2026):** openFit used to truncate each stage segment to whole minutes before adding them. With 60-odd segments a night, that lost about 16 minutes (15 Oct: 7 h 52 m against Fitbit's 8 h 1 m). Summing seconds first gives Fitbit's figures: deep 84, REM 116 (Fitbit 115), light 282, awake 64 (63). The fit holds on the corrected minutes (3.3 points RMS).
+
 Health Connect's stage minutes agree with Fitbit's timeline:
 - 24 Sept: REM 53 vs 54, Deep 69 vs 70, with the same 2:21–9:09 am window.
-- Total sleep reads 1–2 % lower than Fitbit's.
+- Total sleep matches Fitbit's since the fix above.
 
 **"Current sleep schedule":** the user's own bedtime and wake-time goal, as in Fitbit. Until it is set, the Sleep screen offers "Set a sleep schedule", and "days on schedule" shows a dash. A night is on schedule when both ends are within 30 minutes of the goal.
 

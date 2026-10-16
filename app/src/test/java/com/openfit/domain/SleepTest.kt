@@ -30,6 +30,14 @@ class SleepTest {
     }
 
     @Test
+    fun stageMinutesAreSummedInSecondsBeforeRounding() {
+        // Sixty-seven segments of 1 m 30 s: truncating each would give 67 minutes instead of 100.5.
+        val start = Instant.parse("2026-10-14T18:05:00Z")
+        val segments = (0 until 67).map { i -> StageSegment(SleepStage.Light, start.plusSeconds(90L * i), start.plusSeconds(90L * (i + 1))) }
+        assertEquals(101L, minutesOf(segments))
+    }
+
+    @Test
     fun onlyTheMainSleepIsScored() {
         // 5 Oct 2026: 9 h 05 m asleep that day, but the main sleep was 5 h 39 m with a quarter of it awake. Fitbit: 54.
         val withNap = night(deep = 28, rem = 71, light = 140, awake = 82, total = 539)

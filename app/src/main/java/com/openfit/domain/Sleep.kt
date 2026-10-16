@@ -9,8 +9,15 @@ import kotlin.math.roundToInt
 enum class SleepStage { Awake, Rem, Light, Deep }
 
 data class StageSegment(val stage: SleepStage, val start: Instant, val end: Instant) {
+    val seconds: Long get() = Duration.between(start, end).seconds
     val minutes: Long get() = Duration.between(start, end).toMinutes()
 }
+
+/**
+ * Whole minutes in [segments], summed in seconds first: a night has 60-odd segments, and truncating each one lost about
+ * 16 minutes on 15 Oct 2026 (7 h 52 m against Fitbit's 8 h 1 m).
+ */
+fun minutesOf(segments: List<StageSegment>): Long = Math.round(segments.sumOf { it.seconds } / 60.0)
 
 /** A night of sleep, filed under the day it ended: the main sleep's stages and all the day's sleep combined. */
 data class SleepNight(
@@ -25,13 +32,13 @@ data class SleepNight(
     val timeInBedMinutes: Long get() = Duration.between(start, end).toMinutes()
 
     /** Minutes asleep in the main sleep alone (its non-awake stages), which is what Fitbit scores. */
-    val mainAsleepMinutes: Long get() = segments.filter { it.stage != SleepStage.Awake }.sumOf { it.minutes }
+    val mainAsleepMinutes: Long get() = minutesOf(segments.filter { it.stage != SleepStage.Awake })
 
-    fun minutes(stage: SleepStage): Long = segments.filter { it.stage == stage }.sumOf { it.minutes }
+    fun minutes(stage: SleepStage): Long = minutesOf(segments.filter { it.stage == stage })
 
     /** Share of the main sleep (awake included) spent in [stage], 0–100. */
     fun percent(stage: SleepStage): Double {
-        val total = segments.sumOf { it.minutes }.takeIf { it > 0 } ?: return 0.0
+        val total = minutesOf(segments).takeIf { it > 0 } ?: return 0.0
         return minutes(stage) * 100.0 / total
     }
 }
