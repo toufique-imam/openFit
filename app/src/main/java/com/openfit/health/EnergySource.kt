@@ -3,6 +3,8 @@ package com.openfit.health
 import com.openfit.domain.EnergyDay
 import com.openfit.domain.EnergyRates
 import com.openfit.domain.energyBank
+import com.openfit.domain.StressDay
+import com.openfit.domain.stressDays
 import java.time.LocalDate
 
 /** Energy Bank days from Health Connect: reads the 30-day stress baseline and a week of warm-up before [from]. */
@@ -18,7 +20,17 @@ class EnergySource(gateway: HealthConnectGateway, cache: SlotCache) {
         return energyBank(all.filter { it.first >= firstWorn }, showFrom)
     }
 
+    /** Stress for [from]..[until], with a 30-day baseline before each day; days without a baseline are left out. */
+    suspend fun stress(from: LocalDate, until: LocalDate): List<StressDay> {
+        val all = slots.days(from.minusDays(30), until)
+        val firstWorn = all.firstOrNull { (_, day) -> day.any { it.bpm != null } }?.first ?: return emptyList()
+        return stressDays(all, maxOf(from, firstWorn.plusDays(MIN_STRESS_BASELINE_DAYS)))
+    }
+
     private companion object {
+        /** Pulse: stress needs 5 days of data. */
+        const val MIN_STRESS_BASELINE_DAYS = 5L
+
         /** A 30-day stress baseline before the warm-up week. */
         const val LEAD_DAYS = 30L + EnergyRates.WARM_UP_DAYS
     }

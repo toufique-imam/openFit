@@ -21,6 +21,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.SelfImprovement
+import com.openfit.domain.stressBand
+import com.openfit.ui.stress.stressBandName
 import androidx.compose.ui.graphics.Shape
 import com.openfit.health.ExerciseSession
 import androidx.compose.material.icons.outlined.BatteryChargingFull
@@ -386,6 +389,24 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     }
 
     section(R.string.section_stress_mindfulness)
+    item {
+        val stress = state.stress
+        // Today: the latest reading; past days: the day's average (Pulse).
+        val value = if (state.isToday) stress?.latest else stress?.average
+        MetricTile(
+            title = stringResource(R.string.stress_title),
+            value = value?.let { AnnotatedString(it.toString()) }
+                ?: noValue(stringResource(if (state.energyLoading) R.string.energy_loading else R.string.energy_calibrating_short)),
+            subtitle = listOfNotNull(dayLabel(state), value?.let { stringResource(stressBandName(stressBand(it))) }).joinToString(" • "),
+            onClick = { onOpen(MetricPage.Stress) },
+        ) {
+            if (value == null) {
+                IconBadge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender)
+            } else {
+                ArcGauge(Icons.Outlined.SelfImprovement, OpenFitColors.Lavender, value / 100f)
+            }
+        }
+    }
     item {
         val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
         MetricTile(

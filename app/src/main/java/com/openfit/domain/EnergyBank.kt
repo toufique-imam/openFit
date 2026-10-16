@@ -28,6 +28,45 @@ fun slotStress(bpm: Int, baseline: IntArray): Int? {
 fun stressBaseline(days: Collection<List<Slot>>): IntArray =
     days.flatMap { slots -> slots.mapNotNull { slot -> slot.bpm.takeIf { !slot.asleep && !slot.exercise } } }.sorted().toIntArray()
 
+enum class StressBand { Low, Medium, High }
+
+/** Pulse's bands: 0-29 low, 30-59 medium, 60-100 high. */
+fun stressBand(stress: Int): StressBand = when {
+    stress < 30 -> StressBand.Low
+    stress < 60 -> StressBand.Medium
+    else -> StressBand.High
+}
+
+/**
+ * The stress openFit shows: 0.75 x the heart-rate rank, fitted to Pulse's daily averages and time in each band for
+ * 30 Sep - 14 Oct 2026 (3.7 points from Pulse's average; low-stress time within 5%, high within 7%). Energy Bank keeps
+ * the raw rank, which its own rates were fitted on.
+ */
+fun displayedStress(rank: Int): Int = (rank * DISPLAY_SCALE).toInt()
+
+private const val DISPLAY_SCALE = 0.75
+
+/** A day of stress: each slot's 0-100 (null when not worn or in a workout), asleep or not. */
+data class StressDay(val date: LocalDate, val slots: List<Int?>, val asleep: List<Boolean>) {
+    val latest: Int? get() = slots.lastOrNull { it != null }
+    val latestSlot: Int? get() = slots.indexOfLast { it != null }.takeIf { it >= 0 }
+    val average: Int? get() = slots.filterNotNull().takeIf { it.isNotEmpty() }?.average()?.toInt()
+
+    /** Minutes in each band. */
+    fun minutes(band: StressBand): Int = slots.count { it != null && stressBand(it) == band } * SLOT_MINUTES
+}
+
+/**
+ * Stress for each day in [days] from [showFrom], ranking every worn slot (asleep too) among the awake, non-workout slots
+ * of the 30 days before. Workouts show no stress, as in Pulse.
+ */
+fun stressDays(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): List<StressDay> =
+    days.withIndex().filter { it.value.first >= showFrom }.map { (index, day) ->
+        val baseline = stressBaseline(days.subList((index - 30).coerceAtLeast(0), index).map { it.second })
+        val (date, slots) = day
+        StressDay(date, slots.map { slot -> slot.bpm?.takeIf { !slot.exercise }?.let { bpm -> slotStress(bpm, baseline)?.let(::displayedStress) } }, slots.map { it.asleep })
+    }
+
 /** A stretch that drained the bank most: a workout by name, or an hour of stress. */
 sealed interface EnergyDrain {
     val points: Double

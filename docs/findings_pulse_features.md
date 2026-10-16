@@ -83,3 +83,13 @@ Ideas not done:
 - Pace of Aging (Pulse: the 30-day age held against 6 months).
 - A history chart.
 - Body fat estimated from BMI when only weight is logged (needs height in the profile).
+
+## Stress (`EnergyBank.kt` stressDays, `ui/stress`)
+
+- Built on the same six-minute slots as Energy Bank. Each worn slot (asleep too) ranks its heart rate among the awake, non-workout slots of the 30 days before. Workouts show no stress.
+- **Shown stress = 0.75 x that rank.** It was fitted to Pulse's daily average and its time in each band for 30 Sep - 14 Oct 2026: 3.7 points from Pulse's average, low-stress time within 5% and high within 7%. A plain rank put 22% of the day in high stress against Pulse's 6%.
+- Bands are Pulse's: 0-29 low, 30-59 medium, 60-100 high. Today shows the latest reading, past days the day's average. It needs 5 days of data.
+- **Screens:** a Today tile in Stress and mindfulness, where Fitbit's server-only Stress Management Score was. The page has a Day view (bars by band over 24 h with sleep shaded; low, medium and high time) plus Week and Month.
+- **On 16 Oct:** openFit gave 9 h 6 m low, 6 h medium and 1 h high; Pulse gave 10:00, 6:06 and 0:12.
+- **Not done:** Pulse's HRV term during sleep, its "typical Friday" comparison, and Breathe.
+

@@ -31,6 +31,7 @@ import com.openfit.health.HealthConnectSleep
 import com.openfit.health.HealthConnectVitals
 import com.openfit.domain.sleepScore
 import com.openfit.domain.EnergyDay
+import com.openfit.domain.StressDay
 import com.openfit.health.EnergySource
 import com.openfit.health.ExerciseSession
 import com.openfit.health.HealthConnectExercises
@@ -90,6 +91,7 @@ sealed interface TodayUiState {
         /** The day's Energy Bank; loaded after the rest, since its first run reads weeks of heart rate. */
         val energy: EnergyDay? = null,
         val energyLoading: Boolean = true,
+        val stress: StressDay? = null,
         /** Pulse Age over the 28 days before the date; loaded after the rest. */
         val pulseAge: PulseAge? = null,
         val pulseAgeLoading: Boolean = true,
@@ -166,7 +168,9 @@ class TodayViewModel(
             } catch (_: Exception) {
                 null
             }
-            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(energy = day, energyLoading = false) else it }
+            // The slots are cached by now, so stress costs little extra.
+            val stress = runCatching { energySource.stress(date, date).singleOrNull() }.getOrNull()
+            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(energy = day, energyLoading = false, stress = stress) else it }
         }
     }
 

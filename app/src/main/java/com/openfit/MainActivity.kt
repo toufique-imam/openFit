@@ -32,6 +32,8 @@ import com.openfit.ui.cardio.CardioLoadViewModel
 import com.openfit.journal.JournalStore
 import com.openfit.health.SlotCache
 import com.openfit.ui.energy.EnergyRoute
+import com.openfit.ui.stress.StressRoute
+import com.openfit.ui.stress.StressViewModel
 import com.openfit.ui.age.PulseAgeRoute
 import com.openfit.ui.age.PulseAgeViewModel
 import com.openfit.ui.energy.EnergyViewModel
@@ -219,6 +221,11 @@ class MainActivity : ComponentActivity() {
                 val model = viewModel { PulseAgeViewModel(gateway, profileStore, dayLoadCache) }
                 LaunchedEffect(screen) { model.open(screen.date) }
                 PulseAgeRoute(model, onBack)
+            }
+            MetricPage.Stress -> {
+                val model = viewModel { StressViewModel(gateway, slotCache) }
+                LaunchedEffect(screen) { model.open(screen.date) }
+                StressRoute(model, onBack)
             }
             MetricPage.EnergyBank -> {
                 val model = viewModel { EnergyViewModel(gateway, slotCache) }

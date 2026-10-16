@@ -57,6 +57,14 @@ class EnergyBankTest {
     }
 
     @Test
+    fun `shown stress is three quarters of the rank, as fitted to Pulse`() {
+        assertEquals(75, displayedStress(100))
+        assertEquals(StressBand.Medium, stressBand(displayedStress(51)))
+        val day = stressDays(listOf(start to day(70), start.plusDays(1) to day(70)), showFrom = start.plusDays(1)).single()
+        assertTrue(day.slots.filterNotNull().all { it in 0..75 })
+    }
+
+    @Test
     fun `bands follow the thirds`() {
         assertEquals(EnergyBand.Plenty, energyBand(67.0))
         assertEquals(EnergyBand.PaceYourself, energyBand(34.0))
