@@ -637,6 +637,7 @@
     <string name="energy_band_plenty">Plenty in reserve</string>
     <string name="energy_band_pace">Pace yourself</string>
     <string name="energy_band_low">Running low</string>
+    <string name="energy_woke">Woke at %1$s with %2$d%%</string>
     <string name="energy_updated">Last updated %s</string>
     <string name="energy_charged">Charged</string>
     <string name="energy_drained">Drained</string>
@@ -648,7 +649,17 @@
     <string name="energy_peak_list">Daily peak</string>
     <string name="energy_about_title">About Energy Bank</string>
     <string name="energy_about_body">An estimate of your energy in reserve, from 1 to 100%. Sleep charges it; stress and workouts drain it.</string>
-    <string name="energy_sheet">Energy Bank moves every 6 minutes.\n\nAsleep: a full 7.5-hour night charges about 80 points.\n\nAwake and calm: when your heart rate sits low among your usual awake heart rates of the last 30 days, the bank charges a little, about 15 points over a waking day.\n\nAwake and stressed: a higher heart rate drains it, faster the higher it ranks; about 60 points over a waking day at middling stress. Workouts drain through the same heart rate.\n\nCharging slows near 100 and draining near 1, and the level carries over midnight. It shows after a week of wearing your device.\n\nIt is a model, not a measurement: it cannot see mental effort that leaves your heart rate unchanged, food or caffeine.</string>
+    <string name="energy_sheet">Energy Bank moves every 6 minutes.
+
+Asleep: a full 7.5-hour night charges about 40 points.
+
+Awake and calm: when your heart rate sits low among your usual awake heart rates of the last 30 days, the bank charges a little.
+
+Awake and stressed: a higher heart rate drains it, faster the higher it ranks; about 55 points over a waking day at middling stress. Workouts drain through the same heart rate.
+
+Charging slows as the bank fills and draining as it empties, and the level carries over midnight. It shows after a week of wearing your device. The rates are tuned to match Pulse.
+
+It is a model, not a measurement: it cannot see mental effort that leaves your heart rate unchanged, food or caffeine.</string>
 
     <!-- Pulse Age -->
     <string name="age_title">Pulse Age</string>

@@ -198,6 +198,16 @@ private fun LazyListScope.dayContent(state: EnergyUiState.Ready) {
                 style = MaterialTheme.typography.bodyMedium,
                 color = OpenFitColors.OnSurfaceVariant,
             )
+            val wakeSlot = day?.wakeSlot
+            val wakeLevel = day?.wakeLevel
+            if (wakeSlot != null && wakeLevel != null) {
+                val minute = (wakeSlot + 1) * SLOT_MINUTES
+                Text(
+                    stringResource(R.string.energy_woke, "%02d:%02d".format(minute / 60, minute % 60), wakeLevel.roundToInt()),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = OpenFitColors.OnSurfaceVariant,
+                )
+            }
             day?.latestSlot?.takeIf { state.anchor == state.today }?.let { slot ->
                 val minute = (slot + 1) * SLOT_MINUTES
                 Text(

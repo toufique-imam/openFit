@@ -46,6 +46,9 @@ data class EnergyDay(
     val drained: Double,
     /** The three biggest drains, largest first. */
     val drains: List<EnergyDrain>,
+    /** The last asleep slot of the morning (before 2 pm) and the level then: Pulse's "Woke at 09:16 with 39%". */
+    val wakeSlot: Int? = null,
+    val wakeLevel: Double? = null,
 ) {
     val latest: Double? get() = levels.lastOrNull { it != null }
 
@@ -62,23 +65,26 @@ fun energyBand(level: Double): EnergyBand = when {
     else -> EnergyBand.RunningLow
 }
 
-/** The model's rates, per six-minute slot. */
+/**
+ * The model's rates, per six-minute slot, fitted to Pulse's own Energy Bank for 1-14 Oct 2026 (its wake level, end
+ * level, and daily charged and drained totals): about 7.6 points RMS, against 34 for the rates in Pulse's explainer.
+ */
 object EnergyRates {
-    /** A 7.5-hour night (75 slots) charges about 80 points. */
-    const val ASLEEP = 80.0 / 75
+    /** A 7.5-hour night (75 slots) charges about 41 points. */
+    const val ASLEEP = 0.55
 
-    /** Calm waking time charges about 15 points over 16.5 hours (165 slots). */
-    const val CALM = 15.0 / 165
+    /** Calm waking time charges about 8 points over 16.5 hours (165 slots). */
+    const val CALM = 0.05
 
-    /** Stress at [BASE_STRESS] drains about 60 points over 16.5 hours; higher stress drains proportionally faster. */
-    const val DRAIN = 60.0 / 165
-    const val BASE_STRESS = 50.0
+    /** Stress at [BASE_STRESS] drains about 54 points over 16.5 hours; higher stress drains proportionally faster. */
+    const val DRAIN = 0.33
+    const val BASE_STRESS = 40.0
 
     /** Below this stress, waking time charges instead of draining. */
     const val CALM_BELOW = 20
 
     /** Charging slows over the last [EDGE] points below 100, and draining over the last [EDGE] above 1. */
-    const val EDGE = 20.0
+    const val EDGE = 40.0
 
     const val START = 50.0
     const val MIN = 1.0
@@ -103,6 +109,8 @@ fun energyBank(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): Li
         val workoutDrain = mutableMapOf<Int, Double>()
         val stressDrain = DoubleArray(24)
         var workoutStart = -1
+        var wakeSlot: Int? = null
+        var wakeLevel: Double? = null
         slots.forEachIndexed { i, slot ->
             val change = slotChange(slot, level, baseline)
             if (slot.exercise) {
@@ -119,11 +127,15 @@ fun energyBank(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): Li
                 }
             }
             levels += if (change == null && slot.bpm == null) null else level
+            if (slot.asleep && i < MORNING_END_SLOT) {
+                wakeSlot = i
+                wakeLevel = level
+            }
         }
         if (date >= showFrom) {
             val drains = workoutDrain.map { EnergyDrain.Workout(it.key, it.value) } +
                 stressDrain.withIndex().filter { it.value > 0 }.map { EnergyDrain.Stress(it.index, it.value) }
-            result += EnergyDay(date, levels, charged, drained, drains.sortedByDescending { it.points }.take(TOP_DRAINS))
+            result += EnergyDay(date, levels, charged, drained, drains.sortedByDescending { it.points }.take(TOP_DRAINS), wakeSlot, wakeLevel)
         }
     }
     return result
@@ -145,3 +157,4 @@ private fun slotChange(slot: Slot, level: Double, baseline: IntArray): Double? {
 
 private const val BASELINE_DAYS = 30
 private const val TOP_DRAINS = 3
+private const val MORNING_END_SLOT = 14 * 60 / SLOT_MINUTES

@@ -14,7 +14,15 @@ sees data since it was installed.
   - asleep: the slot's midpoint is in a non-awake sleep stage of any session
   - workout: the slot's midpoint is in an exercise session
 - **Stress (0–100):** where the slot's heart rate ranks among the awake, non-workout slots of the 30 days before.
-- **Each slot moves the bank:**
+- **Fit to Pulse (16 Oct 2026):** the rates in Pulse's explainer ("a full 7.5-hour night charges about 80") put openFit at 90-100% every morning, while Pulse's own app woke at 37-66% and ended days at 16-31%. Fitting to Pulse's daily wake level, end level, charged and drained for 1-14 Oct (12 days) gives:
+  - asleep +0.55 per slot (about 41 a night);
+  - calm +0.05 per slot;
+  - drain 0.33 x stress / 40;
+  - calm below stress 20;
+  - edges of 40 points.
+
+  That is 7.6 points RMS, against 34 before. On 16 Oct both read 27% at 16:18; openFit woke at 52%, Pulse at 39%.
+- **Each slot moves the bank (rates before the fit):**
   - Asleep: +80/75 per slot (a 7.5-hour night charges about 80).
   - Awake with stress < 20: +15/165 per slot.
   - Awake with stress ≥ 20: −(60/165) × stress/50 per slot. Workouts drain the same way.

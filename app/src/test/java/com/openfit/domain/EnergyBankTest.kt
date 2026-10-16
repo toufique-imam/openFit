@@ -30,13 +30,13 @@ class EnergyBankTest {
     }
 
     @Test
-    fun `a night charges about 80 points from a low level`() {
+    fun `a night charges about 40 points`() {
         val days = listOf(start to List(SLOTS_PER_DAY) { i -> if (i < 75) Slot(55, asleep = true) else Slot(null) })
         val result = energyBank(days, showFrom = start)
-        // From 50, 75 asleep slots charge until the slow-down near 100.
+        // From 50, 75 asleep slots charge about 32: the charge slows over the last 40 points below 100.
         val morning = result.single().levels[74]!!
-        assertTrue("morning $morning", morning in 90.0..100.0)
-        assertTrue(result.single().charged in 45.0..50.0)
+        assertTrue("morning $morning", morning in 78.0..86.0)
+        assertTrue(result.single().charged in 28.0..36.0)
     }
 
     @Test
