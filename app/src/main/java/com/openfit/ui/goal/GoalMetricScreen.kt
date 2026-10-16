@@ -9,6 +9,7 @@ import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material3.MaterialTheme
 import com.openfit.profile.UnitSystem
 import com.openfit.profile.Profile
+import androidx.compose.material.icons.outlined.KeyboardDoubleArrowUp
 import androidx.compose.material.icons.outlined.LocalFireDepartment
 import androidx.compose.material.icons.outlined.Stairs
 import androidx.compose.material.icons.outlined.LocationOn
@@ -168,6 +169,7 @@ private val GoalMetric.title: Int
         GoalMetric.Distance -> R.string.tile_distance
         GoalMetric.Floors -> R.string.tile_floors
         GoalMetric.Energy -> R.string.tile_energy_burned
+        GoalMetric.ZoneMinutes -> R.string.azm_title
     }
 
 private val GoalMetric.icon: ImageVector
@@ -176,6 +178,7 @@ private val GoalMetric.icon: ImageVector
         GoalMetric.Distance -> Icons.Outlined.LocationOn
         GoalMetric.Floors -> Icons.Outlined.Stairs
         GoalMetric.Energy -> Icons.Outlined.LocalFireDepartment
+        GoalMetric.ZoneMinutes -> Icons.Outlined.KeyboardDoubleArrowUp
     }
 
 /** The short unit after numbers ("of 10,000 steps", "km per day (avg)"). */
@@ -184,6 +187,7 @@ private fun GoalMetric.unit(profile: Profile): Int = when (this) {
     GoalMetric.Distance -> if (profile.units == UnitSystem.Imperial) R.string.unit_mi else R.string.unit_km
     GoalMetric.Floors -> R.string.unit_floors
     GoalMetric.Energy -> R.string.unit_cal
+    GoalMetric.ZoneMinutes -> R.string.unit_zone_minutes
 }
 
 /** The unit inside takeaway sentences ("burned a total of 14,000 calories"). */
@@ -195,6 +199,7 @@ private val GoalMetric.phrase: Int
         GoalMetric.Distance -> R.string.phrase_distance
         GoalMetric.Floors -> R.string.phrase_floors
         GoalMetric.Energy -> R.string.phrase_energy
+        GoalMetric.ZoneMinutes -> R.string.phrase_zone_minutes
     }
 
 private val GoalMetric.format: (Double) -> String

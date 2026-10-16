@@ -265,6 +265,7 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             } else {
                 listOf(dayLabel(state), stringResource(R.string.week_progress, whole(target.doneThisWeek), whole(target.weekly))).joinToString(" • ")
             },
+            onClick = { onOpen(MetricPage.ZoneMinutes) },
         ) {
             ArcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zoneMinutes ?: 0) / target.daily.coerceAtLeast(1.0).toFloat())
         }

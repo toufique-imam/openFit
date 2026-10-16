@@ -469,4 +469,9 @@
     <string name="hm_value_out_of_range">%1$s · %2$s</string>
     <string name="hm_above_range">Above personal range</string>
     <string name="hm_below_range">Below personal range</string>
+
+    <!-- Active Zone Minutes detail -->
+    <string name="azm_title">Active Zone Minutes</string>
+    <string name="unit_zone_minutes">Zone Minutes</string>
+    <string name="phrase_zone_minutes">earned a total of %1$s %2$s</string>
 </resources>

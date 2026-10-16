@@ -143,9 +143,9 @@ class MainActivity : ComponentActivity() {
                 LaunchedEffect(screen) { model.open(screen.date) }
                 ReadinessRoute(model, onBack)
             }
-            MetricPage.Steps, MetricPage.Distance, MetricPage.Floors, MetricPage.Energy -> {
+            MetricPage.Steps, MetricPage.Distance, MetricPage.Floors, MetricPage.Energy, MetricPage.ZoneMinutes -> {
                 val metric = GoalMetric.valueOf(screen.page.name)
-                val model = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore) }
+                val model = viewModel(key = metric.name) { GoalMetricViewModel(metric, gateway, profileStore, dayLoadCache) }
                 LaunchedEffect(screen) { model.open(screen.date) }
                 GoalMetricRoute(model, onBack)
             }

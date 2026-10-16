@@ -14,7 +14,12 @@ import com.openfit.domain.weekRows
 import com.openfit.domain.weekRowsOf
 import com.openfit.health.DailyTotal
 import com.openfit.health.HealthConnectGateway
+import com.openfit.health.DayLoadCache
+import com.openfit.health.HealthConnectSource
 import com.openfit.health.HealthConnectTotals
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.math.ceil
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import com.openfit.profile.UnitSystem
@@ -29,8 +34,11 @@ import java.time.YearMonth
 
 private const val METERS_PER_MILE = 1_609.344
 
-/** A Fitbit goal screen: which daily total it shows, in which unit, and where its goal comes from. */
-enum class GoalMetric(val total: DailyTotal, val goal: (Profile) -> Double, val display: (Double, Profile) -> Double = { value, _ -> value }) {
+/**
+ * A Fitbit goal screen: which daily total it shows, in which unit, and where its goal comes from. [total] is null for
+ * Active Zone Minutes, which openFit works out from heart rate rather than reading from Health Connect.
+ */
+enum class GoalMetric(val total: DailyTotal?, val goal: (Profile) -> Double, val display: (Double, Profile) -> Double = { value, _ -> value }) {
     Steps(DailyTotal.Steps, { it.dailyStepGoal.toDouble() }),
     Distance(
         DailyTotal.DistanceMeters,
@@ -39,6 +47,9 @@ enum class GoalMetric(val total: DailyTotal, val goal: (Profile) -> Double, val 
     ),
     Floors(DailyTotal.Floors, { it.dailyFloorsGoal.toDouble() }),
     Energy(DailyTotal.CaloriesOutKcal, { it.dailyCaloriesOutGoal.toDouble() }),
+
+    /** Fitbit's default daily goal is the weekly one spread over seven days (150 → 22). */
+    ZoneMinutes(null, { ceil(it.fitnessGoal.weeklyZoneMinutes / 7.0) }),
 }
 
 private fun distanceFromMeters(meters: Double, profile: Profile): Double =
@@ -67,9 +78,11 @@ class GoalMetricViewModel(
     private val metric: GoalMetric,
     gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
+    dayLoadCache: DayLoadCache,
 ) : ViewModel() {
 
     private val totals = HealthConnectTotals(gateway)
+    private val source = HealthConnectSource(gateway, dayLoadCache)
 
     private val _state = MutableStateFlow<GoalMetricUiState>(GoalMetricUiState.Loading)
     val state: StateFlow<GoalMetricUiState> = _state.asStateFlow()
@@ -104,8 +117,8 @@ class GoalMetricViewModel(
                 val all = periodDays(period, anchor)
                 val days = all.filter { it <= today }
                 val profile = profileStore.load()
-                val values = totals.daily(metric.total, days.first(), days.last()).mapValues { metric.display(it.value, profile) }
-                val hourly = if (period == ChartPeriod.Day) totals.hourly(metric.total, anchor).mapValues { metric.display(it.value, profile) } else emptyMap()
+                val values = daily(days.first(), days.last(), profile).mapValues { metric.display(it.value, profile) }
+                val hourly = if (period == ChartPeriod.Day) hourly(anchor, profile).mapValues { metric.display(it.value, profile) } else emptyMap()
                 val goal = metric.goal(profile)
                 GoalMetricUiState.Ready(
                     metric = metric,
@@ -139,5 +152,33 @@ class GoalMetricViewModel(
                 GoalMetricUiState.Failed(error.message ?: error.javaClass.simpleName)
             }
         }
+    }
+
+    private suspend fun daily(from: LocalDate, until: LocalDate, profile: Profile): Map<LocalDate, Double> {
+        val total = metric.total ?: return source.history(from, until, profile, backfillDays = BACKFILL_DAYS).zoneMinutes.mapValues { it.value.toDouble() }
+        return totals.daily(total, from, until)
+    }
+
+    /** Zone Minutes per hour: a point for each moderate minute and two for each vigorous or peak minute. */
+    private suspend fun hourly(date: LocalDate, profile: Profile): Map<Int, Double> {
+        val total = metric.total ?: return source.heartDay(date, profile).let { day ->
+            val zones = day.zones ?: return emptyMap()
+            day.byMinute.entries
+                .groupBy { Instant.ofEpochSecond(it.key * 60).atZone(ZoneId.systemDefault()).hour }
+                .mapValues { (_, minutes) ->
+                    minutes.sumOf { (_, bpm) ->
+                        when {
+                            bpm >= zones.cardioFrom -> 2.0
+                            bpm >= zones.fatBurnFrom -> 1.0
+                            else -> 0.0
+                        }
+                    }
+                }
+        }
+        return totals.hourly(total, date)
+    }
+
+    private companion object {
+        const val BACKFILL_DAYS = 31
     }
 }
