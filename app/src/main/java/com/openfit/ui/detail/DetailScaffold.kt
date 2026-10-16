@@ -23,7 +23,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.foundation.layout.size
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -358,12 +360,14 @@ fun LazyListScope.periodRows(
     anchor: LocalDate,
     today: LocalDate,
     rows: List<PeriodRow>,
+    goal: Double? = null,
     value: (PeriodRow) -> String = { whole(it.load) },
 ) {
     if (rows.isEmpty()) return
     item {
         Row(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = SectionGap, bottom = 16.dp)) {
-            Text(listTitle(period, anchor), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
+            val title = if (period == ChartPeriod.Week && today in periodDays(period, anchor)) stringResource(R.string.this_week) else listTitle(period, anchor)
+            Text(title, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
             if (period != ChartPeriod.Week) {
                 Text(stringResource(R.string.daily_average), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
             }
@@ -373,6 +377,9 @@ fun LazyListScope.periodRows(
         GroupedCard(index, rows.size, minHeight = 68.dp) {
             Row(Modifier.fillMaxWidth().heightIn(min = 68.dp).padding(horizontal = 24.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(rowLabel(period, row, today), style = MaterialTheme.typography.titleSmall, color = OpenFitColors.OnSurface, modifier = Modifier.weight(1f))
+                if (goal != null && period == ChartPeriod.Week && row.load >= goal) {
+                    Icon(Icons.Filled.Check, contentDescription = null, tint = OpenFitColors.Mint.accent, modifier = Modifier.padding(end = 8.dp).size(20.dp))
+                }
                 Text(value(row), style = MaterialTheme.typography.headlineMedium, color = OpenFitColors.OnSurface)
             }
         }
@@ -391,7 +398,11 @@ private fun listTitle(period: ChartPeriod, anchor: LocalDate): String {
 
 @Composable
 private fun rowLabel(period: ChartPeriod, row: PeriodRow, today: LocalDate): String = when (period) {
-    ChartPeriod.Week, ChartPeriod.Day -> row.start.weekdayDayMonth()
+    ChartPeriod.Week, ChartPeriod.Day -> when (row.start) {
+        today -> stringResource(R.string.today)
+        today.minusDays(1) -> stringResource(R.string.yesterday)
+        else -> row.start.weekdayDayMonth()
+    }
     ChartPeriod.Month, ChartPeriod.ThreeMonths -> weekRange(row.start, row.end)
     ChartPeriod.Year -> if (YearMonth.from(row.start) == YearMonth.from(today)) {
         stringResource(R.string.this_month)

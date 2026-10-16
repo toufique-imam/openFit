@@ -487,8 +487,12 @@
     <string name="hm_below_range">Below personal range</string>
 
     <!-- Active Zone Minutes detail -->
-    <string name="azm_title">Active Zone Minutes</string>
-    <string name="unit_zone_minutes">Zone Minutes</string>
+    <string name="azm_title">Active Zone Min</string>
+    <string name="unit_zone_minutes">Zone min</string>
+    <string name="unit_zone_minutes_long">Zone minutes</string>
+    <string name="azm_weekly_target">Weekly target</string>
+    <string name="azm_aha">The American Heart Association (AHA) recommends 150 minutes of moderate activity or 75 minutes of vigorous activity per week.</string>
+    <string name="azm_week_progress">%1$d%% · %2$s of %3$d target minutes · %4$s</string>
     <string name="phrase_zone_minutes">earned a total of %1$s %2$s</string>
 
     <string name="phrase_food">logged a total of %1$s %2$s</string>

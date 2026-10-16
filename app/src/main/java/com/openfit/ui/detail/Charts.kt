@@ -50,6 +50,7 @@ private val TICK_TOP = 6.5.dp
 private val CHART_HEIGHT = 212.dp
 private val LINE_WIDTH = 1.5.dp
 private val DOT_RADIUS = 3.dp
+private val MIN_BAR_HEIGHT = 5.dp
 private val DOT_RING = 1.5.dp
 private const val FILL_ALPHA = 0.12f
 
@@ -255,9 +256,10 @@ fun BarChart(
         values.forEachIndexed { index, value ->
             if (value == null || value <= 0.0) return@forEachIndexed
             val x = left + (index + 0.5f) * slot
-            val barTop = minOf(y(value), bottom - barWidth)
-            drawRoundRect(color, Offset(x - barWidth / 2, barTop), Size(barWidth, bottom - barTop), cornerRadius = CornerRadius(barWidth / 2))
-            if (goal != null && value >= goal) {
+            val barTop = minOf(y(value), bottom - MIN_BAR_HEIGHT.toPx())
+            val barHeight = bottom - barTop
+            drawRoundRect(color, Offset(x - barWidth / 2, barTop), Size(barWidth, barHeight), cornerRadius = CornerRadius(minOf(barWidth, barHeight) / 2))
+            if (goal != null && value >= goal && barHeight >= barWidth) {
                 val center = Offset(x, barTop + barWidth / 2)
                 drawCircle(OpenFitColors.Background, barWidth / 2 * 0.75f, center)
                 if (barWidth >= 12.dp.toPx()) {

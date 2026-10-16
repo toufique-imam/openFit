@@ -30,6 +30,12 @@ import com.openfit.domain.ChartPeriod
 import com.openfit.domain.GoalAxis
 import com.openfit.domain.goalAxis
 import com.openfit.ui.detail.MenuAction
+import com.openfit.ui.detail.SectionGap
+import androidx.compose.foundation.Canvas
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import com.openfit.ui.detail.SetGoalLink
 import com.openfit.ui.goals.GoalEditor
 import com.openfit.ui.today.IconBadge
@@ -190,7 +196,32 @@ private fun LazyListScope.periodContent(state: GoalMetricUiState.Ready) {
             modifier = Modifier.padding(top = 32.dp),
         )
     }
-    periodRows(state.period, state.anchor, state.today, state.rows) { state.metric.format(it.load) }
+    if (state.metric == GoalMetric.ZoneMinutes && state.period == ChartPeriod.Week) item { WeeklyTarget(state) }
+    periodRows(state.period, state.anchor, state.today, state.rows, goal = state.goal) { state.metric.format(it.load) }
+}
+
+/** Fitbit's AZM "Weekly target": the AHA guideline and the week's progress against the user's weekly goal. */
+@Composable
+private fun WeeklyTarget(state: GoalMetricUiState.Ready) {
+    val target = state.profile.fitnessGoal.weeklyZoneMinutes
+    val total = state.summary.total
+    Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = SectionGap)) {
+        Text(stringResource(R.string.azm_weekly_target), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+        Text(stringResource(R.string.azm_aha), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(top = 12.dp))
+        val label = periodLabel(state.period, state.anchor, state.today)
+        Text(
+            stringResource(R.string.azm_week_progress, (total * 100 / target).toInt(), whole(total), target, label),
+            style = MaterialTheme.typography.titleSmall,
+            color = OpenFitColors.OnSurface,
+            modifier = Modifier.padding(top = 16.dp),
+        )
+        Canvas(Modifier.fillMaxWidth().padding(top = 8.dp).height(10.dp)) {
+            val track = 4.dp.toPx()
+            drawRoundRect(OpenFitColors.Mint.track, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
+            val share = (total / target).coerceIn(0.0, 1.0).toFloat()
+            if (share > 0f) drawRoundRect(OpenFitColors.Mint.accent, size = Size(maxOf(size.width * share, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
+        }
+    }
 }
 
 /** Axis labels the way Fitbit writes them: 2.5, 500, 1.6k, 10k. */
@@ -234,7 +265,11 @@ private fun GoalMetric.unit(profile: Profile): Int = when (this) {
 }
 
 /** The unit inside takeaway sentences ("burned a total of 14,000 calories"). */
-private fun GoalMetric.longUnit(profile: Profile): Int = if (this == GoalMetric.Energy || this == GoalMetric.Food) R.string.unit_calories else unit(profile)
+private fun GoalMetric.longUnit(profile: Profile): Int = when (this) {
+    GoalMetric.Energy, GoalMetric.Food -> R.string.unit_calories
+    GoalMetric.ZoneMinutes -> R.string.unit_zone_minutes_long
+    else -> unit(profile)
+}
 
 private val GoalMetric.phrase: Int
     get() = when (this) {

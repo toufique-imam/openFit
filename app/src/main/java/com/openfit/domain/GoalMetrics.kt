@@ -25,6 +25,8 @@ data class GoalAxis(val max: Double, val labels: List<Double>)
 fun goalAxis(goal: Double, highest: Double): GoalAxis {
     if (highest <= goal) return GoalAxis(goal * GOAL_HEADROOM, listOf(0.0, goal / 2, goal))
     val top = roundUp(highest, 2)
+    // A goal low on the chart: half the top replaces half the goal (Fitbit's AZM week: 0, 22, 75, 150).
+    if (goal < top * LOW_GOAL_SHARE) return GoalAxis(top, listOf(0.0, goal, top / 2, top))
     // Fitbit drops the top label when it would crowd the goal's (10,087 steps: no "11k" over "10k").
     val labels = if (top - goal < top * LABEL_CLEARANCE) listOf(0.0, goal / 2, goal) else listOf(0.0, goal / 2, goal, top)
     return GoalAxis(top, labels)
@@ -40,6 +42,7 @@ fun hourlyAxis(highest: Double): ChartAxis {
 
 private const val GOAL_HEADROOM = 1.1
 private const val LABEL_CLEARANCE = 0.15
+private const val LOW_GOAL_SHARE = 0.3
 private const val MIN_HOURLY_TOP = 100.0
 
 private fun roundUp(value: Double, significant: Int): Double {

@@ -281,7 +281,8 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
             subtitle = if (zoneMinutes == null && profile.age == null) stringResource(R.string.zone_minutes_needs_age) else dayLabel(state),
             onClick = { onOpen(MetricPage.ZoneMinutes) },
         ) {
-            ArcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zoneMinutes ?: 0) / target.daily.coerceAtLeast(1.0).toFloat())
+            // Fitbit's ring fills against the daily goal, the weekly one over seven days (150 -> 22), not what is left of the week.
+            ArcGauge(Icons.Outlined.KeyboardDoubleArrowUp, OpenFitColors.Mint, (zoneMinutes ?: 0) / kotlin.math.ceil(profile.fitnessGoal.weeklyZoneMinutes / 7.0).toFloat())
         }
     }
     item {
