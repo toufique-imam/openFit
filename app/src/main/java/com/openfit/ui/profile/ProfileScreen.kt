@@ -59,6 +59,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.domain.Sex
 import com.openfit.health.BudgetUsage
+import com.openfit.health.HealthSync
+import com.openfit.health.SyncState
+import androidx.compose.material3.LinearProgressIndicator
 import com.openfit.domain.maxHeartRate
 import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
@@ -84,7 +87,8 @@ private enum class Editing { None, Name, BirthDate, Sex, Units, WeightUnit, Dele
  * birth date; heart rate zones use 220 − age as the maximum.
  */
 @Composable
-fun ProfileRoute(viewModel: TodayViewModel, onBack: () -> Unit, onDeleteEverything: () -> Unit) {
+fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit, onDeleteEverything: () -> Unit) {
+    val syncState by sync.state.collectAsStateWithLifecycle()
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? TodayUiState.Ready
     val profile = ready?.profile ?: viewModel.profile()
@@ -150,7 +154,9 @@ fun ProfileRoute(viewModel: TodayViewModel, onBack: () -> Unit, onDeleteEverythi
             }
 
             Spacer(Modifier.height(16.dp))
-            HealthConnectUsageCard(remember(state) { viewModel.healthConnectUsage() })
+            SyncCard(syncState, onSync = { sync.startImport() })
+            Spacer(Modifier.height(16.dp))
+            HealthConnectUsageCard(remember(state, syncState) { viewModel.healthConnectUsage() })
 
             OutlinedButton(
                 onClick = { editing = Editing.Delete },
@@ -265,6 +271,52 @@ private fun GoogleHealthCard(status: GoogleHealthStatus, onConnect: () -> Unit, 
                 }
                 if (status != GoogleHealthStatus.Off) {
                     TextButton(onClick = onDisconnect) { Text(stringResource(R.string.google_health_disconnect), color = OpenFitColors.Mint.accent) }
+                }
+            }
+        }
+    }
+}
+
+/**
+ * openFit's copy of Health Connect: how far back it goes and when it was last read, and Sync, which reads everything
+ * still missing (then recent days) without leaving the page waiting: it runs on its own.
+ */
+@Composable
+private fun SyncCard(state: SyncState, onSync: () -> Unit) {
+    val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
+    val clock = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
+    Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(stringResource(R.string.sync_title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+            when (state) {
+                is SyncState.Importing -> {
+                    val progress = state.progress
+                    Text(stringResource(R.string.sync_importing, progress.done, progress.total), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                    LinearProgressIndicator(
+                        progress = { progress.done.toFloat() / progress.total.coerceAtLeast(1) },
+                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                        color = OpenFitColors.Mint.accent,
+                        trackColor = OpenFitColors.Mint.track,
+                    )
+                }
+                SyncState.Syncing -> Text(stringResource(R.string.sync_recent), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+                is SyncState.Idle -> {
+                    Text(
+                        state.firstDay?.let { stringResource(R.string.sync_since, it.format(date)) } ?: stringResource(R.string.sync_not_imported),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = OpenFitColors.OnSurfaceVariant,
+                    )
+                    state.lastSync?.let {
+                        Text(
+                            stringResource(R.string.sync_last, it.atZone(ZoneId.systemDefault()).format(clock)),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = OpenFitColors.OnSurfaceVariant,
+                        )
+                    }
+                    if (state.failed) Text(stringResource(R.string.sync_stopped), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.Pink.accent)
+                    Row(horizontalArrangement = Arrangement.End, modifier = Modifier.fillMaxWidth()) {
+                        TextButton(onClick = onSync) { Text(stringResource(R.string.sync_now), color = OpenFitColors.Mint.accent) }
+                    }
                 }
             }
         }

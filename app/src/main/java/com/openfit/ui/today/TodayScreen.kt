@@ -80,7 +80,7 @@ fun TodayRoute(
     val requestPermissions = { permissions: Set<String> -> permissionLauncher.launch(permissions) }
 
     LifecycleResumeEffect(Unit) {
-        viewModel.refreshIfStale()
+        viewModel.onResume()
         onPauseOrDispose { }
     }
 

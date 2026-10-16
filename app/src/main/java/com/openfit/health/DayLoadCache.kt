@@ -33,5 +33,14 @@ class DayLoadCache(context: Context) {
         editor.apply()
     }
 
+    /** Forgets [dates] for every profile: their heart rate was read again, so their loads are worked out again. */
+    fun forget(dates: Collection<LocalDate>) {
+        if (dates.isEmpty()) return
+        val suffixes = dates.map { ":$it" }
+        val editor = prefs.edit()
+        prefs.all.keys.filter { key -> suffixes.any(key::endsWith) }.forEach(editor::remove)
+        editor.apply()
+    }
+
     private fun key(profileKey: String, date: LocalDate) = "$profileKey:$date"
 }

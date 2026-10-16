@@ -144,7 +144,7 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
-        gateway = HealthConnectGateway(applicationContext)
+        gateway = HealthConnectGateway.get(applicationContext)
         profileStore = ProfileStore(applicationContext)
         dayLoadCache = DayLoadCache(applicationContext)
         journalStore = JournalStore(applicationContext)
@@ -152,7 +152,7 @@ class MainActivity : ComponentActivity() {
         snapshotStore = SnapshotStore(applicationContext)
         layoutStore = TodayLayoutStore(applicationContext)
         onboardingStore = OnboardingStore(applicationContext)
-        healthSync = HealthSync(applicationContext, gateway, dayLoadCache, slotCache, profileStore)
+        healthSync = HealthSync.get(applicationContext)
         SyncWorker.schedule(applicationContext)
         setContent {
             OpenFitTheme {
@@ -263,7 +263,7 @@ class MainActivity : ComponentActivity() {
         onSaveLayout: (TodayLayout) -> Unit,
     ) {
         when (screen.page) {
-            MetricPage.Profile -> ProfileRoute(todayViewModel, onBack, onDeleteEverything = ::deleteEverything)
+            MetricPage.Profile -> ProfileRoute(todayViewModel, healthSync, onBack, onDeleteEverything = ::deleteEverything)
             MetricPage.CustomizeToday -> CustomizeTodayRoute(layout, onSave = onSaveLayout, onClose = onBack, onOpenHealthConnect = ::openHealthConnectSettings)
             MetricPage.CardioLoad -> {
                 val model = viewModel { CardioLoadViewModel(gateway, profileStore, dayLoadCache, snapshotStore) }
@@ -373,7 +373,11 @@ class MainActivity : ComponentActivity() {
      */
     private fun deleteEverything() {
         lifecycleScope.launch {
-            withContext(Dispatchers.IO) { OpenFitDatabase.get(applicationContext).clearAllTables() }
+            healthSync.stop()
+            withContext(Dispatchers.IO) {
+                gateway.store.clear()
+                OpenFitDatabase.get(applicationContext).clearAllTables()
+            }
             LOCAL_PREFS.forEach { getSharedPreferences(it, MODE_PRIVATE).edit().clear().commit() }
             finish()
             startActivity(Intent(this@MainActivity, MainActivity::class.java))

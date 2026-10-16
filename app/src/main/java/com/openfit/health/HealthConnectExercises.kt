@@ -42,18 +42,18 @@ class HealthConnectExercises(private val gateway: HealthConnectGateway, private 
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
         val records = gateway.store.read(ExerciseSessionRecord::class, range)
         val metrics = buildSet {
-            if (read(DistanceRecord::class) in granted) add(DistanceRecord.DISTANCE_TOTAL)
-            if (read(TotalCaloriesBurnedRecord::class) in granted) add(TotalCaloriesBurnedRecord.ENERGY_TOTAL)
+            if (read(DistanceRecord::class) in granted) add(TotalMetric.DistanceMeters)
+            if (read(TotalCaloriesBurnedRecord::class) in granted) add(TotalMetric.CaloriesOutKcal)
         }
         return records.sortedBy { it.startTime }.map { record ->
-            val totals = if (metrics.isEmpty()) null else gateway.store.aggregate(metrics, record.startTime, record.endTime)
+            val totals = gateway.store.sessionTotals(record.startTime, record.endTime, metrics)
             ExerciseSession(
                 name = record.toExercise().name,
                 type = record.exerciseType,
                 start = record.startTime,
                 end = record.endTime,
-                distanceMeters = totals?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters?.takeIf { it > 0 },
-                caloriesKcal = totals?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories?.takeIf { it > 0 },
+                distanceMeters = totals?.distanceMeters?.takeIf { it > 0 },
+                caloriesKcal = totals?.caloriesKcal?.takeIf { it > 0 },
             )
         }
     }

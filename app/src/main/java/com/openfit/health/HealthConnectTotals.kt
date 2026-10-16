@@ -20,80 +20,42 @@ import java.time.ZoneId
 import kotlin.reflect.KClass
 
 /** Metrics that add up over a day, as Fitbit's goal screens show them. */
-enum class DailyTotal(val record: KClass<out Record>) {
-    Steps(StepsRecord::class),
-    DistanceMeters(DistanceRecord::class),
-    Floors(FloorsClimbedRecord::class),
-    CaloriesOutKcal(TotalCaloriesBurnedRecord::class),
-    CaloriesInKcal(NutritionRecord::class),
-    WaterLiters(HydrationRecord::class),
+enum class DailyTotal(val metric: TotalMetric) {
+    Steps(TotalMetric.Steps),
+    DistanceMeters(TotalMetric.DistanceMeters),
+    Floors(TotalMetric.Floors),
+    CaloriesOutKcal(TotalMetric.CaloriesOutKcal),
+    CaloriesInKcal(TotalMetric.CaloriesInKcal),
+    WaterLiters(TotalMetric.WaterLiters),
+    ;
+
+    val record: KClass<out Record> get() = metric.record
 }
 
-/** Daily and hourly sums from Health Connect's aggregation API (through [HealthStore]) — one request per range, however long. */
+/** Daily, hourly and per-minute sums, from openFit's saved copy ([HealthStore]). */
 class HealthConnectTotals(private val gateway: HealthConnectGateway, private val zone: ZoneId = ZoneId.systemDefault()) {
 
     suspend fun daily(total: DailyTotal, from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
         if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
-        // Saved per day; the stored units are the ones DailyTotal names (count, metres, kcal, litres).
-        return gateway.store.dailyTotals(metric(total), from, until)
+        return gateway.store.dailyTotals(total.metric, from, until)
     }
 
     suspend fun hourly(total: DailyTotal, date: LocalDate): Map<Int, Double> {
         if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
-        val start = date.atStartOfDay(zone).toInstant()
-        val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
-        if (end <= start) return emptyMap()
-        return gateway.store.aggregateByDuration(setOf(metric(total)), start, end, Duration.ofHours(1))
-            .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.atZone(zone).hour to it } }
-            .toMap()
+        return gateway.store.hourly(total.metric, date)
     }
 
-    /** Per-minute sums (epoch minute → value) for one day between [fromHour] and [untilHour], capped at now. */
+    /** Steps per minute (epoch minute → steps) for one day between [fromHour] and [untilHour]; only steps are kept per minute. */
     suspend fun minutely(total: DailyTotal, date: LocalDate, fromHour: Int, untilHour: Int): Map<Long, Double> {
+        require(total == DailyTotal.Steps) { "Only steps are saved per minute" }
         if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
-        val start = date.atTime(fromHour, 0).atZone(zone).toInstant()
-        val end = minOf(date.atTime(untilHour.coerceAtMost(23), 59, 59).atZone(zone).toInstant(), Instant.now())
-        if (end <= start) return emptyMap()
-        return gateway.store.aggregateByDuration(setOf(metric(total)), start, end, Duration.ofMinutes(1))
-            .mapNotNull { bucket -> value(total, bucket.result)?.let { bucket.startTime.epochSecond / 60 to it } }
-            .toMap()
+        val from = date.atTime(fromHour, 0).atZone(zone).toEpochSecond() / 60
+        val until = date.atTime(untilHour.coerceAtMost(23), 59).atZone(zone).toEpochSecond() / 60
+        return gateway.store.minuteSteps(date).filterKeys { it in from..until }
     }
 
-    /** Hourly sums for every day in a range, one request per month. */
     suspend fun hourlyByDay(total: DailyTotal, from: LocalDate, until: LocalDate): Map<LocalDate, Map<Int, Double>> {
         if (read(total.record) !in gateway.grantedPermissions()) return emptyMap()
-        val result = mutableMapOf<LocalDate, MutableMap<Int, Double>>()
-        var chunk = from
-        while (chunk <= until) {
-            val chunkEnd = minOf(chunk.plusMonths(1).withDayOfMonth(1).minusDays(1), until)
-            val start = chunk.atStartOfDay(zone).toInstant()
-            val end = minOf(chunkEnd.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
-            if (end > start) {
-                gateway.store.aggregateByDuration(setOf(metric(total)), start, end, Duration.ofHours(1)).forEach { bucket ->
-                    val time = bucket.startTime.atZone(zone)
-                    value(total, bucket.result)?.let { result.getOrPut(time.toLocalDate()) { mutableMapOf() }[time.hour] = it }
-                }
-            }
-            chunk = chunkEnd.plusDays(1)
-        }
-        return result
-    }
-
-    private fun metric(total: DailyTotal) = when (total) {
-        DailyTotal.Steps -> StepsRecord.COUNT_TOTAL
-        DailyTotal.DistanceMeters -> DistanceRecord.DISTANCE_TOTAL
-        DailyTotal.Floors -> FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL
-        DailyTotal.CaloriesOutKcal -> TotalCaloriesBurnedRecord.ENERGY_TOTAL
-        DailyTotal.CaloriesInKcal -> NutritionRecord.ENERGY_TOTAL
-        DailyTotal.WaterLiters -> HydrationRecord.VOLUME_TOTAL
-    }
-
-    private fun value(total: DailyTotal, result: AggregateValues): Double? = when (total) {
-        DailyTotal.Steps -> result[StepsRecord.COUNT_TOTAL]?.toDouble()
-        DailyTotal.DistanceMeters -> result[DistanceRecord.DISTANCE_TOTAL]?.inMeters
-        DailyTotal.Floors -> result[FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL]
-        DailyTotal.CaloriesOutKcal -> result[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories
-        DailyTotal.CaloriesInKcal -> result[NutritionRecord.ENERGY_TOTAL]?.inKilocalories
-        DailyTotal.WaterLiters -> result[HydrationRecord.VOLUME_TOTAL]?.inLiters
+        return gateway.store.hourlyByDay(total.metric, from, until)
     }
 }

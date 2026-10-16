@@ -68,8 +68,8 @@ class HealthConnectSource(
         val age = profile.age
 
         // Each read is a round trip to Health Connect, so they all run at once.
-        val totals = async { aggregate(window) }
-        val hourly = async { hourlySteps(window) }
+        val totals = async { dayTotals(date, granted) }
+        val hourly = async { hourlySteps(date, granted) }
         val heartRecords = async { window.records(HeartRateRecord::class, start) }
         val restingRecords = async { window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK) }
         val moving = async { if (age != null) movingMinutes(start, end, granted) else null }
@@ -91,13 +91,13 @@ class HealthConnectSource(
         val sums = totals.await()
 
         DailyMetrics(
-            steps = sums?.get(StepsRecord.COUNT_TOTAL),
+            steps = sums[TotalMetric.Steps]?.toLong(),
             hourlySteps = hourly.await(),
-            distanceMeters = sums?.get(DistanceRecord.DISTANCE_TOTAL)?.inMeters,
-            floors = sums?.get(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL),
-            caloriesOutKcal = sums?.get(TotalCaloriesBurnedRecord.ENERGY_TOTAL)?.inKilocalories,
-            caloriesInKcal = sums?.get(NutritionRecord.ENERGY_TOTAL)?.inKilocalories,
-            waterLiters = sums?.get(HydrationRecord.VOLUME_TOTAL)?.inLiters,
+            distanceMeters = sums[TotalMetric.DistanceMeters],
+            floors = sums[TotalMetric.Floors],
+            caloriesOutKcal = sums[TotalMetric.CaloriesOutKcal],
+            caloriesInKcal = sums[TotalMetric.CaloriesInKcal],
+            waterLiters = sums[TotalMetric.WaterLiters],
             zoneMinutes = if (age != null && restingBpm != null && heartRate.isNotEmpty()) {
                 zoneMinutes(heartRate, heartRateZones(age, restingBpm.value))
             } else {
@@ -295,9 +295,12 @@ class HealthConnectSource(
                 if (!steps) {
                     emptyList()
                 } else {
-                    gateway.store.aggregateByDuration(setOf(StepsRecord.COUNT_TOTAL), start, end, Duration.ofMinutes(1))
-                        .filter { (it.result[StepsRecord.COUNT_TOTAL] ?: 0L) > 0L }
-                        .map { it.startTime.epochSecond / 60 }
+                    // Saved per day: the days the range touches, then only its minutes.
+                    val (from, until) = start.epochSecond / 60 to end.epochSecond / 60
+                    generateSequence(localDate(start)) { it.plusDays(1) }.takeWhile { it <= localDate(end.minusMillis(1)) }.toList()
+                        .flatMap { gateway.store.minuteSteps(it).keys }
+                        .filter { it in from until until }
+                        .toList()
                 }
             }
             val sessions = async { if (exercise) readAll(ExerciseSessionRecord::class, range) else emptyList() }
@@ -310,11 +313,9 @@ class HealthConnectSource(
 
     private fun localDate(time: Instant): LocalDate = time.atZone(zone).toLocalDate()
 
-    private suspend fun hourlySteps(window: Window): Map<Int, Long> {
-        if (read(StepsRecord::class) !in window.granted) return emptyMap()
-        return gateway.store.aggregateByDuration(setOf(StepsRecord.COUNT_TOTAL), window.start, window.end, Duration.ofHours(1)).associate { bucket ->
-            bucket.startTime.atZone(zone).hour to (bucket.result[StepsRecord.COUNT_TOTAL] ?: 0L)
-        }
+    private suspend fun hourlySteps(date: LocalDate, granted: Set<String>): Map<Int, Long> {
+        if (read(StepsRecord::class) !in granted) return emptyMap()
+        return gateway.store.hourly(TotalMetric.Steps, date).mapValues { it.value.toLong() }
     }
 
     private inner class Window(val start: Instant, val end: Instant, val granted: Set<String>) {
@@ -322,14 +323,11 @@ class HealthConnectSource(
             if (read(type) in granted) readAll(type, TimeRangeFilter.between(from, end)) else emptyList()
     }
 
-    private suspend fun aggregate(window: Window): AggregateValues? {
-        val metrics = AGGREGATES
-            .filterKeys { read(it) in window.granted }
-            .values
-            .toSet()
-        if (metrics.isEmpty()) return null
-        return gateway.store.aggregate(metrics, window.start, window.end)
-    }
+    /** The day's totals from the saved daily totals, for the types granted. */
+    private suspend fun dayTotals(date: LocalDate, granted: Set<String>): Map<TotalMetric, Double> =
+        TotalMetric.entries.filter { read(it.record) in granted }.mapNotNull { metric ->
+            gateway.store.dailyTotals(metric, date, date)[date]?.let { metric to it }
+        }.toMap()
 
     private suspend fun <T : Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
         val records = gateway.store.read(type, range)
@@ -353,14 +351,6 @@ class HealthConnectSource(
         const val PARALLEL_DAYS = 4
 
 
-        val AGGREGATES: Map<KClass<out Record>, AggregateMetric<*>> = mapOf(
-            StepsRecord::class to StepsRecord.COUNT_TOTAL,
-            DistanceRecord::class to DistanceRecord.DISTANCE_TOTAL,
-            FloorsClimbedRecord::class to FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL,
-            TotalCaloriesBurnedRecord::class to TotalCaloriesBurnedRecord.ENERGY_TOTAL,
-            NutritionRecord::class to NutritionRecord.ENERGY_TOTAL,
-            HydrationRecord::class to HydrationRecord.VOLUME_TOTAL,
-        )
 
         val AWAKE_STAGES = setOf(
             SleepSessionRecord.STAGE_TYPE_AWAKE,

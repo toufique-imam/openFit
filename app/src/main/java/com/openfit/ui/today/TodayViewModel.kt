@@ -172,10 +172,26 @@ class TodayViewModel(
         show(date, Reload.IfStale)
     }
 
-    /** A refresh the user asked for, or after permissions or the data sources changed. */
+    /**
+     * Opening the app: Today shows what is saved at once, then the last days are read from Health Connect (at most
+     * every few minutes) and Today reloads from the copy if anything was read.
+     */
+    fun onResume() {
+        refreshIfStale()
+        viewModelScope.launch {
+            sync.startRecent().join()
+            refreshIfStale()
+        }
+    }
+
+    /** Pull to refresh (or permissions or data sources changed): reads the last days now, then reloads. */
     fun refresh() {
         gateway.invalidatePermissions()
-        show(currentDate(), Reload.Pull)
+        _state.update { if (it is TodayUiState.Ready) it.copy(refreshing = true) else it }
+        viewModelScope.launch {
+            sync.syncRecent()
+            show(currentDate(), Reload.Pull)
+        }
     }
 
     fun showDate(date: LocalDate) {
@@ -298,14 +314,14 @@ class TodayViewModel(
 
     /** The first time, reads the history into openFit's copy in the background, so every screen opens from it later. */
     private fun importIfNeeded() {
-        if (importing?.isActive == true) return
-        importing = viewModelScope.launch(Dispatchers.Default + HcPriority.Background) {
-            if (sync.importNeeded()) sync.importHistory()
-        }
+        if (importing?.isActive == true || sync.imported) return
+        importing = sync.startImport(background = true)
     }
 
     private fun isFresh(shown: TodayUiState.Ready, profileKey: String): Boolean {
         val at = shownAt ?: return false
+        // A sync since read new data into the copy.
+        if (sync.lastSync?.isAfter(at) == true) return false
         if (!shownCurrent || shownProfileKey != profileKey || shown.energyLoading || shown.pulseAgeLoading) return false
         val now = Instant.now()
         if (shown.date >= LocalDate.now()) return Duration.between(at, now) < TODAY_FRESH
@@ -407,9 +423,6 @@ class TodayViewModel(
         val dataTypes = requestable - HealthConnectGateway.OPTIONAL_PERMISSIONS
         val granted = gateway.grantedPermissions()
         val missing = dataTypes - granted
-        // The last three days are read again (at most every 15 minutes) and saved days changed since are forgotten,
-        // so this load sees what the watch synced late.
-        sync.refresh(onlyIfDue = true)
         if (missing == dataTypes) return@coroutineScope TodayUiState.PermissionsRequired(requestable)
 
         val today = LocalDate.now()

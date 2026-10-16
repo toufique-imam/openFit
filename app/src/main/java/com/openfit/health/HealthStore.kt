@@ -4,7 +4,6 @@ import android.content.Context
 import android.util.LruCache
 import androidx.health.connect.client.HealthConnectClient
 import androidx.health.connect.client.aggregate.AggregateMetric
-import androidx.health.connect.client.aggregate.AggregationResult
 import androidx.health.connect.client.changes.DeletionChange
 import androidx.health.connect.client.changes.UpsertionChange
 import androidx.health.connect.client.records.DistanceRecord
@@ -25,16 +24,14 @@ import androidx.health.connect.client.units.Energy
 import androidx.health.connect.client.units.Length
 import androidx.health.connect.client.units.Volume
 import com.openfit.R
-import com.openfit.ui.Notices
 import com.openfit.data.AggregateEntity
 import com.openfit.data.OpenFitDatabase
 import com.openfit.data.RecordDayEntity
+import com.openfit.ui.Notices
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.withContext
 import kotlinx.serialization.KSerializer
-import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
 import kotlinx.serialization.builtins.MapSerializer
 import kotlinx.serialization.builtins.serializer
@@ -42,35 +39,33 @@ import kotlinx.serialization.json.Json
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
-import java.time.LocalDateTime
 import java.time.Period
 import java.time.ZoneId
 import java.util.concurrent.ConcurrentHashMap
 import kotlin.reflect.KClass
 
-/** Sums from an aggregate request, read like Health Connect's [AggregationResult]. */
-class AggregateValues internal constructor(internal val values: Map<String, Double>) {
-    @Suppress("UNCHECKED_CAST")
-    operator fun <T : Any> get(metric: AggregateMetric<T>): T? {
-        val codec = METRICS[metric] ?: error("Unsupported metric $metric")
-        return values[codec.name]?.let { codec.decode(it) as T }
-    }
+/** The totals openFit adds up from Health Connect, saved per day. */
+enum class TotalMetric(val metric: AggregateMetric<*>, val record: KClass<out Record>, val key: String, val toNumber: (Any) -> Double) {
+    Steps(StepsRecord.COUNT_TOTAL, StepsRecord::class, "steps", { (it as Long).toDouble() }),
+    DistanceMeters(DistanceRecord.DISTANCE_TOTAL, DistanceRecord::class, "distance", { (it as Length).inMeters }),
+    Floors(FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL, FloorsClimbedRecord::class, "floors", { it as Double }),
+    CaloriesOutKcal(TotalCaloriesBurnedRecord.ENERGY_TOTAL, TotalCaloriesBurnedRecord::class, "calories", { (it as Energy).inKilocalories }),
+    CaloriesInKcal(NutritionRecord.ENERGY_TOTAL, NutritionRecord::class, "nutrition", { (it as Energy).inKilocalories }),
+    WaterLiters(HydrationRecord.VOLUME_TOTAL, HydrationRecord::class, "hydration", { (it as Volume).inLiters }),
 }
 
-class DurationBucket(val startTime: Instant, val endTime: Instant, val result: AggregateValues)
-
-class PeriodBucket(val startTime: LocalDateTime, val endTime: LocalDateTime, val result: AggregateValues)
+/** A workout's distance and energy, added up over its time. */
+@kotlinx.serialization.Serializable
+data class SessionTotals(val distanceMeters: Double? = null, val caloriesKcal: Double? = null)
 
 /**
- * openFit's copy of Health Connect, and the only way to it. Screens read through here; Health Connect is asked only for
- * what is not saved yet or may still change:
- *  - records are saved per type and local day (filed by start, as Health Connect files them). A day read well after it
- *    ended ([SETTLE]) is final; a recent one is read again at most every [LIVE_TTL].
- *  - an aggregate answer is saved per request, final or not by the same rule.
- *  - [syncChanges] follows Health Connect's changes feed and forgets the saved days that changed later (a watch syncing
- *    late, an app backfilling history).
- * Every call goes through [HealthConnectBudget]. When it refuses, or Health Connect fails, saved data stands in; only
- * data never read before fails.
+ * openFit's copy of Health Connect. Pages and calculations read only from it ([read], [dailyTotals], [hourly],
+ * [minuteSteps], [sessionTotals]); a day never read before is filled once on first use, everything else comes from the
+ * syncs ([HealthSync]): the import of all available data, and the last days on opening the app or pulling to refresh.
+ *  - records are saved per type and local day, filed by start as Health Connect files them;
+ *  - totals are saved per metric and day (daily, hourly, per minute for steps), and per workout.
+ * Every call goes through [HealthConnectBudget]. When it refuses, or Health Connect fails, the saved data shows (with a
+ * note when some days are missing); only a request with nothing saved fails.
  */
 class HealthStore(
     context: Context,
@@ -83,12 +78,22 @@ class HealthStore(
     private val locks = ConcurrentHashMap<String, Mutex>()
     private val decoded = LruCache<String, List<SavedRecord>>(MEMORY_DAYS)
 
+    /**
+     * The first day with data, found by the import. Days before it hold nothing, so reading them costs no call; before
+     * the import, the last [DEFAULT_WINDOW_DAYS] count as possible.
+     */
+    var firstDay: LocalDate
+        get() = prefs.getString(KEY_FIRST_DAY, null)?.let(LocalDate::parse) ?: LocalDate.now(zone).minusDays(DEFAULT_WINDOW_DAYS)
+        set(value) = prefs.edit().putString(KEY_FIRST_DAY, value.toString()).apply()
+
+    // ---- What pages read ----
+
     /** Records of [type] starting in [start, end), as Health Connect's readRecords would return them. */
     suspend fun <T : Record> read(type: KClass<T>, start: Instant, end: Instant): List<T> {
         if (end <= start) return emptyList()
-        val days = days(start, end)
+        val days = days(day(start), day(end.minusMillis(1)))
         if (days.isEmpty()) return emptyList()
-        val rows = ensure(type, days)
+        val rows = records(type, days, force = false)
         val from = start.toEpochMilli()
         val until = end.toEpochMilli()
         return days.flatMap { day -> rows[day]?.let(::decode).orEmpty() }
@@ -96,186 +101,124 @@ class HealthStore(
             .map { it.toRecord(type) }
     }
 
-    /**
-     * Saves [first]..[last] of [type] from Health Connect where nothing current is saved, without reading it back (the
-     * import); with [force], reads them again whatever is saved.
-     */
-    suspend fun <T : Record> save(type: KClass<T>, first: LocalDate, last: LocalDate, force: Boolean = false) {
-        val days = days(first.atStartOfDay(zone).toInstant(), last.plusDays(1).atStartOfDay(zone).toInstant())
-        if (days.isNotEmpty()) ensure(type, days, force)
-    }
-
-    /** Forgets saved aggregate answers covering [from] or later, so they are asked again. */
-    suspend fun forgetAggregatesFrom(from: LocalDate) = dao.forgetAggregatesFrom(from.toString())
-
-    /** Local days from [start] to the one before [end], stopping at today: later days hold nothing yet. */
-    private fun days(start: Instant, end: Instant): List<LocalDate> {
-        val first = day(start)
-        val last = minOf(day(end.minusMillis(1)), LocalDate.now(zone))
-        return generateSequence(first) { it.plusDays(1) }.takeWhile { it <= last }.toList()
-    }
-
-    /** The saved rows for [days], reading the stale ones from Health Connect first. */
-    private suspend fun <T : Record> ensure(type: KClass<T>, days: List<LocalDate>, force: Boolean = false): Map<LocalDate, RecordDayEntity> {
-        val name = SAVED_TYPES[type] ?: error("Unsupported record ${type.simpleName}")
-        val first = days.first()
-        val last = days.last()
-        return lock("records:$name").withLock {
-            val saved = dao.days(name, first.toString(), last.toString()).associateBy { LocalDate.parse(it.day) }
-            val stale = if (force) days else days.filter { day -> saved[day]?.let { isFresh(it.fetchedAt, dayEnd(day)) } != true }
-            if (stale.isEmpty()) {
-                budget.savedRead()
-                saved
-            } else {
-                try {
-                    saved + fetchDays(type, name, stale)
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    // Days read before stand in for the ones Health Connect would not give now; with some never read,
-                    // the saved ones still show (a year chart with gaps beats an error), with a note why.
-                    if (saved.isEmpty()) throw error
-                    if (stale.any { it !in saved }) Notices.postOnce(R.string.hc_partial)
-                    budget.savedRead()
-                    saved
-                }
-            }
-        }
-    }
-
     suspend fun <T : Record> read(type: KClass<T>, range: TimeRangeFilter): List<T> =
         read(type, range.startTime ?: error("Instant ranges only"), range.endTime ?: error("Instant ranges only"))
 
-    suspend fun aggregate(metrics: Set<AggregateMetric<*>>, start: Instant, end: Instant): AggregateValues {
-        val until = settledEnd(end)
-        val key = "total|${names(metrics)}|${start.toEpochMilli()}|${until.toEpochMilli()}"
-        val values = cached(key, metrics, start, until, MAP) {
-            encode(metrics, client().aggregate(AggregateRequest(metrics, TimeRangeFilter.between(start, until))))
-        }
-        return AggregateValues(values)
+    /** [metric]'s total each day in [from]..[until] (count, metres, kcal or litres), for days with data. */
+    suspend fun dailyTotals(metric: TotalMetric, from: LocalDate, until: LocalDate): Map<LocalDate, Double> =
+        series(KIND_DAY, metric, days(from, until), force = false, DOUBLE).mapNotNull { (day, value) -> value?.let { day to it } }.toMap()
+
+    /** [metric] per hour of [date] (hour of day → total). */
+    suspend fun hourly(metric: TotalMetric, date: LocalDate): Map<Int, Double> = hourlyByDay(metric, date, date)[date].orEmpty()
+
+    suspend fun hourlyByDay(metric: TotalMetric, from: LocalDate, until: LocalDate): Map<LocalDate, Map<Int, Double>> =
+        series(KIND_HOUR, metric, days(from, until), force = false, HOURS).mapNotNull { (day, value) -> value?.let { day to it } }.toMap()
+
+    /** Steps per minute of [date] (epoch minute → steps), minutes with steps only. */
+    suspend fun minuteSteps(date: LocalDate): Map<Long, Double> =
+        series(KIND_MINUTE, TotalMetric.Steps, days(date, date), force = false, MINUTES)[date].orEmpty()
+
+    /** A workout's distance and energy over [start, end); null when neither could be read. */
+    suspend fun sessionTotals(start: Instant, end: Instant, metrics: Set<TotalMetric>): SessionTotals? {
+        val key = "$KIND_SESSION|${start.toEpochMilli()}|${end.toEpochMilli()}"
+        return lock(key).withLock { sessionTotals(key, start, end, metrics) }
     }
 
-    /**
-     * [metric]'s total for each day in [from]..[until], saved per day so any range reuses them: the days not saved (or
-     * still changing) are asked in one request. Values in [AggregateValues]' units (count, metres, kcal, litres).
-     */
-    suspend fun dailyTotals(metric: AggregateMetric<*>, from: LocalDate, until: LocalDate): Map<LocalDate, Double> {
-        val codec = METRICS[metric] ?: error("Unsupported metric $metric")
-        val last = minOf(until, LocalDate.now(zone))
-        if (last < from) return emptyMap()
-        val prefix = "day|${codec.name}|"
-        return lock("daily:${codec.name}").withLock {
-            val saved = dao.dailyTotals(prefix, from.toString(), last.toString()).associateBy { LocalDate.parse(it.firstDay) }
-            val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= last }.toList()
-            val stale = days.filter { day -> saved[day]?.let { isFresh(it.fetchedAt, it.rangeEnd) } != true }
-            val rows = if (stale.isEmpty()) {
-                budget.savedRead()
-                saved
-            } else {
-                try {
-                    val start = stale.first()
-                    val end = stale.last().plusDays(1)
-                    val request = AggregateGroupByPeriodRequest(setOf(metric), TimeRangeFilter.between(start.atStartOfDay(), end.atStartOfDay()), Period.ofDays(1))
-                    val buckets = budget.call("totals") { client().aggregateGroupByPeriod(request) }
-                        .associate { bucket -> bucket.startTime.toLocalDate() to bucket.result[metric]?.let(codec.encode) }
-                    val fetchedAt = System.currentTimeMillis()
-                    // Every day asked about is saved, a day without data too, so it is not asked again.
-                    val fresh = generateSequence(start) { it.plusDays(1) }.takeWhile { it < end }.map { day ->
-                        AggregateEntity(
-                            key = prefix + day,
-                            fetchedAt = fetchedAt,
-                            rangeEnd = dayEnd(day),
-                            firstDay = day.toString(),
-                            lastDay = day.toString(),
-                            types = ",${codec.type},",
-                            json = buckets[day]?.toString() ?: "",
-                        )
-                    }.toList()
-                    dao.putAggregates(fresh)
-                    saved + fresh.associateBy { LocalDate.parse(it.firstDay) }
-                } catch (error: CancellationException) {
-                    throw error
-                } catch (error: Exception) {
-                    if (saved.isEmpty()) throw error
-                    Notices.postOnce(R.string.hc_partial)
-                    saved
-                }
-            }
-            rows.mapNotNull { (day, row) -> row.json.toDoubleOrNull()?.let { day to it } }.toMap()
+    private suspend fun sessionTotals(key: String, start: Instant, end: Instant, metrics: Set<TotalMetric>): SessionTotals? {
+        dao.aggregate(key)?.let { saved ->
+            budget.savedRead()
+            return JSON.decodeFromString(SessionTotals.serializer(), saved.json)
         }
-    }
-
-    suspend fun aggregateByDuration(metrics: Set<AggregateMetric<*>>, start: Instant, end: Instant, slicer: Duration): List<DurationBucket> {
-        val until = settledEnd(end)
-        val key = "duration|${names(metrics)}|${start.toEpochMilli()}|${until.toEpochMilli()}|${slicer.seconds}"
-        val buckets = cached(key, metrics, start, until, ListSerializer(SavedBucket.serializer())) {
-            client().aggregateGroupByDuration(AggregateGroupByDurationRequest(metrics, TimeRangeFilter.between(start, until), slicer))
-                .map { SavedBucket(it.startTime.toEpochMilli().toString(), it.endTime.toEpochMilli().toString(), encode(metrics, it.result)) }
-        }
-        return buckets.map { DurationBucket(Instant.ofEpochMilli(it.start.toLong()), Instant.ofEpochMilli(it.end.toLong()), AggregateValues(it.values)) }
-    }
-
-    suspend fun aggregateByPeriod(metrics: Set<AggregateMetric<*>>, start: LocalDateTime, end: LocalDateTime, slicer: Period): List<PeriodBucket> {
-        val key = "period|${names(metrics)}|$start|$end|$slicer"
-        val buckets = cached(key, metrics, start.atZone(zone).toInstant(), end.atZone(zone).toInstant(), ListSerializer(SavedBucket.serializer())) {
-            client().aggregateGroupByPeriod(AggregateGroupByPeriodRequest(metrics, TimeRangeFilter.between(start, end), slicer))
-                .map { SavedBucket(it.startTime.toString(), it.endTime.toString(), encode(metrics, it.result)) }
-        }
-        return buckets.map { PeriodBucket(LocalDateTime.parse(it.start), LocalDateTime.parse(it.end), AggregateValues(it.values)) }
-    }
-
-    /**
-     * Follows Health Connect's changes feed (at most every [CHANGES_EVERY]) and forgets saved days and aggregates that
-     * changed since: Fitbit's app may write a day hours late, or backfill older days. Background priority, and quiet on
-     * failure: the saved days are still the best there is.
-     */
-    suspend fun syncChanges(granted: Set<String>) = withContext(HcPriority.Background) {
-        val types = CHANGE_TYPES.keys.filter { HealthConnectGateway.read(it) in granted }.toSet()
-        if (types.isEmpty()) return@withContext
-        val now = System.currentTimeMillis()
-        if (now - prefs.getLong(KEY_SYNCED_AT, 0) < CHANGES_EVERY.toMillis() || !budget.hasRoom()) return@withContext
-        val typeKey = types.mapNotNull { CHANGE_TYPES[it] }.sorted().joinToString(",")
-        // Taken before the walk, so a change written during it is not counted as seen.
-        val walkStart = now
-        try {
-            var token = prefs.getString(KEY_TOKEN, null)?.takeIf { prefs.getString(KEY_TYPES, null) == typeKey }
-            if (token != null) {
-                var pages = 0
-                var deleted = false
-                while (pages++ < MAX_CHANGE_PAGES) {
-                    val current = token ?: break
-                    val response = budget.call("changes") { client().getChanges(current) }
-                    if (response.changesTokenExpired) {
-                        token = null
-                        forgetRecent()
-                        break
-                    }
-                    response.changes.forEach { change ->
-                        when (change) {
-                            is UpsertionChange -> forget(change.record)
-                            // A deletion names only the record's id: forget the recent days, where deletions happen.
-                            is DeletionChange -> deleted = true
-                        }
-                    }
-                    token = response.nextChangesToken
-                    if (!response.hasMore) break
-                }
-                if (deleted) forgetRecent()
-            }
-            val editor = prefs.edit()
-            if (token == null) {
-                token = budget.call("changes token") { client().getChangesToken(ChangesTokenRequest(types)) }
-                // A new token reports only what changes from now on.
-                editor.putLong(KEY_SINCE, walkStart)
-            }
-            editor.putString(KEY_TOKEN, token).putString(KEY_TYPES, typeKey).putLong(KEY_SYNCED_AT, now).putLong(KEY_WALKED_AT, walkStart).apply()
+        if (metrics.isEmpty()) return null
+        return try {
+            val result = budget.call("workout totals") { client().aggregate(AggregateRequest(metrics.map { it.metric }.toSet(), TimeRangeFilter.between(start, end))) }
+            val totals = SessionTotals(
+                distanceMeters = result[DistanceRecord.DISTANCE_TOTAL]?.inMeters,
+                caloriesKcal = result[TotalCaloriesBurnedRecord.ENERGY_TOTAL]?.inKilocalories,
+            )
+            val day = day(start).toString()
+            dao.putAggregate(AggregateEntity(key, System.currentTimeMillis(), end.toEpochMilli(), day, day, ",distance,calories,", JSON.encodeToString(SessionTotals.serializer(), totals)))
+            totals
         } catch (error: CancellationException) {
             throw error
         } catch (_: Exception) {
+            null
         }
     }
 
-    /** Forgets everything saved, so the next reads go to Health Connect (Delete everything). */
+    // ---- Syncs: reading Health Connect ----
+
+    /** Reads [first]..[last] of [type] again (or, without [force], the days not saved yet). */
+    suspend fun <T : Record> syncRecords(type: KClass<T>, first: LocalDate, last: LocalDate, force: Boolean) {
+        val days = days(first, last, window = false)
+        if (days.isNotEmpty()) records(type, days, force, strict = true)
+    }
+
+    /** Reads [metric]'s daily and hourly totals for [first]..[last] again (or, without [force], the missing days). */
+    suspend fun syncTotals(metric: TotalMetric, first: LocalDate, last: LocalDate, force: Boolean) {
+        val days = days(first, last, window = false)
+        if (days.isEmpty()) return
+        series(KIND_DAY, metric, days, force, DOUBLE, strict = true)
+        series(KIND_HOUR, metric, days, force, HOURS, strict = true)
+    }
+
+    /** Reads steps per minute (for cardio load's moving minutes) for [first]..[last]. */
+    suspend fun syncMinutes(first: LocalDate, last: LocalDate, force: Boolean) {
+        val days = days(first, last, window = false)
+        if (days.isNotEmpty()) series(KIND_MINUTE, TotalMetric.Steps, days, force, MINUTES, strict = true)
+    }
+
+    /** The first day [type] has data, from one record read oldest first; null without any. */
+    suspend fun <T : Record> earliestDay(type: KClass<T>): LocalDate? {
+        val range = TimeRangeFilter.between(Instant.EPOCH, Instant.now())
+        val response = budget.call("first record") { client().readRecords(ReadRecordsRequest(type, range, ascendingOrder = true, pageSize = 1)) }
+        return response.records.firstOrNull()?.let { day(it.filedAt) }
+    }
+
+    /** The first day [metric] has data, from yearly totals; null without any. */
+    suspend fun earliestDay(metric: TotalMetric): LocalDate? {
+        val start = LocalDate.now(zone).minusYears(MAX_HISTORY_YEARS)
+        val request = AggregateGroupByPeriodRequest(setOf(metric.metric), TimeRangeFilter.between(start.atStartOfDay(), LocalDate.now(zone).plusDays(1).atStartOfDay()), Period.ofMonths(1))
+        val months = budget.call("first total") { client().aggregateGroupByPeriod(request) }
+        return months.firstOrNull { it.result[metric.metric] != null }?.startTime?.toLocalDate()
+    }
+
+    /**
+     * Health Connect's changes since the last call, as the local days each record type changed on; null when the feed
+     * is new or expired (the caller then re-reads recent days). The next call reports what changes after this one.
+     */
+    suspend fun changedDays(granted: Set<String>): Map<KClass<out Record>, Set<LocalDate>>? {
+        val types = CHANGE_TYPES.filter { HealthConnectGateway.read(it) in granted }.toSet()
+        if (types.isEmpty()) return emptyMap()
+        val typeKey = types.mapNotNull { TYPE_NAMES[it] }.sorted().joinToString(",")
+        var token = prefs.getString(KEY_TOKEN, null)?.takeIf { prefs.getString(KEY_TYPES, null) == typeKey }
+        val changed = mutableMapOf<KClass<out Record>, MutableSet<LocalDate>>()
+        var complete = token != null
+        var pages = 0
+        while (token != null && pages++ < MAX_CHANGE_PAGES) {
+            val current = token
+            val response = budget.call("changes") { client().getChanges(current) }
+            if (response.changesTokenExpired) {
+                token = null
+                complete = false
+                break
+            }
+            response.changes.forEach { change ->
+                when (change) {
+                    is UpsertionChange -> changed.getOrPut(change.record::class) { mutableSetOf() } += day(change.record.filedAt)
+                    // A deletion names only the record: count it as a change to the recent days of every type.
+                    is DeletionChange -> types.forEach { type -> changed.getOrPut(type) { mutableSetOf() } += days(LocalDate.now(zone).minusDays(DELETION_DAYS), LocalDate.now(zone), window = false) }
+                }
+            }
+            token = response.nextChangesToken
+            if (!response.hasMore) break
+        }
+        if (token == null) token = budget.call("changes token") { client().getChangesToken(ChangesTokenRequest(types)) }
+        prefs.edit().putString(KEY_TOKEN, token).putString(KEY_TYPES, typeKey).apply()
+        return if (complete) changed else null
+    }
+
+    /** Forgets everything saved, so the next sync reads it all again (Delete everything). */
     suspend fun clear() {
         dao.clearDays()
         dao.clearAggregates()
@@ -283,31 +226,40 @@ class HealthStore(
         prefs.edit().clear().apply()
     }
 
-    private suspend fun forget(record: Record) {
-        val day = day(record.filedAt).toString()
-        SAVED_TYPES[record::class]?.let { dao.forgetDay(it, day) }
-        CHANGE_TYPES[record::class]?.let { dao.forgetAggregates(it, day) }
-    }
+    // ---- Saved records ----
 
-    private suspend fun forgetRecent() {
-        val from = LocalDate.now(zone).minusDays(RECENT_DAYS).toString()
-        dao.forgetDaysFrom(from)
-        dao.forgetAggregatesFrom(from)
-    }
-
-    /** Reads [days] from Health Connect, one request per run of consecutive days, and saves them (empty days too). */
-    private suspend fun <T : Record> fetchDays(type: KClass<T>, name: String, days: List<LocalDate>): Map<LocalDate, RecordDayEntity> {
-        // Runs of consecutive days, each at most [maxRun] long: a few days of heart rate already fill several pages.
-        val maxRun = if (type == HeartRateRecord::class) HEART_RATE_RUN_DAYS else RUN_DAYS
-        val runs = mutableListOf<MutableList<LocalDate>>()
-        days.sorted().forEach { day ->
-            val run = runs.lastOrNull()
-            if (run != null && run.last().plusDays(1) == day && run.size < maxRun) run += day else runs += mutableListOf(day)
+    /**
+     * The saved rows of [type] for [days]. Without [force], only days never read go to Health Connect; with it, all of
+     * [days] do. [strict] (a sync) fails when Health Connect does; a page instead keeps what is saved.
+     */
+    private suspend fun <T : Record> records(type: KClass<T>, days: List<LocalDate>, force: Boolean, strict: Boolean = false): Map<LocalDate, RecordDayEntity> {
+        val name = SAVED_TYPES[type] ?: error("Unsupported record ${type.simpleName}")
+        return lock("records:$name").withLock {
+            val saved = dao.days(name, days.first().toString(), days.last().toString()).associateBy { LocalDate.parse(it.day) }
+            val missing = if (force) days else days.filter { it !in saved }
+            if (missing.isEmpty()) {
+                budget.savedRead()
+                return@withLock saved
+            }
+            try {
+                saved + fetchDays(type, name, missing)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                if (strict || saved.isEmpty()) throw error
+                Notices.postOnce(R.string.hc_partial)
+                saved
+            }
         }
+    }
+
+    /** Reads [days] from Health Connect in runs of consecutive days, and saves each day (empty ones too). */
+    private suspend fun <T : Record> fetchDays(type: KClass<T>, name: String, days: List<LocalDate>): Map<LocalDate, RecordDayEntity> {
+        // A few days of heart rate already fill several pages.
         val result = mutableMapOf<LocalDate, RecordDayEntity>()
-        runs.forEach { run ->
+        runs(days, if (type == HeartRateRecord::class) HEART_RATE_RUN_DAYS else RUN_DAYS).forEach { run ->
             val fetchedAt = System.currentTimeMillis()
-            val range = TimeRangeFilter.between(run.first().atStartOfDay(zone).toInstant(), run.last().plusDays(1).atStartOfDay(zone).toInstant())
+            val range = TimeRangeFilter.between(start(run.first()), start(run.last().plusDays(1)))
             val records = mutableListOf<SavedRecord>()
             var pageToken: String? = null
             do {
@@ -325,61 +277,114 @@ class HealthStore(
         return result
     }
 
-    private suspend fun <R> cached(
-        key: String,
-        metrics: Set<AggregateMetric<*>>,
-        start: Instant,
-        end: Instant,
-        serializer: KSerializer<R>,
-        fetch: suspend () -> R,
-    ): R = lock("aggregate:$key").withLock {
-        val saved = dao.aggregate(key)
-        if (saved != null && isFresh(saved.fetchedAt, end.toEpochMilli())) {
-            budget.savedRead()
-            return@withLock JSON.decodeFromString(serializer, saved.json)
+    // ---- Saved totals ----
+
+    /**
+     * [metric]'s saved [kind] values for [days] ("" saved for a day without data, so it is not asked again), reading
+     * the missing days (or all, with [force]) from Health Connect, one request per run.
+     */
+    private suspend fun <V> series(
+        kind: String,
+        metric: TotalMetric,
+        days: List<LocalDate>,
+        force: Boolean,
+        serializer: KSerializer<V>,
+        strict: Boolean = false,
+    ): Map<LocalDate, V?> {
+        if (days.isEmpty()) return emptyMap()
+        val prefix = "$kind|${metric.key}|"
+        return lock("series:$prefix").withLock {
+            val saved = dao.dailyTotals(prefix, days.first().toString(), days.last().toString()).associateBy { LocalDate.parse(it.firstDay) }
+            val missing = if (force) days else days.filter { it !in saved }
+            val rows = if (missing.isEmpty()) {
+                budget.savedRead()
+                saved
+            } else {
+                try {
+                    saved + fetchSeries(kind, metric, prefix, missing, serializer)
+                } catch (error: CancellationException) {
+                    throw error
+                } catch (error: Exception) {
+                    if (strict || saved.isEmpty()) throw error
+                    Notices.postOnce(R.string.hc_partial)
+                    saved
+                }
+            }
+            rows.mapValues { (_, row) -> row.json.takeIf { it.isNotEmpty() }?.let { JSON.decodeFromString(serializer, it) } }
         }
-        try {
-            val value = budget.call("aggregate") { fetch() }
-            dao.putAggregate(
+    }
+
+    @Suppress("UNCHECKED_CAST")
+    private suspend fun <V> fetchSeries(kind: String, metric: TotalMetric, prefix: String, days: List<LocalDate>, serializer: KSerializer<V>): Map<LocalDate, AggregateEntity> {
+        val result = mutableMapOf<LocalDate, AggregateEntity>()
+        val maxRun = when (kind) {
+            KIND_DAY -> DAY_TOTALS_RUN_DAYS
+            KIND_HOUR -> RUN_DAYS
+            else -> MINUTE_RUN_DAYS
+        }
+        runs(days, maxRun).forEach { run ->
+            val first = run.first()
+            val end = run.last().plusDays(1)
+            val values: Map<LocalDate, Any> = when (kind) {
+                KIND_DAY -> {
+                    val request = AggregateGroupByPeriodRequest(setOf(metric.metric), TimeRangeFilter.between(first.atStartOfDay(), end.atStartOfDay()), Period.ofDays(1))
+                    budget.call("daily totals") { client().aggregateGroupByPeriod(request) }
+                        .mapNotNull { bucket -> bucket.result[metric.metric]?.let { bucket.startTime.toLocalDate() to metric.toNumber(it) } }
+                        .toMap()
+                }
+                else -> {
+                    val slice = if (kind == KIND_HOUR) Duration.ofHours(1) else Duration.ofMinutes(1)
+                    val request = AggregateGroupByDurationRequest(setOf(metric.metric), TimeRangeFilter.between(start(first), start(end)), slice)
+                    val buckets = budget.call(if (kind == KIND_HOUR) "hourly totals" else "minute steps") { client().aggregateGroupByDuration(request) }
+                    buckets.mapNotNull { bucket -> bucket.result[metric.metric]?.let { bucket.startTime to metric.toNumber(it) } }
+                        .filter { (_, value) -> value > 0 }
+                        .groupBy { (time, _) -> day(time) }
+                        .mapValues { (_, entries) ->
+                            if (kind == KIND_HOUR) {
+                                entries.associate { (time, value) -> time.atZone(zone).hour to value }
+                            } else {
+                                entries.associate { (time, value) -> time.epochSecond / 60 to value }
+                            }
+                        }
+                }
+            }
+            val fetchedAt = System.currentTimeMillis()
+            val rows = run.map { day ->
                 AggregateEntity(
-                    key = key,
-                    fetchedAt = System.currentTimeMillis(),
-                    rangeEnd = end.toEpochMilli(),
-                    firstDay = day(start).toString(),
-                    lastDay = day(end.minusMillis(1)).toString(),
-                    types = metrics.mapNotNull { METRICS[it]?.type }.distinct().joinToString(",", prefix = ",", postfix = ","),
-                    json = JSON.encodeToString(serializer, value),
-                ),
-            )
-            value
-        } catch (error: CancellationException) {
-            throw error
-        } catch (error: Exception) {
-            if (saved == null) throw error
-            budget.savedRead()
-            JSON.decodeFromString(serializer, saved.json)
+                    key = prefix + day,
+                    fetchedAt = fetchedAt,
+                    rangeEnd = start(day.plusDays(1)).toEpochMilli(),
+                    firstDay = day.toString(),
+                    lastDay = day.toString(),
+                    types = ",${metric.key},",
+                    json = values[day]?.let { JSON.encodeToString(serializer, it as V) } ?: "",
+                )
+            }
+            dao.putAggregates(rows)
+            rows.forEach { result[LocalDate.parse(it.firstDay)] = it }
         }
+        return result
     }
 
-    /**
-     * Final once read [SETTLE] after its end. Before that, good for [LIVE_TTL], or for as long as the changes feed has
-     * been followed since it was read: a change would have made [syncChanges] forget it.
-     */
-    private fun isFresh(fetchedAt: Long, end: Long): Boolean {
-        if (fetchedAt >= end + SETTLE.toMillis()) return true
-        if (System.currentTimeMillis() - fetchedAt < LIVE_TTL.toMillis()) return true
-        val since = prefs.getLong(KEY_SINCE, Long.MAX_VALUE)
-        return fetchedAt >= since && prefs.getLong(KEY_WALKED_AT, 0) >= fetchedAt
-    }
+    // ---- Helpers ----
 
     /**
-     * A range that runs to now asks to the end of today instead, so the request is the same all day and its saved answer
-     * can be found again (Health Connect has nothing after now anyway).
+     * The days [first]..[last], stopping at today (later days hold nothing yet); with [window], also starting at
+     * [firstDay] (earlier days hold nothing either), so a page asking about them costs no call.
      */
-    private fun settledEnd(end: Instant): Instant {
-        val now = Instant.now()
-        val endOfToday = LocalDate.now(zone).plusDays(1).atStartOfDay(zone).toInstant()
-        return if (end > now.minusSeconds(NOW_SLACK_SECONDS) && end < endOfToday) endOfToday else end
+    private fun days(first: LocalDate, last: LocalDate, window: Boolean = true): List<LocalDate> {
+        val from = if (window) maxOf(first, firstDay) else first
+        val until = minOf(last, LocalDate.now(zone))
+        return generateSequence(from) { it.plusDays(1) }.takeWhile { it <= until }.toList()
+    }
+
+    private fun runs(days: List<LocalDate>, maxRun: Int): List<List<LocalDate>> {
+        val runs = mutableListOf<MutableList<LocalDate>>()
+        days.sorted().forEach { day ->
+            val run = runs.lastOrNull()
+            if (run != null && run.last().plusDays(1) == day && run.size < maxRun) run += day else runs += mutableListOf(day)
+        }
+        return runs
     }
 
     private fun decode(row: RecordDayEntity): List<SavedRecord> {
@@ -387,66 +392,40 @@ class HealthStore(
         return decoded.get(key) ?: JSON.decodeFromString(RECORDS, row.json).also { decoded.put(key, it) }
     }
 
-    private fun encode(metrics: Set<AggregateMetric<*>>, result: AggregationResult): Map<String, Double> =
-        metrics.mapNotNull { metric -> METRICS[metric]?.let { codec -> result[metric]?.let { codec.name to codec.encode(it) } } }.toMap()
-
-    private fun names(metrics: Set<AggregateMetric<*>>) = metrics.map { METRICS[it]?.name ?: error("Unsupported metric $it") }.sorted().joinToString(",")
-
     private fun day(instant: Instant): LocalDate = instant.atZone(zone).toLocalDate()
 
-    private fun dayEnd(day: LocalDate): Long = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
+    private fun start(day: LocalDate): Instant = day.atStartOfDay(zone).toInstant()
 
     private fun lock(key: String): Mutex = locks.getOrPut(key) { Mutex() }
 
-    @Serializable
-    private class SavedBucket(val start: String, val end: String, val values: Map<String, Double>)
-
     companion object {
-        /** A day read this long after it ended is final (a watch syncs within hours; the changes feed covers later). */
-        val SETTLE: Duration = Duration.ofHours(36)
-        /** How long a recent day or answer is good for before Health Connect is asked again. */
-        val LIVE_TTL: Duration = Duration.ofMinutes(15)
-        /** One call when nothing changed, so it can run with every Today refresh. */
-        val CHANGES_EVERY: Duration = Duration.ofMinutes(5)
         /** Health Connect's largest page: fewer calls for a day of heart rate or a month of HRV. */
         private const val PAGE_SIZE = 5_000
         private const val HEART_RATE_RUN_DAYS = 2
         private const val RUN_DAYS = 31
+        private const val DAY_TOTALS_RUN_DAYS = 92
+        /** Three days of minutes is 4,320 buckets in one answer. */
+        private const val MINUTE_RUN_DAYS = 3
         private const val MEMORY_DAYS = 64
         private const val MAX_CHANGE_PAGES = 20
-        private const val RECENT_DAYS = 7L
-        private const val NOW_SLACK_SECONDS = 120L
+        private const val DELETION_DAYS = 7L
+        private const val DEFAULT_WINDOW_DAYS = 180L
+        private const val MAX_HISTORY_YEARS = 5L
+        private const val KIND_DAY = "day"
+        private const val KIND_HOUR = "hour"
+        private const val KIND_MINUTE = "minute"
+        private const val KIND_SESSION = "session"
         private const val KEY_TOKEN = "token"
         private const val KEY_TYPES = "types"
-        private const val KEY_SYNCED_AT = "synced_at"
-        /** When the current token started: saved data read before it is not covered by the feed. */
-        private const val KEY_SINCE = "token_since"
-        /** When the last walk of the feed started: everything read before it, and still saved, is unchanged. */
-        private const val KEY_WALKED_AT = "walked_at"
+        private const val KEY_FIRST_DAY = "first_day"
         private val JSON = Json { ignoreUnknownKeys = true }
         private val RECORDS = ListSerializer(SavedRecord.serializer())
-        private val MAP = MapSerializer(String.serializer(), Double.serializer())
+        private val DOUBLE = Double.serializer()
+        private val HOURS = MapSerializer(Int.serializer(), Double.serializer())
+        private val MINUTES = MapSerializer(Long.serializer(), Double.serializer())
 
         /** Record types whose changes matter: the saved ones, and the ones openFit only adds up. */
-        private val CHANGE_TYPES: Map<KClass<out Record>, String> = SAVED_TYPES + mapOf(
-            StepsRecord::class to "steps",
-            DistanceRecord::class to "distance",
-            FloorsClimbedRecord::class to "floors",
-            TotalCaloriesBurnedRecord::class to "calories",
-            NutritionRecord::class to "nutrition",
-            HydrationRecord::class to "hydration",
-        )
+        val CHANGE_TYPES: Set<KClass<out Record>> = SAVED_TYPES.keys + TotalMetric.entries.map { it.record }
+        private val TYPE_NAMES: Map<KClass<out Record>, String> = SAVED_TYPES + TotalMetric.entries.associate { it.record to it.key }
     }
 }
-
-private class MetricCodec(val name: String, val type: String, val encode: (Any) -> Double, val decode: (Double) -> Any)
-
-/** The aggregate metrics openFit asks for, stored as numbers in fixed units. */
-private val METRICS: Map<AggregateMetric<*>, MetricCodec> = mapOf(
-    StepsRecord.COUNT_TOTAL to MetricCodec("steps", "steps", { (it as Long).toDouble() }, { it.toLong() }),
-    DistanceRecord.DISTANCE_TOTAL to MetricCodec("distance_m", "distance", { (it as Length).inMeters }, { Length.meters(it) }),
-    FloorsClimbedRecord.FLOORS_CLIMBED_TOTAL to MetricCodec("floors", "floors", { it as Double }, { it }),
-    TotalCaloriesBurnedRecord.ENERGY_TOTAL to MetricCodec("calories_out_kcal", "calories", { (it as Energy).inKilocalories }, { Energy.kilocalories(it) }),
-    NutritionRecord.ENERGY_TOTAL to MetricCodec("calories_in_kcal", "nutrition", { (it as Energy).inKilocalories }, { Energy.kilocalories(it) }),
-    HydrationRecord.VOLUME_TOTAL to MetricCodec("water_l", "hydration", { (it as Volume).inLiters }, { Volume.liters(it) }),
-)

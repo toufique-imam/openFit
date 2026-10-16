@@ -111,6 +111,14 @@ class SlotCache(context: Context) {
         editor.apply()
     }
 
+    /** Forgets [dates]: their heart rate, sleep or workouts were read again. */
+    fun forget(dates: Collection<LocalDate>) {
+        if (dates.isEmpty()) return
+        val editor = prefs.edit()
+        dates.forEach { editor.remove(key(it)) }
+        editor.apply()
+    }
+
     private fun key(date: LocalDate) = "$VERSION:$date"
 
     private companion object {

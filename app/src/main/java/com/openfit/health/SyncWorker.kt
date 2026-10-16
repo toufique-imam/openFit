@@ -8,7 +8,6 @@ import androidx.work.ExistingPeriodicWorkPolicy
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
-import com.openfit.profile.ProfileStore
 import kotlinx.coroutines.withContext
 import java.util.concurrent.TimeUnit
 
@@ -20,13 +19,14 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
-        val gateway = HealthConnectGateway(applicationContext)
+        val gateway = HealthConnectGateway.get(applicationContext)
         if (gateway.availability() != HealthConnectAvailability.Available) return Result.success()
         if (HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in gateway.grantedPermissions()) return Result.success()
-        val sync = HealthSync(applicationContext, gateway, DayLoadCache(applicationContext), SlotCache(applicationContext), ProfileStore(applicationContext))
+        val sync = HealthSync.get(applicationContext)
         // Background reads: Health Connect's background quota is half the foreground one, and these leave a reserve.
         withContext(HcPriority.Background) {
-            if (sync.importNeeded()) sync.importHistory() else sync.refresh()
+            if (!sync.imported) sync.importAll()
+            sync.syncRecent()
         }
         return Result.success()
     }

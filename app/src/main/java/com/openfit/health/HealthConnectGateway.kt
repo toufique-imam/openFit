@@ -29,7 +29,7 @@ import kotlin.reflect.KClass
 
 enum class HealthConnectAvailability { Available, UpdateRequired, Unavailable }
 
-class HealthConnectGateway(private val context: Context) {
+class HealthConnectGateway private constructor(private val context: Context) {
 
     private val client: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
 
@@ -75,6 +75,16 @@ class HealthConnectGateway(private val context: Context) {
 
     companion object {
         const val PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
+
+        @Volatile private var instance: HealthConnectGateway? = null
+
+        /**
+         * The one gateway of this process, shared by the app and the background work, so they share one copy, one
+         * set of locks and one quota model.
+         */
+        fun get(context: Context): HealthConnectGateway = instance ?: synchronized(this) {
+            instance ?: HealthConnectGateway(context.applicationContext).also { instance = it }
+        }
         private const val PERMISSIONS_TTL_MS = 30_000L
 
         val OPTIONAL_PERMISSIONS = setOf(

@@ -2,6 +2,12 @@ package com.openfit.health
 
 import androidx.health.connect.client.feature.ExperimentalMindfulnessSessionApi
 import androidx.health.connect.client.records.BodyFatRecord
+import androidx.health.connect.client.records.DistanceRecord
+import androidx.health.connect.client.records.FloorsClimbedRecord
+import androidx.health.connect.client.records.HydrationRecord
+import androidx.health.connect.client.records.NutritionRecord
+import androidx.health.connect.client.records.StepsRecord
+import androidx.health.connect.client.records.TotalCaloriesBurnedRecord
 import androidx.health.connect.client.records.ExerciseSessionRecord
 import androidx.health.connect.client.records.HeartRateRecord
 import androidx.health.connect.client.records.HeartRateVariabilityRmssdRecord
@@ -46,9 +52,20 @@ data class SavedRecord(
     val kinds: IntArray? = null,
 )
 
-/** When the record starts: its time, or the start of its interval. Health Connect files a record by this. */
+/**
+ * When the record starts: its time, or the start of its interval. Health Connect files a record by this. The changes
+ * feed also reports the types openFit only adds up, so those are covered too.
+ */
 val Record.filedAt: Instant
-    get() = Instant.ofEpochMilli(toSaved().start)
+    get() = when (this) {
+        is StepsRecord -> startTime
+        is DistanceRecord -> startTime
+        is FloorsClimbedRecord -> startTime
+        is TotalCaloriesBurnedRecord -> startTime
+        is NutritionRecord -> startTime
+        is HydrationRecord -> startTime
+        else -> Instant.ofEpochMilli(toSaved().start)
+    }
 
 /** The record types openFit reads one by one (the rest come from aggregates), by a stable name for the cache. */
 val SAVED_TYPES: Map<KClass<out Record>, String> = @OptIn(ExperimentalMindfulnessSessionApi::class) mapOf(

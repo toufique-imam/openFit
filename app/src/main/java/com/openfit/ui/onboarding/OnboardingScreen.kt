@@ -76,7 +76,7 @@ import com.openfit.domain.Sex
 import com.openfit.health.HealthConnectAvailability
 import com.openfit.health.HealthConnectGateway
 import com.openfit.health.HealthSync
-import com.openfit.health.ImportProgress
+import com.openfit.health.SyncState
 import com.openfit.health.ImportStage
 import androidx.compose.runtime.remember
 import com.openfit.profile.Profile
@@ -350,15 +350,16 @@ private val READS = listOf(
 /** The first load: today, then Energy Bank, then Pulse Age; Today opens from the snapshot it leaves. */
 @Composable
 private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinish: () -> Unit) {
-    var imported by remember { mutableStateOf<ImportProgress?>(null) }
+    val syncState by sync.state.collectAsStateWithLifecycle()
     var importDone by remember { mutableStateOf(false) }
     val state by todayViewModel.state.collectAsStateWithLifecycle()
     LaunchedEffect(Unit) {
-        // The history first (it stops early if Health Connect's quota runs low), then Today from the saved copy.
-        sync.importHistory { imported = it }
+        // Everything available first (it stops early if Health Connect's quota runs low), then Today from the copy.
+        sync.startImport().join()
         importDone = true
         todayViewModel.refresh()
     }
+    val imported = (syncState as? SyncState.Importing)?.progress
     val ready = (state as? TodayUiState.Ready)?.takeIf { importDone && !it.refreshing && it.pendingDate == null }
     // The import is most of the work; Today's own load is the last tenth.
     val importShare = imported?.let { it.done.toFloat() / it.total.coerceAtLeast(1) } ?: 0f
@@ -370,7 +371,7 @@ private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinis
     }
     val stage = when {
         !importDone -> when (imported?.stage) {
-            ImportStage.HeartRate -> stringResource(R.string.onboarding_import_heart, imported!!.done, imported!!.total)
+            ImportStage.HeartRate -> stringResource(R.string.onboarding_import_heart, imported.done, imported.total)
             ImportStage.Scoring -> stringResource(R.string.onboarding_import_scoring)
             else -> stringResource(R.string.onboarding_import_reading)
         }
