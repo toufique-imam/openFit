@@ -42,7 +42,9 @@ fun readiness(date: LocalDate, history: DailyHistory): Readiness? {
     val resting = restingComponent(date, baselineDays, history.restingBpm)
     val sleep = sleepComponent(date, baselineDays, history.sleepMinutes)
     val components = listOfNotNull(hrv, resting, sleep)
-    if (sleep == null || components.size < MIN_COMPONENTS || components.none { it.confidence > 0 }) return null
+    // Fitbit scores a day only with HRV from the night's sleep: it showed "No score" on 6 Oct 2026, the one night
+    // without HRV in Health Connect.
+    if (hrv == null || sleep == null || components.size < MIN_COMPONENTS || components.none { it.confidence > 0 }) return null
 
     val combined = components.sumOf { it.weight * it.confidence * it.z } / components.sumOf { it.weight }
     val score = (SCORE_CENTER + SCORE_GAIN * combined).roundToInt().coerceIn(1, 100)

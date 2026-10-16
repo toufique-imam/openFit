@@ -36,6 +36,7 @@ import com.openfit.domain.Exercise
 import com.openfit.domain.HeartDay
 import com.openfit.domain.HeartRateSample
 import com.openfit.domain.averageBpmByMinute
+import kotlin.math.roundToInt
 import com.openfit.domain.Reading
 import com.openfit.domain.SleepSummary
 import com.openfit.domain.estimateRestingBpm
@@ -95,8 +96,10 @@ class HealthConnectSource(
                 .takeIf { it.isNotEmpty() }
                 ?.let { sessions -> SleepSummary(sessions.sumDurations(::asleepDuration), sessions.maxOf { it.endTime }) },
             exercises = window.records(ExerciseSessionRecord::class, start).map { it.toExercise() },
-            heartRateRange = heartRate.takeIf { it.isNotEmpty() }?.let { samples ->
-                samples.minOf { it.bpm }.toInt()..samples.maxOf { it.bpm }.toInt()
+            // Fitbit's day range is the lowest and highest minute average (15 Oct 2026: 49-188 from minutes, 46-190
+            // from raw samples).
+            heartRateRange = averageBpmByMinute(heartRate).values.takeIf { it.isNotEmpty() }?.let { minutes ->
+                minutes.min().roundToInt()..minutes.max().roundToInt()
             },
             latestHeartRate = heartRate.maxByOrNull { it.time }?.let { Reading(it.bpm.toInt(), it.time) },
             restingBpm = restingBpm,

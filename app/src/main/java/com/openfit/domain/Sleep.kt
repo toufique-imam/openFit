@@ -24,6 +24,9 @@ data class SleepNight(
     val hasStages: Boolean get() = segments.any { it.stage != SleepStage.Awake && it.stage != SleepStage.Light } || segments.size > 1
     val timeInBedMinutes: Long get() = Duration.between(start, end).toMinutes()
 
+    /** Minutes asleep in the main sleep alone (its non-awake stages), which is what Fitbit scores. */
+    val mainAsleepMinutes: Long get() = segments.filter { it.stage != SleepStage.Awake }.sumOf { it.minutes }
+
     fun minutes(stage: SleepStage): Long = segments.filter { it.stage == stage }.sumOf { it.minutes }
 
     /** Share of the main sleep (awake included) spent in [stage], 0–100. */
@@ -51,29 +54,31 @@ val TYPICAL_STAGE_PERCENT: Map<SleepStage, ClosedFloatingPointRange<Double>> = m
 )
 
 /**
- * openFit's Sleep Score in Fitbit's shape (duration up to 50, quality up to 25, restoration up to 25). Fitbit computes
- * its score on its servers; these constants were fitted to Fitbit's scores for five nights (within 2 points; see
- * docs/findings_algorithms.md). Fitbit only scores a main sleep of at least 3 hours.
+ * openFit's Sleep Score in Fitbit's published shape: duration, quality (deep + REM) and restoration (time awake).
+ * Fitbit computes its score on its servers and scores the main sleep only, not the day's naps (a 9 h 05 m day with a
+ * 5.5 h main sleep scored 54). The constants were fitted to 31 of Fitbit's nightly scores, 9 Sept - 16 Oct 2026:
+ * 3.2 points RMS, 27 nights within 3 (see docs/findings_algorithms.md). Fitbit gives no score below 3 hours asleep.
  */
 fun sleepScore(night: SleepNight): Int? {
-    if (night.timeInBedMinutes < MIN_SCORED_MINUTES) return null
-    val asleep = night.totalAsleepMinutes.toDouble()
-    val duration = DURATION_POINTS * min(1.0, asleep / FULL_DURATION_MINUTES)
-    val quality = if (night.segments.size > 1) {
-        val restorative = (night.minutes(SleepStage.Deep) + night.minutes(SleepStage.Rem)).toDouble()
-        QUALITY_POINTS * min(1.0, restorative / FULL_DEEP_REM_MINUTES)
+    val asleep = night.mainAsleepMinutes.toDouble()
+    if (asleep < MIN_SCORED_MINUTES) return null
+    val duration = DURATION_POINTS_PER_HOUR * min(asleep, FULL_DURATION_MINUTES) / 60
+    val restorativePercent = if (night.segments.size > 1) {
+        (night.minutes(SleepStage.Deep) + night.minutes(SleepStage.Rem)) * 100.0 / asleep
     } else {
-        QUALITY_POINTS / 2
+        TYPICAL_DEEP_REM_PERCENT
     }
-    val restoration = (RESTORATION_BASE - AWAKE_PENALTY * night.percent(SleepStage.Awake)).coerceIn(0.0, RESTORATION_POINTS)
-    return (duration + quality + restoration).roundToInt().coerceIn(1, 100)
+    val quality = QUALITY_POINTS_PER_PERCENT * restorativePercent
+    val restoration = -AWAKE_POINTS_PER_PERCENT * night.percent(SleepStage.Awake)
+    return (SCORE_BASE + duration + quality + restoration).roundToInt().coerceIn(1, 100)
 }
 
 private const val MIN_SCORED_MINUTES = 180
-private const val DURATION_POINTS = 50.0
-private const val QUALITY_POINTS = 25.0
-private const val RESTORATION_POINTS = 25.0
+private const val SCORE_BASE = 41.3
+private const val DURATION_POINTS_PER_HOUR = 4.37
 private const val FULL_DURATION_MINUTES = 465.0
-private const val FULL_DEEP_REM_MINUTES = 130.0
-private const val RESTORATION_BASE = 18.0
-private const val AWAKE_PENALTY = 0.6
+private const val QUALITY_POINTS_PER_PERCENT = 0.42
+private const val AWAKE_POINTS_PER_PERCENT = 0.86
+
+/** Nights recorded without stages are scored as if deep + REM made up a typical share of the sleep. */
+private const val TYPICAL_DEEP_REM_PERCENT = 38.0

@@ -5,8 +5,9 @@ import kotlin.math.max
 import kotlin.math.min
 
 enum class FitnessGoal(val weeklyZoneMinutes: Int, val lowLoadRatio: Double, val highLoadRatio: Double) {
-    Maintain(150, lowLoadRatio = 1.04, highLoadRatio = 1.14),
-    Improve(300, lowLoadRatio = 1.14, highLoadRatio = 1.24),
+    // Fitted to Fitbit's maintaining ranges of 7-25 Sept 2026; Improve is assumed to sit 0.10 higher.
+    Maintain(150, lowLoadRatio = 1.039, highLoadRatio = 1.144),
+    Improve(300, lowLoadRatio = 1.139, highLoadRatio = 1.244),
 }
 
 data class LoadTarget(val weekly: Double, val daily: Double, val doneThisWeek: Double) {

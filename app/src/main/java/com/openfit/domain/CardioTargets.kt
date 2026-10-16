@@ -24,9 +24,15 @@ enum class TrainingStatus {
 private const val ROLLING_WEEKS = 4
 private const val MIN_WEEKS_FOR_STATUS = 2
 private const val MIN_TRACKED_DAYS_PER_WEEK = 4
-private const val HIGH_READINESS_SHIFT = 0.05
 private const val LOW_READINESS_SHIFT = -0.10
-private const val MIN_HIGH_SHARE = 0.05
+private const val ILLNESS_HIGH_SHARE = 0.05
+
+/**
+ * Fitbit's minimum daily target: one value for all users (white paper, section 3.3). On 15, 18 and 23 Sept 2026 its
+ * range bottomed out at 4 and never went under 24.
+ */
+private const val MIN_TARGET_LOW = 4.0
+private const val MIN_TARGET_HIGH = 24.0
 private const val RING_SCALE_SHARE = 0.45
 private const val RING_HEADROOM = 1.25
 // Fitbit 4.67's acute:chronic bands and bar segments (decompiled; the ratio itself is computed on Fitbit's server).
@@ -61,28 +67,24 @@ fun chronicWeeklyLoad(date: LocalDate, daily: Map<LocalDate, Double>): Double? =
 fun previousSixDays(date: LocalDate, daily: Map<LocalDate, Double>): Double = (1L..6L).sumOf { daily[date.minusDays(it)] ?: 0.0 }
 
 /**
- * Fitbit 4.67's daily target load, reverse-engineered from its charts: today's load that brings the rolling 7-day
- * load to a window around the chronic weekly load. The window is set by the fitness goal and moved by readiness.
+ * Fitbit 4.67's daily target load, reverse-engineered from 19 of its daily ranges (7-25 Sept 2026): today's load that
+ * brings the rolling 7-day load to a window around the chronic weekly load, never below Fitbit's minimum target. The
+ * window is set by the fitness goal. Readiness from 43 to 88 left it unchanged, so only low readiness moves it
+ * (assumed; untested), and a day without a readiness score still gets a target, as on Fitbit.
  */
-fun dailyCardioRange(goal: FitnessGoal, chronicWeekly: Double, previousSixDays: Double, readiness: Readiness): LoadRange {
-    val shift = when (readiness.level) {
-        ReadinessLevel.Low -> LOW_READINESS_SHIFT
-        ReadinessLevel.High -> HIGH_READINESS_SHIFT
-        ReadinessLevel.Moderate -> 0.0
-    }
-    val floor = MIN_HIGH_SHARE * chronicWeekly
-    var high = max((goal.highLoadRatio + shift) * chronicWeekly - previousSixDays, floor)
-    var low = ((goal.lowLoadRatio + shift) * chronicWeekly - previousSixDays).coerceIn(0.0, high)
-    if (readiness.illness) {
+fun dailyCardioRange(goal: FitnessGoal, chronicWeekly: Double, previousSixDays: Double, readiness: Readiness?): LoadRange {
+    val shift = if (readiness?.level == ReadinessLevel.Low) LOW_READINESS_SHIFT else 0.0
+    var high = max((goal.highLoadRatio + shift) * chronicWeekly - previousSixDays, MIN_TARGET_HIGH)
+    var low = ((goal.lowLoadRatio + shift) * chronicWeekly - previousSixDays).coerceIn(MIN_TARGET_LOW, high)
+    if (readiness?.illness == true) {
         low = 0.0
-        high = floor
+        high = ILLNESS_HIGH_SHARE * chronicWeekly
     }
     return LoadRange(low = low, high = high, scale = max(RING_SCALE_SHARE * chronicWeekly, RING_HEADROOM * high))
 }
 
-/** The target for [date], or null without readiness or a week of history — Fitbit then shows "No target". */
+/** The target for [date], or null without a week of history; Fitbit then shows "No target". */
 fun dailyCardioRange(date: LocalDate, goal: FitnessGoal, daily: Map<LocalDate, Double>, readiness: Readiness?): LoadRange? {
-    if (readiness == null) return null
     val chronic = chronicWeeklyLoad(date, daily) ?: return null
     return dailyCardioRange(goal, chronic, previousSixDays(date, daily), readiness)
 }

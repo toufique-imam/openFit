@@ -39,6 +39,14 @@ class ReadinessTest {
     }
 
     @Test
+    fun aNightWithoutHrvHasNoScore() {
+        // Fitbit showed "No score" on 6 Oct 2026, when Health Connect had no HRV for the night.
+        val noHrv = typical.withToday(hrv = 55.0, resting = 56, sleep = 450).let { it.copy(hrvMs = it.hrvMs - today) }
+
+        assertNull(readiness(today, noHrv))
+    }
+
+    @Test
     fun anOrdinaryDayIsModerate() {
         val result = readiness(today, typical.withToday(hrv = 55.0, resting = 56, sleep = 450))!!
 

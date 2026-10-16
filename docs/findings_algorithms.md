@@ -56,34 +56,29 @@ Fitbit's own description: the score "compares your sleep, resting heart rate, an
 - Each z is clamped to ±3; minimum SDs: ln-HRV 0.05, resting HR 2 bpm, sleep 0.5 h. Confidence ramps 0 → 1 as the baseline grows from 4 to 14 nights.
 - **Score = 60 + 24 · Σ(w·conf·z) / Σw**, clamped to 1–100.
 - **Calibration (Oct 2026):** Fitbit's daily scores for 13–30 Sept were read off its month chart (bars match its labelled week to ±0.5). With openFit's own z-scores the old weights (0.4/0.3/0.3, 50 + 20R) were off by 14 points RMS and compressed toward 50; a grid search gave center 60, gain ≈ 24 and HRV-dominant weights (RMS 8.4–8.8). Only 17 days and baselines of 5–22 nights were available (Health Connect data starts 8 Sept), so revisit once a full month of baseline exists. Fitbit's 23 Sept score (88) is not explained by HRV, RHR or sleep, and Fitbit's readiness strings mention activity, so recent load may be an extra input.
-- **No score** unless last night's sleep exists and at least two components are available.
+- **No score** unless last night's sleep and HRV exist and at least two components are available. Fitbit showed "No score" on 6 Oct 2026, the one night Health Connect had no HRV.
+- **Recheck (16 Oct 2026, 26 days with a 14+ night baseline):** openFit is 9.4 points RMS from Fitbit. Refitting the weights by least squares (with each day held out in turn) gave 9.5 at best, so the model stands. The misses are days Fitbit scores far from the signals: 23 Sept (Fitbit 88, openFit 65), 7 Oct (15 vs 37), 5 Oct (32 vs 45).
 - **Illness flag** (any of): resting HR ≥ baseline + 7 bpm; ≥ baseline + 4 bpm for 3 days; resting z ≤ −2.5 with HRV z ≤ −2.0.
 - **Breakdown** ("What impacted your readiness"): HRV level from last night's ln-HRV z (±1 usual, ±2 much); resting HR as the bpm difference from the baseline mean; past week of sleep Good (z ≥ −0.5) / Fair (≥ −1.5) / Poor.
 - **Period takeaway:** "Mostly high/moderate/low" when one level covers more than half the scored days, otherwise "Mixed" (Fitbit called 57/79/57/88/65/48/26 "Mixed").
 
 ## Cardio Load target range (`CardioTargets.kt`)
 
-Fitbit 4.67 gives a **daily target range** ("Target 11–46"). Its strings say the range is "personalized based on your recent cardio load and your readiness", and that the fitness target (maintaining / improving) sets "how challenging your daily target load will be". The 2025 white paper (`docs/2508.11613v2.pdf`) describes the *newer* weekly target, not this one, so the daily model was reverse-engineered from the screenshots in `ss/Cardio Load` (week of 20–26 Sept 2026, readiness 48, goal "maintaining"):
+Fitbit 4.67 gives a **daily target range** ("Target 11-46"). Its strings say the range is "personalized based on your recent cardio load and your readiness", and that the fitness target (maintaining / improving) sets "how challenging your daily target load will be". The 2025 white paper (`docs/2508.11613v2.pdf`) describes the newer weekly target, not this one, so the daily model was reverse-engineered.
 
-| Day | Load | Fitbit range | implied low / high ÷ chronic |
-| --- | --- | --- | --- |
-| Sun 20 | 18 | 57–89 | 1.03 / 1.14 |
-| Mon 21 | 103 | 66–96 | 1.01 / 1.11 |
-| Tue 22 | 49 | 4–37 | 1.04 / 1.14 |
-| Wed 23 | 14 | ~4–28 | – / 1.12 |
-| Thu 24 | 77 | 58–91 | 1.05 / 1.15 |
-| Fri 25 | 6 | 11–46 | 1.05 / 1.16 |
+**Data (16 Oct 2026):** Fitbit's own daily loads from 9 Aug (its Week lists) and its daily ranges for 7-25 Sept (its Day view). From 26 Sept on, Fitbit shows "No target" every day, including today: its servers stopped sending targets, so those days say nothing about the algorithm.
 
 The bounds move day to day by exactly the load that enters or leaves a rolling 7-day window, so the range is "today's load that brings the last 7 days to a window around the chronic weekly load":
 
-- **chronic** = 28-day rolling mean of weekly load before today (four rolling 7-day blocks, each needing ≥ 4 tracked days). A daily EWMA or max(RM, EWMA) fits no better; RM is used.
-- **range** = [low, high] × chronic − (load of the previous 6 days), with:
-  - Maintain: 1.04–1.14; Improve: 1.14–1.24 (assumed +0.10, no Fitbit data yet).
-  - Readiness Low (≤ 29): window −0.10; High (≥ 65): +0.05 (assumed; the moderate days above fit unshifted).
-  - Illness flag: 0 – 0.05 × chronic. Overreached weeks: low = 0, high ≥ 0.05 × chronic.
-- **No target** without today's readiness or a week of history (Fitbit shows "0 · No target" + "No score" together).
-- **Ring and Day-chart scale** = 0.45 × chronic (Fitbit's day-chart axis of 139 = 0.45 × 310, and Fri's band ends at 0.32 of the arc = 46 / 144).
-- The fit leaves ±0.02 × chronic (≈ ±7 load) unexplained (readiness and chart-reading error). `CardioTargetsTest` reproduces Fitbit's 24/25 Sept ranges from its own loads within 8.
+- **chronic** = 28-day rolling mean of weekly load before today (four rolling 7-day blocks, each needing 4 or more tracked days).
+- **range** = [low, high] x chronic - (load of the previous 6 days), with:
+  - Maintain: 1.039-1.144, fitted. Improve: 1.139-1.244 (assumed +0.10; no Fitbit data).
+  - Fitbit's **minimum target 4-24**: one value for all users (white paper 3.3). It applied on 15, 18 and 23 Sept.
+  - Readiness 43-88 left the window unchanged, so only low readiness (29 or below) moves it (-0.10, assumed and untested). 18 Sept had no readiness score but still a target, so readiness is not required.
+  - Illness flag: 0 to 0.05 x chronic (assumed).
+- **No target** only without a week of history.
+- **Ring and Day-chart scale** = 0.45 x chronic (Fitbit's day-chart axis of 139 = 0.45 x 310).
+- **Fit:** 17 of 19 days within 2 of both of Fitbit's bounds (sum of squared errors 59, down from 89 before the refit). 11 Sept is off by 6 at the top (Fitbit 6-35, model 4-29).
 
 ### Training status ("Your past seven days of training")
 
@@ -97,7 +92,9 @@ Fitbit: "Every day, Fitbit looks at how much cardio load you've earned the past 
 - Month headline = the month's average day vs the 28 days before it: < 0.8 undertrained, < 1.15 maintained, < 1.3 improved, else overtrained. Fitbit called September (44/day after August's 40, ratio 1.10) "Maintained fitness", so the improve threshold is above 1.10.
 - Year points = monthly average day and the average of that month's ranges.
 
-### Validation against Fitbit (Sept 2026)
+### Validation against Fitbit (Sept 2026; rechecked Oct 2026)
+
+**Recheck (16 Oct 2026):** across 37 days, 9 Sept - 15 Oct, openFit's loads against Fitbit's sum to 456 squared error with +12 bias. Most days are within 5; the largest misses are 30 Sept (+9), 5 Oct (+10) and 12 Oct (+7), all evening workouts. A grid over the threshold, weight, exponent, movement gate and gap filling found nothing clearly better, so the formula stands.
 
 Fitbit's daily loads (read off its Week and Month charts) against openFit's for the same days, with temporary logging of formula variants (17 days; Sept 8 excluded — Health Connect only had 93 minutes of heart rate). Sum of squared errors / total bias:
 
@@ -152,25 +149,15 @@ The hours-with-250-steps counts match Fitbit exactly (2 of 9 that day; 15 hours 
 
 ## Sleep Score (`Sleep.kt`)
 
-Fitbit's Sleep Score is computed on its servers. openFit keeps Fitbit's published shape and fits the constants to Fitbit's own scores:
+Fitbit's Sleep Score is computed on its servers. Its published shape is duration, quality (deep + REM) and restoration (time awake); openFit fits a linear version to Fitbit's own scores.
 
-- **Duration (up to 50):** time asleep ÷ 7 h 45 m, capped at 1.
-- **Quality (up to 25):** deep + REM minutes ÷ 130, capped at 1. Nights without stage data get half.
-- **Restoration (up to 25):** 18 − 0.6 × the night's awake percentage.
-- **Ratings:** 90+ excellent, 80–89 good, 60–79 fair, below 60 poor.
-- **No score:** a main sleep under 3 hours.
+**Fitbit scores the main sleep only.** On 5 Oct 2026 the day had 9 h 05 m asleep, but the main sleep was 5 h 39 m with a quarter of it awake, and Fitbit scored 54. The old formula used the day's total and gave 72.
 
-Fitted to the five nights with stages that Fitbit scored:
+**Score** = 41.3 + 4.37 x hours asleep (capped at 7 h 45 m) + 0.42 x deep-and-REM % of the time asleep - 0.86 x awake % of the night. Nights without stages count a typical 38% deep and REM.
 
-| Night | Asleep | Deep + REM | Awake | Fitbit | openFit |
-| --- | --- | --- | --- | --- | --- |
-| 24 Sept | 298 m | 122 m | 24 % | 58 | 59 |
-| 12 Oct | 381 m | 171 m | 10 % | 78 | 78 |
-| 13 Oct | 308 m | 131 m | 22 % | 65 | 63 |
-| 14 Oct | 316 m | 140 m | 16 % | 68 | 67 |
-| 15 Oct | 472 m | 196 m | 11 % | 85 | 87 |
-
-Every night is within 2 points. Several parameter sets fit about as well, so treat the split between the three parts as unconfirmed.
+- **No score** under 3 hours asleep (18 Sept: 1 h 21 m; 6 Oct: 3 h 48 m in bed).
+- **Ratings:** 90+ excellent, 80-89 good, 60-79 fair, below 60 poor.
+- **Fit (31 nights, 9 Sept - 16 Oct):** 3.2 points RMS, 27 nights within 3, against 6.8 for the old formula. Leaving each night out in turn gives 3.7. The worst miss is 28 Sept (Fitbit 70, openFit 60).
 
 Health Connect's stage minutes agree with Fitbit's timeline:
 - 24 Sept: REM 53 vs 54, Deep 69 vs 70, with the same 2:21–9:09 am window.
@@ -190,3 +177,6 @@ Fitbit's "N zones" on a day counts only moderate, vigorous and peak. For Thu 15 
 | Vigorous | 7 | 8 |
 | Peak | 6 | 6 |
 
+## Heart range (`HealthConnectSource.load`)
+
+Fitbit's day range ("49-188 BPM") is the lowest and highest one-minute average, not the raw samples: on 15 Oct 2026 the minute averages gave 49-188 exactly, while the raw samples gave 46-190.

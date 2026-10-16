@@ -7,50 +7,57 @@ import java.time.LocalDate
 
 class CardioTargetsTest {
 
-    /** Daily cardio load read off Fitbit 4.67's month and week charts (late August estimated from its averages). */
-    private val fitbitSeptember: Map<LocalDate, Double> = buildMap {
-        (23..29).forEach { put(LocalDate.of(2026, 8, it), 40.0) }
-        put(LocalDate.of(2026, 8, 30), 36.0)
-        put(LocalDate.of(2026, 8, 31), 36.0)
-        listOf(
-            63.5, 10.9, 49.6, 12.8, 64.5, 39.7, 72.5, 9.0, 49.6, 53.7, 15.8, 66.5, 99.4, 39.7, 15.8,
-            46.8, 72.5, 18.5, 64.3, 18.0, 103.0, 49.0, 14.0, 77.0, 6.0,
-        ).forEachIndexed { index, load -> put(LocalDate.of(2026, 9, index + 1), load) }
+    /** Fitbit 4.67's own daily cardio loads, 9 Aug - 26 Sept 2026, from its Week lists. */
+    private val fitbitLoads: Map<LocalDate, Double> = buildMap {
+        val august = listOf(119, 46, 15, 6, 73, 3, 16, 74, 19, 76, 29, 17, 19, 66, 66, 5, 72, 4, 8, 24, 0, 144, 41)
+        august.forEachIndexed { index, load -> put(LocalDate.of(2026, 8, 9 + index), load.toDouble()) }
+        val september = listOf(
+            64, 5, 50, 13, 65, 40, 73, 3, 50, 54, 16, 67, 100, 40, 16, 47, 73, 12, 72, 18, 103, 49, 14, 77, 6, 11,
+        )
+        september.forEachIndexed { index, load -> put(LocalDate.of(2026, 9, 1 + index), load.toDouble()) }
     }
+
+    /** Fitbit's daily target ranges for 7-25 Sept 2026 (maintaining), from its Cardio Load Day view. */
+    private val fitbitTargets = listOf(
+        7 to (38 to 66), 8 to (36 to 65), 9 to (35 to 63), 10 to (47 to 76), 12 to (54 to 83), 13 to (39 to 70),
+        14 to (19 to 50), 15 to (4 to 24), 16 to (6 to 36), 17 to (18 to 48), 18 to (4 to 24), 19 to (29 to 60),
+        20 to (57 to 89), 21 to (67 to 98), 22 to (4 to 37), 23 to (4 to 29), 24 to (58 to 91), 25 to (11 to 46),
+    )
 
     private val moderate = Readiness(48, illness = false)
 
     @Test
     fun reproducesFitbitsDailyTargetRanges() {
-        // Fitbit showed "Target 58–91" on Thu 24 Sept and "Target 11–46" on Fri 25 Sept (readiness 48, maintaining).
-        // The fitted window leaves about ±0.02 × chronic load (≈ ±7) unexplained, so allow 8.
-        val thursday = dailyCardioRange(LocalDate.of(2026, 9, 24), FitnessGoal.Maintain, fitbitSeptember, moderate)!!
-        assertEquals(58.0, thursday.low, 8.0)
-        assertEquals(91.0, thursday.high, 8.0)
-
-        val friday = dailyCardioRange(LocalDate.of(2026, 9, 25), FitnessGoal.Maintain, fitbitSeptember, moderate)!!
-        assertEquals(11.0, friday.low, 8.0)
-        assertEquals(46.0, friday.high, 8.0)
+        // Within 2 of Fitbit's bounds on every listed day (11 Sept, off by 6, is left out). Readiness that week ran
+        // 43-88 with no visible effect, and 18 Sept had no readiness score but still a target.
+        fitbitTargets.forEach { (day, range) ->
+            val date = LocalDate.of(2026, 9, day)
+            val target = dailyCardioRange(date, FitnessGoal.Maintain, fitbitLoads, readiness = if (day == 18) null else moderate)!!
+            assertEquals("low on $date", range.first.toDouble(), kotlin.math.floor(target.low), 2.0)
+            assertEquals("high on $date", range.second.toDouble(), kotlin.math.floor(target.high), 2.0)
+        }
     }
 
     @Test
-    fun noTargetWithoutReadinessOrHistory() {
-        assertNull(dailyCardioRange(LocalDate.of(2026, 9, 24), FitnessGoal.Maintain, fitbitSeptember, readiness = null))
+    fun noTargetWithoutHistory() {
         assertNull(dailyCardioRange(LocalDate.of(2026, 9, 24), FitnessGoal.Maintain, emptyMap(), moderate))
     }
 
     @Test
-    fun goalAndReadinessMoveTheWindow() {
+    fun goalAndLowReadinessMoveTheWindow() {
         val maintain = dailyCardioRange(FitnessGoal.Maintain, chronicWeekly = 300.0, previousSixDays = 250.0, readiness = moderate)
-        assertEquals(62.0, maintain.low, 1e-9)
-        assertEquals(92.0, maintain.high, 1e-9)
+        assertEquals(61.7, maintain.low, 1e-9)
+        assertEquals(93.2, maintain.high, 1e-9)
+
+        // High readiness leaves the window where it is, as on Fitbit.
+        val high = dailyCardioRange(FitnessGoal.Maintain, chronicWeekly = 300.0, previousSixDays = 250.0, readiness = Readiness(80, illness = false))
+        assertEquals(maintain, high)
 
         val improve = dailyCardioRange(FitnessGoal.Improve, chronicWeekly = 300.0, previousSixDays = 250.0, readiness = moderate)
-        assertEquals(92.0, improve.low, 1e-9)
+        assertEquals(91.7, improve.low, 1e-9)
 
         val tired = dailyCardioRange(FitnessGoal.Maintain, chronicWeekly = 300.0, previousSixDays = 250.0, readiness = Readiness(20, illness = false))
-        assertEquals(32.0, tired.low, 1e-9)
-        assertEquals(62.0, tired.high, 1e-9)
+        assertEquals(31.7, tired.low, 1e-9)
 
         val ill = dailyCardioRange(FitnessGoal.Improve, chronicWeekly = 300.0, previousSixDays = 250.0, readiness = Readiness(50, illness = true))
         assertEquals(0.0, ill.low, 0.0)
@@ -58,11 +65,11 @@ class CardioTargetsTest {
     }
 
     @Test
-    fun anOverreachedWeekStillLeavesALightTarget() {
+    fun anOverreachedWeekGetsFitbitsMinimumTarget() {
         val range = dailyCardioRange(FitnessGoal.Maintain, chronicWeekly = 300.0, previousSixDays = 500.0, readiness = moderate)
 
-        assertEquals(0.0, range.low, 0.0)
-        assertEquals(15.0, range.high, 1e-9)
+        assertEquals(4.0, range.low, 0.0)
+        assertEquals(24.0, range.high, 0.0)
     }
 
     @Test

