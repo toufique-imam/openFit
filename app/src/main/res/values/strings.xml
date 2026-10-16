@@ -599,4 +599,57 @@
     <string name="behaviour_travel_q">Travelled today?</string>
     <string name="behaviour_menstruating">Menstruating</string>
     <string name="behaviour_menstruating_q">Menstruating?</string>
+
+    <!-- Energy Bank -->
+    <string name="energy_title">Energy Bank</string>
+    <string name="energy_loading">Loading…</string>
+    <string name="energy_calibrating">Calibrating: Energy Bank shows after a week of wearing your device.</string>
+    <string name="energy_calibrating_short">Calibrating</string>
+    <string name="energy_band_plenty">Plenty in reserve</string>
+    <string name="energy_band_pace">Pace yourself</string>
+    <string name="energy_band_low">Running low</string>
+    <string name="energy_charged">Charged</string>
+    <string name="energy_drained">Drained</string>
+    <string name="energy_biggest_drains">Biggest drains</string>
+    <string name="energy_drain_workout">Workout</string>
+    <string name="energy_drain_stress">Stress</string>
+    <string name="energy_peak_avg">% peak per day (avg)</string>
+    <string name="energy_peak_body">Your highest level each day, usually after sleep.</string>
+    <string name="energy_peak_list">Daily peak</string>
+    <string name="energy_about_title">About Energy Bank</string>
+    <string name="energy_about_body">An estimate of your energy in reserve, from 1 to 100%. Sleep charges it; stress and workouts drain it.</string>
+    <string name="energy_sheet">Energy Bank moves every 6 minutes.\n\nAsleep: a full 7.5-hour night charges about 80 points.\n\nAwake and calm: when your heart rate sits low among your usual awake heart rates of the last 30 days, the bank charges a little, about 15 points over a waking day.\n\nAwake and stressed: a higher heart rate drains it, faster the higher it ranks; about 60 points over a waking day at middling stress. Workouts drain through the same heart rate.\n\nCharging slows near 100 and draining near 1, and the level carries over midnight. It shows after a week of wearing your device.\n\nIt is a model, not a measurement: it cannot see mental effort that leaves your heart rate unchanged, food or caffeine.</string>
+
+    <!-- Pulse Age -->
+    <string name="age_title">Pulse Age</string>
+    <string name="age_years">years</string>
+    <string name="age_younger">%1$s years younger than your age, %2$d</string>
+    <string name="age_older">%1$s years older than your age, %2$d</string>
+    <string name="age_same">The same as your age, %d</string>
+    <string name="age_younger_short">%s years younger</string>
+    <string name="age_older_short">%s years older</string>
+    <string name="age_same_short">Same as your age</string>
+    <string name="age_not_enough">Needs at least 5 of the 9 inputs; %d so far.</string>
+    <string name="age_based_on">From %1$d of %2$d inputs over the last 28 days. The ones present stand for all nine.</string>
+    <string name="age_average">28-day average: %s</string>
+    <string name="age_per_week">%s a week</string>
+    <string name="age_per_day">%s a day</string>
+    <string name="age_needs_profile">Pulse Age compares you with people of your age and sex. Add both in your profile.</string>
+    <string name="age_tile_needs_profile">Add age and sex</string>
+    <string name="age_tile_window">Last 28 days</string>
+    <string name="age_group_sleep">Sleep</string>
+    <string name="age_group_activity">Activity</string>
+    <string name="age_group_fitness">Fitness</string>
+    <string name="age_factor_sleep_hours">Hours of sleep</string>
+    <string name="age_factor_sleep_consistency">Sleep consistency</string>
+    <string name="age_factor_moderate">Moderate activity</string>
+    <string name="age_factor_vigorous">Vigorous activity</string>
+    <string name="age_factor_strength">Strength training</string>
+    <string name="age_factor_steps">Daily steps</string>
+    <string name="age_factor_vo2max">VO2 max</string>
+    <string name="age_factor_resting_hr">Resting heart rate</string>
+    <string name="age_factor_body_fat">Body fat</string>
+    <string name="age_about_title">About Pulse Age</string>
+    <string name="age_about_body">How old your body behaves, from nine habits and vitals compared with references for your age and sex.</string>
+    <string name="age_sheet">Each input maps to a change in the risk of dying from any cause, against a reference for your age and sex, using published studies: VO2 max (Kodama 2009), resting heart rate (Zhang 2016), steps (Paluch 2022), sleep hours (Saint-Maurice 2024), sleep consistency (Windred 2024), moderate and vigorous minutes (Arem 2015, Ahmadi 2022), strength training (Momma 2022) and body fat (Jayedi 2022).\n\nThe changes add up and turn into years: about 5 years per unit of log hazard ratio, half the 10 a year of age implies, because separate studies overstate their joint effect. Inputs without data are left out and the ones present scaled up to stand for all nine; at least 5 are needed. Pulse Age stays within 15 years of your age.\n\nModerate minutes are openFit’s fat-burn and cardio zones, vigorous the peak zone. Strength counts strength, weight, calisthenics, HIIT, Pilates and yoga workouts.\n\nIt rests on population studies, not a clinical test of your body.</string>
 </resources>

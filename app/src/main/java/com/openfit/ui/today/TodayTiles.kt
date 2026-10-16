@@ -21,6 +21,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.DirectionsRun
 import androidx.compose.material.icons.automirrored.outlined.DirectionsWalk
 import androidx.compose.material.icons.outlined.AccessTime
+import androidx.compose.material.icons.outlined.BatteryChargingFull
+import androidx.compose.material.icons.outlined.Timelapse
+import com.openfit.ui.age.ageDifferenceShort
+import com.openfit.ui.age.fixed
+import com.openfit.domain.EnergyBand
+import com.openfit.domain.energyBand
+import kotlin.math.roundToInt
 import androidx.compose.material.icons.outlined.Bedtime
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material.icons.outlined.FitnessCenter
@@ -212,6 +219,23 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
         }
     }
 
+    item {
+        val level = state.energy?.latest
+        MetricTile(
+            title = stringResource(R.string.energy_title),
+            value = level?.let { quantityText(it.roundToInt().toString(), "%") }
+                ?: noValue(stringResource(if (state.energyLoading) R.string.energy_loading else R.string.energy_calibrating_short)),
+            subtitle = listOfNotNull(dayLabel(state), level?.let { stringResource(energyBandText(energyBand(it))) }).joinToString(" · "),
+            onClick = { onOpen(MetricPage.EnergyBank) },
+        ) {
+            if (level == null) {
+                IconBadge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender)
+            } else {
+                ArcGauge(Icons.Outlined.BatteryChargingFull, OpenFitColors.Lavender, (level / 100).toFloat())
+            }
+        }
+    }
+
     section(R.string.section_activity)
     item {
         val range = state.cardioRange
@@ -314,12 +338,31 @@ fun LazyListScope.todaySections(state: TodayUiState.Ready, onOpen: (MetricPage) 
     val health = healthTiles(metrics, profile)
     val showHeart = metrics.latestHeartRate != null || metrics.heartRateRange != null || metrics.restingBpm != null
     val readings = state.healthMetrics
-    if (health.isNotEmpty() || showHeart || readings.isNotEmpty()) section(R.string.section_health)
+    section(R.string.section_health)
     if (readings.isNotEmpty()) {
         item { HealthMetricsTile(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
         item { HealthMetricsSummary(readings, onClick = { onOpen(MetricPage.HealthMetrics) }) }
     }
     if (showHeart) item { HeartTile(state, onClick = { onOpen(MetricPage.Heart) }) }
+    item {
+        val age = state.pulseAge
+        MetricTile(
+            title = stringResource(R.string.age_title),
+            value = age?.let { AnnotatedString(fixed(it.age)) } ?: noValue(
+                stringResource(
+                    when {
+                        profile.age == null || profile.sex == null -> R.string.age_tile_needs_profile
+                        state.pulseAgeLoading -> R.string.energy_loading
+                        else -> R.string.no_data
+                    },
+                ),
+            ),
+            subtitle = age?.let { ageDifferenceShort(it.difference) } ?: stringResource(R.string.age_tile_window),
+            onClick = { onOpen(MetricPage.PulseAge) },
+        ) {
+            IconBadge(Icons.Outlined.Timelapse, OpenFitColors.Blue)
+        }
+    }
     health.forEach { tile ->
         item {
             val weight = tile.title == R.string.tile_weight
@@ -569,6 +612,12 @@ private fun readinessLabel(readiness: Readiness): Int = when {
     readiness.level == ReadinessLevel.Low -> R.string.readiness_low
     readiness.level == ReadinessLevel.High -> R.string.readiness_high
     else -> R.string.readiness_moderate
+}
+
+private fun energyBandText(band: EnergyBand): Int = when (band) {
+    EnergyBand.Plenty -> R.string.energy_band_plenty
+    EnergyBand.PaceYourself -> R.string.energy_band_pace
+    EnergyBand.RunningLow -> R.string.energy_band_low
 }
 
 /** A goal's progress ring, or just its icon while the user has not set the goal (or there is nothing to measure). */

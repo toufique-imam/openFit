@@ -43,6 +43,7 @@ is left, so that work can resume without re-deriving it.
   - Food, Water and Weight
 - Goals (from the You tab): Sleep, Activity, Nutrition and Health, as in Fitbit's Goals list.
 - Journal tab (in place of Fitbit's online Coach): daily behaviour check-ins and next-day insights. See [findings_journal.md](findings_journal.md).
+- From pulse-mobile: Energy Bank (Recovery section) and Pulse Age (Health section). See [findings_pulse_features.md](findings_pulse_features.md).
 
 **Goals are user input only.** No goal has a built-in value:
 - An unset goal shows "Set goal" on the Goals list and on its screen, and tiles show the icon without a progress ring.

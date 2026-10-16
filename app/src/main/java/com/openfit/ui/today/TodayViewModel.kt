@@ -30,6 +30,11 @@ import com.openfit.health.HealthConnectSource
 import com.openfit.health.HealthConnectSleep
 import com.openfit.health.HealthConnectVitals
 import com.openfit.domain.sleepScore
+import com.openfit.domain.EnergyDay
+import com.openfit.health.EnergySource
+import com.openfit.health.PulseAgeSource
+import com.openfit.domain.PulseAge
+import com.openfit.health.SlotCache
 import com.openfit.health.DayLoadCache
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
@@ -76,6 +81,12 @@ sealed interface TodayUiState {
         val googleHealth: GoogleHealthStatus,
         val healthMetrics: List<MetricReading> = emptyList(),
         val sleepScore: Int? = null,
+        /** The day's Energy Bank; loaded after the rest, since its first run reads weeks of heart rate. */
+        val energy: EnergyDay? = null,
+        val energyLoading: Boolean = true,
+        /** Pulse Age over the 28 days before the date; loaded after the rest. */
+        val pulseAge: PulseAge? = null,
+        val pulseAgeLoading: Boolean = true,
         val refreshing: Boolean = false,
     ) : TodayUiState
 }
@@ -85,9 +96,14 @@ class TodayViewModel(
     private val profileStore: ProfileStore,
     private val googleHealthAuth: GoogleHealthAuth,
     dayLoadCache: DayLoadCache,
+    slotCache: SlotCache,
 ) : ViewModel() {
 
     private val healthConnect = HealthConnectSource(gateway, dayLoadCache)
+    private val energySource = EnergySource(gateway, slotCache)
+    private var energyJob: Job? = null
+    private val pulseAgeSource = PulseAgeSource(gateway, dayLoadCache)
+    private var pulseAgeJob: Job? = null
     private val vitals = HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<TodayUiState>(TodayUiState.Loading)
@@ -113,6 +129,38 @@ class TodayViewModel(
             } catch (error: Exception) {
                 TodayUiState.Failed(error.message ?: error.javaClass.simpleName)
             }
+            (_state.value as? TodayUiState.Ready)?.let {
+                loadEnergy(it.date)
+                loadPulseAge(it.date, it.profile)
+            }
+        }
+    }
+
+    private fun loadPulseAge(date: LocalDate, profile: Profile) {
+        pulseAgeJob?.cancel()
+        pulseAgeJob = viewModelScope.launch {
+            val age = try {
+                pulseAgeSource.pulseAge(date.minusDays(1), profile)
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
+            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(pulseAge = age, pulseAgeLoading = false) else it }
+        }
+    }
+
+    private fun loadEnergy(date: LocalDate) {
+        energyJob?.cancel()
+        energyJob = viewModelScope.launch {
+            val day = try {
+                energySource.days(date, date).singleOrNull()
+            } catch (error: CancellationException) {
+                throw error
+            } catch (_: Exception) {
+                null
+            }
+            _state.update { if (it is TodayUiState.Ready && it.date == date) it.copy(energy = day, energyLoading = false) else it }
         }
     }
 

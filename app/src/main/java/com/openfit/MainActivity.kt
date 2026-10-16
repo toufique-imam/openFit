@@ -30,6 +30,11 @@ import com.openfit.ui.RootTab
 import com.openfit.ui.cardio.CardioLoadRoute
 import com.openfit.ui.cardio.CardioLoadViewModel
 import com.openfit.journal.JournalStore
+import com.openfit.health.SlotCache
+import com.openfit.ui.energy.EnergyRoute
+import com.openfit.ui.age.PulseAgeRoute
+import com.openfit.ui.age.PulseAgeViewModel
+import com.openfit.ui.energy.EnergyViewModel
 import com.openfit.ui.journal.BehavioursRoute
 import com.openfit.ui.journal.JournalRoute
 import com.openfit.ui.journal.JournalViewModel
@@ -93,6 +98,7 @@ class MainActivity : ComponentActivity() {
     private lateinit var profileStore: ProfileStore
     private lateinit var dayLoadCache: DayLoadCache
     private lateinit var journalStore: JournalStore
+    private lateinit var slotCache: SlotCache
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -101,10 +107,11 @@ class MainActivity : ComponentActivity() {
         profileStore = ProfileStore(applicationContext)
         dayLoadCache = DayLoadCache(applicationContext)
         journalStore = JournalStore(applicationContext)
+        slotCache = SlotCache(applicationContext)
         setContent {
             OpenFitTheme {
                 val backStack = rememberSaveable(saver = BackStackSaver) { mutableStateListOf<Screen>(Screen.Tab(RootTab.Today)) }
-                val todayViewModel = viewModel { TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache) }
+                val todayViewModel = viewModel { TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache) }
                 val top = backStack.last()
                 val showTab: (RootTab) -> Unit = { tab ->
                     backStack.clear()
@@ -197,6 +204,16 @@ class MainActivity : ComponentActivity() {
                 SleepRoute(model, onBack)
             }
             MetricPage.JournalBehaviours -> BehavioursRoute(journalViewModel(), onBack)
+            MetricPage.PulseAge -> {
+                val model = viewModel { PulseAgeViewModel(gateway, profileStore, dayLoadCache) }
+                LaunchedEffect(screen) { model.open(screen.date) }
+                PulseAgeRoute(model, onBack)
+            }
+            MetricPage.EnergyBank -> {
+                val model = viewModel { EnergyViewModel(gateway, slotCache) }
+                LaunchedEffect(screen) { model.open(screen.date) }
+                EnergyRoute(model, onBack)
+            }
             MetricPage.Goals -> {
                 val model = viewModel { GoalsViewModel(profileStore) }
                 LaunchedEffect(screen) { model.reload() }
