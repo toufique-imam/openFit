@@ -10,6 +10,7 @@ import com.openfit.domain.IntRangeSerializer
 import com.openfit.domain.LocalDateSerializer
 import com.openfit.domain.LocalTimeSerializer
 import android.content.Context
+import android.content.SharedPreferences
 import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
 import java.time.LocalDate
@@ -51,13 +52,13 @@ data class Profile(
     val weightGoalKg: Double? = null,
 )
 
-class ProfileStore(context: Context) {
-
-    private val prefs = context.getSharedPreferences("profile", Context.MODE_PRIVATE)
+class ProfileStore internal constructor(private val prefs: SharedPreferences, private val today: () -> LocalDate = LocalDate::now) {
+    constructor(context: Context) : this(context.getSharedPreferences("profile", Context.MODE_PRIVATE))
 
     fun load(): Profile {
         val imperial = Locale.getDefault().country in IMPERIAL_COUNTRIES
-        val birthDate = prefs.getLong(KEY_BIRTH_DATE, 0L).takeIf { it > 0 }?.let { LocalDate.ofEpochDay(it - 1) }
+        val birthDate = prefs.getString(KEY_BIRTH_DATE_ISO, null)?.let(LocalDate::parse)
+            ?: prefs.getLong(KEY_BIRTH_DATE, 0L).takeIf { it != 0L }?.let { LocalDate.ofEpochDay(it - 1) }
         return Profile(
             name = prefs.getString(KEY_NAME, null).orEmpty(),
             age = birthDate?.let(::ageOn) ?: int(KEY_AGE),
@@ -92,7 +93,8 @@ class ProfileStore(context: Context) {
             putInt(KEY_AGE, profile.age ?: 0)
             // An age typed over a birth date's (in the profile dialog) replaces the birth date.
             val birthDate = profile.birthDate?.takeIf { ageOn(it) == profile.age }
-            putLong(KEY_BIRTH_DATE, birthDate?.toEpochDay()?.plus(1) ?: 0L)
+            putString(KEY_BIRTH_DATE_ISO, birthDate?.toString())
+            remove(KEY_BIRTH_DATE)
             putInt(KEY_STEP_GOAL, profile.dailyStepGoal ?: 0)
             putFloat(KEY_DISTANCE_GOAL, profile.dailyDistanceGoalMeters?.toFloat() ?: 0f)
             putInt(KEY_FLOORS_GOAL, profile.dailyFloorsGoal ?: 0)
@@ -110,7 +112,7 @@ class ProfileStore(context: Context) {
         }.apply()
     }
 
-    private fun ageOn(birthDate: LocalDate): Int = Period.between(birthDate, LocalDate.now()).years
+    private fun ageOn(birthDate: LocalDate): Int = Period.between(birthDate, today()).years
 
     /** Zero means "not set" for every stored number. */
     private fun int(key: String): Int? = prefs.getInt(key, 0).takeIf { it > 0 }
@@ -141,6 +143,7 @@ class ProfileStore(context: Context) {
         const val KEY_NAME = "name"
         const val KEY_AGE = "age"
         const val KEY_BIRTH_DATE = "birth_date_epoch_day"
+        const val KEY_BIRTH_DATE_ISO = "birth_date"
         const val KEY_SEX = "sex"
         const val KEY_UNITS = "units"
         const val KEY_WEIGHT_UNIT = "weight_unit"
