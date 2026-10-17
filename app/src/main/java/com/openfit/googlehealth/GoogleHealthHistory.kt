@@ -34,6 +34,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import org.json.JSONObject
@@ -70,7 +71,7 @@ class GoogleHealthHistory private constructor(context: Context) {
     private val sync = HealthSync.get(context)
     private val prefs = context.getSharedPreferences("google_health_history", Context.MODE_PRIVATE)
     private val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-    private val zone: ZoneId = ZoneId.systemDefault()
+    private val zone: ZoneId get() = ZoneId.systemDefault()
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val running = Mutex()
     private val _state = MutableStateFlow<CloudHistoryState>(idle())
@@ -80,6 +81,18 @@ class GoogleHealthHistory private constructor(context: Context) {
     /** When the copy last changed (a copy or a top-up), epoch milliseconds: Today reloads when it moves. */
     val updated: StateFlow<Long> = _updated.asStateFlow()
     private var job: Job? = null
+
+    suspend fun stopAndJoin() {
+        val jobs = scope.coroutineContext[Job]!!.children.toList()
+        jobs.forEach { it.cancel() }
+        jobs.joinAll()
+        _state.value = idle()
+    }
+
+    fun onDataDeleted() {
+        _state.value = idle()
+        _updated.value = 0L
+    }
 
     /** Starts the copy, or returns the one going. Google Health must be connected (Profile) first. */
     fun start(): Job = synchronized(this) {
@@ -103,19 +116,24 @@ class GoogleHealthHistory private constructor(context: Context) {
      */
     suspend fun topUp(due: Duration = Duration.ZERO) {
         if (prefs.getString(KEY_COPIED_FROM, null) == null || !auth.enabled) return
+        if (prefs.getInt(KEY_RECONCILIATION, 0) < RECONCILIATION_VERSION) {
+            copy()
+            if (prefs.getInt(KEY_RECONCILIATION, 0) < RECONCILIATION_VERSION) return
+        }
         if (System.currentTimeMillis() - prefs.getLong(KEY_LAST_TOP_UP, 0L) < due.toMillis()) return
         if (!running.tryLock()) return
         try {
             val session = Session("top-up")
-            val today = LocalDate.now(zone)
+            val importZone = zone
+            val today = LocalDate.now(importZone)
             val from = today.minusDays(TOP_UP_DAYS - 1)
             val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= today }.toList()
             // A type the copy holds nothing of (floors without an altimeter, say) is asked about once a week, not every
             // time; once it has data, every time.
             val weekly = System.currentTimeMillis() - prefs.getLong(KEY_EMPTY_CHECKED, 0L) > EMPTY_RECHECK.toMillis()
             TASKS.filter { weekly || gateway.store.cloudHasData(it.type) }.forEach { task ->
-                val records = task.fetch(session, from, today, zone)
-                gateway.store.saveCloud(task.type, days, byDay(records, zone).filterKeys { it in days })
+                val records = task.fetch(session, from, today, importZone)
+                gateway.store.saveCloud(task.type, days, byDay(records, importZone).filterKeys { it in days }, sourceZone = importZone)
             }
             if (weekly) prefs.edit().putLong(KEY_EMPTY_CHECKED, System.currentTimeMillis()).apply()
             note { "top-up $from..$today: ${session.calls} calls" }
@@ -136,21 +154,27 @@ class GoogleHealthHistory private constructor(context: Context) {
     private suspend fun copy() = running.withLock {
         try {
             val session = Session("copy")
-            val today = LocalDate.now(zone)
+            val importZone = zone
+            val today = LocalDate.now(importZone)
             val until = today.minusDays(1)
             _state.value = CloudHistoryState.Copying(0)
-            val first = prefs.getString(KEY_FIRST, null)?.let(LocalDate::parse) ?: session.firstDay(until).also {
-                prefs.edit().putString(KEY_FIRST, it.toString()).apply()
+            val first = prefs.getString(KEY_FIRST, null)?.takeIf { prefs.getInt(KEY_DISCOVERY_VERSION, 0) == DISCOVERY_VERSION }
+                ?.let(LocalDate::parse) ?: session.firstDay(until).also {
+                prefs.edit().putString(KEY_FIRST, it.toString()).putInt(KEY_DISCOVERY_VERSION, DISCOVERY_VERSION).apply()
             }
             val store = gateway.store
             // Every chunk of every type, newest first, less those saved by an earlier run.
             val chunks = TASKS.flatMap { task -> task.chunks(first, until).map { task to it } }
-            val pending = chunks.filter { (task, chunk) -> store.cloudDays(task.type, chunk.start, chunk.endInclusive).size < chunk.days() }
+            val pending = chunks.filter { (task, chunk) ->
+                store.cloudDays(task.type, chunk.start, chunk.endInclusive).size < chunk.days() ||
+                    task.name in RECONCILED_TASKS && !prefs.getBoolean(reconciledChunk(task, chunk), false)
+            }
             var done = chunks.size - pending.size
             pending.forEach { (task, chunk) ->
-                val records = task.fetch(session, chunk.start, chunk.endInclusive, zone)
+                val records = task.fetch(session, chunk.start, chunk.endInclusive, importZone)
                 val days = generateSequence(chunk.start) { it.plusDays(1) }.takeWhile { it <= chunk.endInclusive }.toList()
-                store.saveCloud(task.type, days, byDay(records, zone).filterKeys { it in chunk })
+                store.saveCloud(task.type, days, byDay(records, importZone).filterKeys { it in chunk }, sourceZone = importZone)
+                if (task.name in RECONCILED_TASKS) prefs.edit().putBoolean(reconciledChunk(task, chunk), true).apply()
                 note { "${task.name} ${chunk.start}..${chunk.endInclusive}: ${records.size} records" }
                 _state.value = CloudHistoryState.Copying((++done * 100 / chunks.size.coerceAtLeast(1)))
             }
@@ -160,8 +184,9 @@ class GoogleHealthHistory private constructor(context: Context) {
                 .putString(KEY_COPIED_FROM, first.toString())
                 .putLong(KEY_LAST_TOP_UP, System.currentTimeMillis())
                 .putLong(KEY_EMPTY_CHECKED, System.currentTimeMillis())
+                .putInt(KEY_RECONCILIATION, RECONCILIATION_VERSION)
                 .apply()
-            // Cardio load, zone minutes and Energy Bank for the days just added.
+            // Cardio load, zone minutes and Vitality reserve for the days just added.
             sync.rescore(first)
             _updated.value = System.currentTimeMillis()
             _state.value = idle()
@@ -216,20 +241,16 @@ class GoogleHealthHistory private constructor(context: Context) {
             is GoogleHealthAuthorization.NeedsConsent -> error("Connect Google Health first (Profile).")
         }
 
-        /** Where the history begins: steps a day, 90 days a call, back until half a year has none (or [MAX_YEARS]). */
+        /** Search the supported history window, including long gaps when the tracker was not used. */
         suspend fun firstDay(until: LocalDate): LocalDate {
             var end = until
             var first: LocalDate? = null
-            var empty = 0
             val limit = until.minusYears(MAX_YEARS)
-            while (empty < EMPTY_CHUNKS_TO_STOP && end > limit) {
+            while (end >= limit) {
                 val from = maxOf(end.minusDays(ROLLUP_DAYS - 1), limit)
                 val days = call("steps days $from..$end") { api -> parseDailyRollups(api.dailyRollUp("steps", from, end.plusDays(1)), "steps") }
                     .filterValues { (it.number("countSum") ?: 0.0) > 0 }.keys
-                if (days.isEmpty()) empty++ else {
-                    empty = 0
-                    first = days.min()
-                }
+                if (days.isNotEmpty()) first = days.min()
                 end = from.minusDays(1)
             }
             return first ?: until
@@ -271,9 +292,16 @@ class GoogleHealthHistory private constructor(context: Context) {
     companion object {
         private const val TAG = "openFit.gh"
         private const val KEY_FIRST = "first"
+        private const val KEY_DISCOVERY_VERSION = "discovery_version"
+        private const val DISCOVERY_VERSION = 1
         private const val KEY_COPIED_FROM = "copied_from"
         private const val KEY_LAST_TOP_UP = "last_top_up"
         private const val KEY_EMPTY_CHECKED = "empty_checked"
+        private const val KEY_RECONCILIATION = "reconciliation_version"
+        private const val RECONCILIATION_VERSION = 1
+        private val RECONCILED_TASKS = setOf("workouts", "food", "water")
+        private fun reconciledChunk(task: Task, chunk: ClosedRange<LocalDate>) =
+            "reconciled:$RECONCILIATION_VERSION:${task.name}:${chunk.start}:${chunk.endInclusive}"
         private val EMPTY_RECHECK: Duration = Duration.ofDays(7)
         /** 300 requests a minute per user: one every 220 ms stays under it. */
         private const val MIN_GAP_MS = 220L
@@ -281,7 +309,6 @@ class GoogleHealthHistory private constructor(context: Context) {
         private const val MAX_RETRIES = 5
         private const val MAX_YEARS = 15L
         private const val ROLLUP_DAYS = 90L
-        private const val EMPTY_CHUNKS_TO_STOP = 2
         /** Days read again by a top-up: today, and two before it (a watch syncs late). */
         private const val TOP_UP_DAYS = 3L
         /** Opening the app tops up at most this often; a pull to refresh, at most every [PULL_TOP_UP]. */
@@ -312,6 +339,10 @@ class GoogleHealthHistory private constructor(context: Context) {
             family: String? = GoogleHealthApi.WEARABLES,
             pageSize: Int = PAGE_SIZE,
         ): List<JSONObject> = pages(dataType) { api, token -> api.list(dataType, filter, token, family, pageSize) }.flatMap { it.points(field) }
+
+        /** Use the API's source reconciliation so mirrored sessions/logs do not appear twice. */
+        private suspend fun Session.reconciled(dataType: String, field: String, filter: String, pageSize: Int = PAGE_SIZE): List<JSONObject> =
+            pages(dataType) { api, token -> api.reconcile(dataType, filter, token, GoogleHealthApi.ALL_SOURCES, pageSize) }.flatMap { it.points(field) }
 
         /**
          * Every window with data of a rollUp over [from]..[until], 10,000 a call, asking only for [sumKey] of [field]
@@ -357,7 +388,7 @@ class GoogleHealthHistory private constructor(context: Context) {
                 sleepRecords(pages("sleep") { api, token -> api.reconcile("sleep", filter, token, family = null, pageSize = SESSION_PAGE_SIZE) }.flatMap { it.points("sleep") })
             },
             Task("workouts", ExerciseSessionRecord::class, WHOLE) { from, until, _ ->
-                exerciseRecords(listed("exercise", "exercise", civil("exercise.interval.civil_start_time", from, until), GoogleHealthApi.ALL_SOURCES, SESSION_PAGE_SIZE))
+                exerciseRecords(reconciled("exercise", "exercise", civil("exercise.interval.civil_start_time", from, until), SESSION_PAGE_SIZE))
             },
             Task("resting heart rate", RestingHeartRateRecord::class, WHOLE) { from, until, zone ->
                 dailyRecords(
@@ -405,10 +436,10 @@ class GoogleHealthHistory private constructor(context: Context) {
                 )
             },
             Task("food", NutritionRecord::class, WHOLE) { from, until, _ ->
-                nutritionRecords(listed("nutrition-log", "nutritionLog", civil("nutrition_log.interval.civil_start_time", from, until), GoogleHealthApi.ALL_SOURCES))
+                nutritionRecords(reconciled("nutrition-log", "nutritionLog", civil("nutrition_log.interval.civil_start_time", from, until)))
             },
             Task("water", HydrationRecord::class, WHOLE) { from, until, _ ->
-                hydrationRecords(listed("hydration-log", "hydrationLog", civil("hydration_log.interval.civil_start_time", from, until), GoogleHealthApi.ALL_SOURCES))
+                hydrationRecords(reconciled("hydration-log", "hydrationLog", civil("hydration_log.interval.civil_start_time", from, until)))
             },
         )
 

@@ -2,6 +2,9 @@ package com.openfit.googlehealth
 
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.CoroutineStart
 import org.json.JSONObject
 import java.net.HttpURLConnection
 import java.net.URL
@@ -14,7 +17,10 @@ class GoogleHealthException(val code: Int, val body: String) : Exception("Google
     val isAuthProblem: Boolean get() = code == 401 || "ACCOUNT_NOT_LINKED" in body
 }
 
-class GoogleHealthApi(private val accessToken: String) {
+class GoogleHealthApi(
+    private val accessToken: String,
+    private val openConnection: (URL) -> HttpURLConnection = { it.openConnection() as HttpURLConnection },
+) {
 
     suspend fun dailyRollUp(dataType: String, date: LocalDate): JSONObject = dailyRollUp(dataType, date, date.plusDays(1))
 
@@ -81,7 +87,12 @@ class GoogleHealthApi(private val accessToken: String) {
         .put("time", JSONObject())
 
     private suspend fun request(method: String, url: String, body: JSONObject? = null): JSONObject = withContext(Dispatchers.IO) {
-        val connection = URL(url).openConnection() as HttpURLConnection
+        val connection = openConnection(URL(url))
+        connection.connectTimeout = 15_000
+        connection.readTimeout = 30_000
+        val cancellation = launch(start = CoroutineStart.UNDISPATCHED) {
+            try { awaitCancellation() } finally { connection.disconnect() }
+        }
         try {
             connection.requestMethod = method
             connection.setRequestProperty("Authorization", "Bearer $accessToken")
@@ -99,6 +110,7 @@ class GoogleHealthApi(private val accessToken: String) {
             if (code !in 200..299) throw GoogleHealthException(code, text)
             if (text.isBlank()) JSONObject() else JSONObject(text)
         } finally {
+            cancellation.cancel()
             connection.disconnect()
         }
     }
