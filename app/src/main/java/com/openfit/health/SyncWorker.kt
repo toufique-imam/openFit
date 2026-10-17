@@ -9,6 +9,8 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
+import com.openfit.ui.onboarding.OnboardingStore
 import java.util.concurrent.TimeUnit
 
 /**
@@ -20,6 +22,7 @@ import java.util.concurrent.TimeUnit
 class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
 
     override suspend fun doWork(): Result {
+        if (!OnboardingStore(applicationContext).done) return Result.success()
         val gateway = HealthConnectGateway.get(applicationContext)
         if (gateway.availability() != HealthConnectAvailability.Available) return Result.success()
         if (HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND !in gateway.grantedPermissions()) return Result.success()
@@ -44,6 +47,10 @@ class SyncWorker(context: Context, params: WorkerParameters) : CoroutineWorker(c
                 .setConstraints(Constraints.Builder().setRequiresBatteryNotLow(true).build())
                 .build()
             WorkManager.getInstance(context).enqueueUniquePeriodicWork(NAME, ExistingPeriodicWorkPolicy.KEEP, request)
+        }
+
+        suspend fun cancel(context: Context) = withContext(Dispatchers.IO) {
+            WorkManager.getInstance(context).cancelUniqueWork(NAME).result.get()
         }
     }
 }
