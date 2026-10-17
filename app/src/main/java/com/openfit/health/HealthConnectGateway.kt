@@ -5,7 +5,6 @@ import android.os.SystemClock
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import androidx.health.connect.client.HealthConnectClient
-import androidx.health.connect.client.HealthConnectFeatures
 import androidx.health.connect.client.permission.HealthPermission
 import androidx.health.connect.client.records.BodyFatRecord
 import androidx.health.connect.client.records.DistanceRecord
@@ -66,17 +65,12 @@ class HealthConnectGateway internal constructor(
         granted = null
     }
 
-    fun requestablePermissions(): Set<String> = buildSet {
-        addAll(READ_PERMISSIONS)
-        if (isAvailable(HealthConnectFeatures.FEATURE_SKIN_TEMPERATURE)) add(read(SkinTemperatureRecord::class))
-        @OptIn(androidx.health.connect.client.feature.ExperimentalMindfulnessSessionApi::class)
-        if (isAvailable(HealthConnectFeatures.FEATURE_MINDFULNESS_SESSION)) add(read(androidx.health.connect.client.records.MindfulnessSessionRecord::class))
-        if (isAvailable(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_HISTORY)) add(HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY)
-        if (isAvailable(HealthConnectFeatures.FEATURE_READ_HEALTH_DATA_IN_BACKGROUND)) add(HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND)
-    }
-
-    private fun isAvailable(feature: Int): Boolean =
-        client.features.getFeatureStatus(feature) == HealthConnectFeatures.FEATURE_STATUS_AVAILABLE
+    /**
+     * Everything openFit reads, asked for whether or not this Health Connect supports it: connect-client's feature
+     * check says skin temperature and mindfulness are unavailable on every Health Connect app (Android 13 and below),
+     * yet a current one grants and serves them. A permission it can't grant simply stays ungranted.
+     */
+    fun requestablePermissions(): Set<String> = READ_PERMISSIONS.toSet() + OPTIONAL_PERMISSIONS
 
     companion object {
         const val PROVIDER_PACKAGE = "com.google.android.apps.healthdata"
@@ -92,7 +86,11 @@ class HealthConnectGateway internal constructor(
         }
         private const val PERMISSIONS_TTL_MS = 30_000L
 
+        /** Asked for, but not every Health Connect has them, so a missing one never raises the Today banner. */
+        @OptIn(androidx.health.connect.client.feature.ExperimentalMindfulnessSessionApi::class)
         val OPTIONAL_PERMISSIONS = setOf(
+            read(SkinTemperatureRecord::class),
+            read(androidx.health.connect.client.records.MindfulnessSessionRecord::class),
             HealthPermission.PERMISSION_READ_HEALTH_DATA_HISTORY,
             HealthPermission.PERMISSION_READ_HEALTH_DATA_IN_BACKGROUND,
         )

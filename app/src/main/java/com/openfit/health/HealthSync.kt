@@ -74,6 +74,12 @@ class HealthSync internal constructor(
 
     suspend fun copyCoverage(): List<com.openfit.data.CopyCoverage> = gateway.store.copyCoverage()
 
+    /** The types openFit reads that Health Connect doesn't allow (refused, or not supported by this Health Connect). */
+    suspend fun notAllowedTypes(): List<String> {
+        val granted = gateway.grantedPermissions()
+        return SAVED_TYPES.filterKeys { read(it) !in granted }.values.toList()
+    }
+
     /** When Health Connect was last read for recent days (or imported). */
     val lastSync: Instant? get() = prefs.getLong(KEY_LAST_SYNC, 0).takeIf { it > 0 }?.let(Instant::ofEpochMilli)
 

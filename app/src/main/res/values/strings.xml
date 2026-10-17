@@ -869,6 +869,7 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="sync_hide_types">Hide copied data types</string>
     <string name="sync_type_coverage">%1$s · %2$s to %3$s · %4$d days copied</string>
     <string name="sync_other_type">Other health data</string>
+    <string name="sync_type_not_allowed">%s · Not allowed in Health Connect</string>
     <string name="sync_since">Saved on this phone from %s</string>
     <string name="sync_not_imported">Not copied yet. Sync reads everything Health Connect has.</string>
     <string name="sync_last">Last read %s</string>

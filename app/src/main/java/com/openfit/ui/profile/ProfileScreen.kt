@@ -98,6 +98,9 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
     val coverage by produceState(emptyList<com.openfit.data.CopyCoverage>(), syncState) {
         value = withContext(Dispatchers.IO) { sync.copyCoverage() }
     }
+    val notAllowed by produceState(emptyList<String>(), syncState) {
+        value = withContext(Dispatchers.IO) { runCatching { sync.notAllowedTypes() }.getOrDefault(emptyList()) }
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val history = remember { GoogleHealthHistory.get(context) }
@@ -168,7 +171,7 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
             }
 
             Spacer(Modifier.height(16.dp))
-            SyncCard(syncState, coverage, onSync = { sync.startImport() })
+            SyncCard(syncState, coverage, notAllowed, onSync = { sync.startImport() })
             Spacer(Modifier.height(16.dp))
             HealthConnectUsageCard(remember(state, syncState) { viewModel.healthConnectUsage() })
             com.openfit.ui.PrivacyPolicyLink(Modifier.align(Alignment.CenterHorizontally))
@@ -329,24 +332,33 @@ private fun GoogleHealthCard(
  * still missing (then recent days) without leaving the page waiting: it runs on its own.
  */
 @Composable
-private fun SyncCard(state: SyncState, coverage: List<com.openfit.data.CopyCoverage>, onSync: () -> Unit) {
+private fun SyncCard(state: SyncState, coverage: List<com.openfit.data.CopyCoverage>, notAllowed: List<String>, onSync: () -> Unit) {
     var expanded by rememberSaveable { mutableStateOf(false) }
     val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
     val clock = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
     Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.sync_title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
-            if (coverage.isNotEmpty()) {
+            if (coverage.isNotEmpty() || notAllowed.isNotEmpty()) {
                 TextButton(onClick = { expanded = !expanded }) {
                     Text(stringResource(if (expanded) R.string.sync_hide_types else R.string.sync_show_types))
                 }
-                if (expanded) coverage.forEach { copied ->
-                    Text(
-                        stringResource(R.string.sync_type_coverage, stringResource(copyTypeLabel(copied.type)),
-                            LocalDate.parse(copied.firstDay).format(date), LocalDate.parse(copied.lastDay).format(date), copied.days),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = OpenFitColors.OnSurfaceVariant,
-                    )
+                if (expanded) {
+                    coverage.forEach { copied ->
+                        Text(
+                            stringResource(R.string.sync_type_coverage, stringResource(copyTypeLabel(copied.type)),
+                                LocalDate.parse(copied.firstDay).format(date), LocalDate.parse(copied.lastDay).format(date), copied.days),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OpenFitColors.OnSurfaceVariant,
+                        )
+                    }
+                    notAllowed.forEach { type ->
+                        Text(
+                            stringResource(R.string.sync_type_not_allowed, stringResource(copyTypeLabel(type))),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = OpenFitColors.OnSurfaceVariant,
+                        )
+                    }
                 }
             }
             when (state) {
