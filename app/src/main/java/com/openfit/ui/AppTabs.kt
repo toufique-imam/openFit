@@ -40,14 +40,10 @@ enum class RootTab(@StringRes val label: Int, val icon: ImageVector, val optiona
     You(R.string.tab_you, Icons.Outlined.GridView),
 }
 
-private val BAR = Color(0xFF1E201F)
-private val INDICATOR = Color(0xFF324B45)
-private val SELECTED_ICON = Color(0xFFCDE8E1)
-
-/** Fitbit's bottom bar: 80dp, a #324B45 pill behind the selected icon. */
+/** Navigation uses the same surface and accent palette as the selected system theme. */
 @Composable
 fun BottomBar(tabs: List<RootTab>, selected: RootTab, onSelect: (RootTab) -> Unit) {
-    NavigationBar(containerColor = BAR) {
+    NavigationBar(containerColor = OpenFitColors.Card) {
         tabs.forEach { tab ->
             NavigationBarItem(
                 selected = tab == selected,
@@ -55,9 +51,9 @@ fun BottomBar(tabs: List<RootTab>, selected: RootTab, onSelect: (RootTab) -> Uni
                 icon = { Icon(tab.icon, contentDescription = null) },
                 label = { Text(stringResource(tab.label), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis) },
                 colors = NavigationBarItemDefaults.colors(
-                    selectedIconColor = SELECTED_ICON,
+                    selectedIconColor = OpenFitColors.OnSurface,
                     selectedTextColor = OpenFitColors.OnSurface,
-                    indicatorColor = INDICATOR,
+                    indicatorColor = OpenFitColors.PrimaryContainer,
                     unselectedIconColor = OpenFitColors.OnSurfaceVariant,
                     unselectedTextColor = OpenFitColors.OnSurfaceVariant,
                 ),

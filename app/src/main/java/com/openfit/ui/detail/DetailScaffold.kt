@@ -233,20 +233,28 @@ fun DetailList(period: ChartPeriod, anchor: LocalDate, content: LazyListScope.()
 }
 
 @Composable
-fun PeriodNavigator(label: String, canGoForward: Boolean, onShift: (Long) -> Unit) {
+fun PeriodNavigator(label: String, canGoForward: Boolean, onShift: (Long) -> Unit, period: ChartPeriod = ChartPeriod.Day) {
     Row(Modifier.fillMaxWidth().padding(start = 4.dp, end = 4.dp, top = 4.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = { onShift(-1) }) {
-            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(R.string.previous_day), tint = OpenFitColors.OnSurface)
+            Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, stringResource(periodArrowLabel(period, forward = false)), tint = OpenFitColors.OnSurface)
         }
         Text(label, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface, textAlign = TextAlign.Center, modifier = Modifier.weight(1f))
         IconButton(onClick = { onShift(1) }, enabled = canGoForward) {
             Icon(
                 Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                stringResource(R.string.next_day),
+                stringResource(periodArrowLabel(period, forward = true)),
                 tint = if (canGoForward) OpenFitColors.OnSurface else OpenFitColors.OnSurface.copy(alpha = 0.38f),
             )
         }
     }
+}
+
+private fun periodArrowLabel(period: ChartPeriod, forward: Boolean): Int = when (period) {
+    ChartPeriod.Day -> if (forward) R.string.next_day else R.string.previous_day
+    ChartPeriod.Week -> if (forward) R.string.next_week else R.string.previous_week
+    ChartPeriod.Month -> if (forward) R.string.next_month else R.string.previous_month
+    ChartPeriod.ThreeMonths -> if (forward) R.string.next_three_months else R.string.previous_three_months
+    ChartPeriod.Year -> if (forward) R.string.next_year else R.string.previous_year
 }
 
 fun isCurrentPeriod(period: ChartPeriod, anchor: LocalDate, today: LocalDate): Boolean = today in periodDays(period, anchor)
@@ -262,8 +270,8 @@ fun periodLabel(period: ChartPeriod, anchor: LocalDate, today: LocalDate): Strin
         ChartPeriod.Week -> if (current) stringResource(R.string.this_week) else weekRange(days.first(), days.last())
         ChartPeriod.Month -> when {
             current -> stringResource(R.string.this_month)
-            anchor.year == today.year -> anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
-            else -> "${anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())} ${anchor.year}"
+            anchor.year == today.year -> anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
+            else -> "${anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())} ${anchor.year}"
         }
         ChartPeriod.ThreeMonths -> weekRange(days.first(), days.last())
         ChartPeriod.Year -> if (current) stringResource(R.string.this_year) else anchor.year.toString()
@@ -414,7 +422,7 @@ private fun listTitle(period: ChartPeriod, anchor: LocalDate): String {
     val days = periodDays(period, anchor)
     return when (period) {
         ChartPeriod.Week, ChartPeriod.ThreeMonths -> weekRange(days.first(), days.last())
-        ChartPeriod.Month -> anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        ChartPeriod.Month -> anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
         else -> anchor.year.toString()
     }
 }
@@ -430,7 +438,7 @@ private fun rowLabel(period: ChartPeriod, row: PeriodRow, today: LocalDate): Str
     ChartPeriod.Year -> if (YearMonth.from(row.start) == YearMonth.from(today)) {
         stringResource(R.string.this_month)
     } else {
-        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
     }
 }
 

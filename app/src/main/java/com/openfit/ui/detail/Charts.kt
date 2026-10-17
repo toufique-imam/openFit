@@ -54,7 +54,7 @@ private val MIN_BAR_HEIGHT = 5.dp
 private val DOT_RING = 1.5.dp
 private const val FILL_ALPHA = 0.12f
 
-val WorkoutYellow = Color(0xFFE3E987)
+val WorkoutYellow @Composable get() = Color(if (OpenFitColors.light) 0xFF756600 else 0xFFE3E987)
 
 /** Fitbit's dotted line: 2dp round dots every 5dp. */
 private fun DrawScope.dotted(color: Color, from: Offset, to: Offset) {
@@ -105,7 +105,7 @@ private fun yFor(value: Double, axisMax: Double, plotTop: Float, plotBottom: Flo
 
 private fun DrawScope.xLabels(measurer: TextMeasurer, style: TextStyle, labels: List<Pair<Float, String>>, plotBottom: Float, centered: Boolean) {
     labels.forEach { (x, label) ->
-        drawLine(OpenFitColors.OnSurfaceVariant, Offset(x, plotBottom + TICK_TOP.toPx()), Offset(x, plotBottom + TICK_TOP.toPx() + TICK.toPx()), strokeWidth = 1.dp.toPx())
+        drawLine(style.color, Offset(x, plotBottom + TICK_TOP.toPx()), Offset(x, plotBottom + TICK_TOP.toPx() + TICK.toPx()), strokeWidth = 1.dp.toPx())
         val layout = measurer.measure(label, style)
         val left = if (centered) x - layout.size.width / 2f else x - layout.size.width / 2f
         drawText(layout, topLeft = Offset(left.coerceAtLeast(0f), plotBottom + X_LABEL_TOP.toPx()))
@@ -128,6 +128,8 @@ fun DayChart(
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
     val xLabels = listOf(0 to "12am", 4 to "4am", 8 to "8am", 12 to "12pm", 16 to "4pm", 20 to "8pm", 23 to "11pm")
+    val palette0 = OpenFitColors
+    val workoutAccent0 = WorkoutYellow
     Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
         val left = PLOT_LEFT.toPx()
         val width = PLOT_WIDTH.toPx()
@@ -136,12 +138,12 @@ fun DayChart(
         fun x(minute: Long): Float = left + ((minute - dayStartMinute) / (24f * 60f)).coerceIn(0f, 1f) * width
         fun y(value: Double): Float = yFor(value, axis.max, top, bottom)
 
-        range?.let { rangeBox(left, left + width, y(it.high), y(it.low), OpenFitColors.Mint.accent) }
+        range?.let { rangeBox(left, left + width, y(it.high), y(it.low), palette0.Mint.accent) }
         val windows = workouts.map { x(it.start.epochSecond / 60) to x(it.end.epochSecond / 60) }
         windows.forEach { (from, to) ->
-            drawRect(WorkoutYellow.copy(alpha = FILL_ALPHA), Offset(from, top), Size((to - from).coerceAtLeast(1f), bottom - top))
-            dotted(WorkoutYellow, Offset(from, top), Offset(from, bottom))
-            dotted(WorkoutYellow, Offset(to, top), Offset(to, bottom))
+            drawRect(workoutAccent0.copy(alpha = FILL_ALPHA), Offset(from, top), Size((to - from).coerceAtLeast(1f), bottom - top))
+            dotted(workoutAccent0, Offset(from, top), Offset(from, bottom))
+            dotted(workoutAccent0, Offset(to, top), Offset(to, bottom))
         }
 
         // Running total per minute; flat stretches get an extra point so the smoothing keeps them flat.
@@ -157,12 +159,12 @@ fun DayChart(
         if (endMinute > previousMinute) points += Offset(x(endMinute), y(previousTotal))
         val path = smoothPath(points)
         val stroke = Stroke(LINE_WIDTH.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        drawPath(path, OpenFitColors.Mint.accent, style = stroke)
+        drawPath(path, palette0.Mint.accent, style = stroke)
         // Inside logged workouts the line turns yellow.
-        windows.forEach { (from, to) -> clipRect(left = from, right = to) { drawPath(path, WorkoutYellow, style = stroke) } }
+        windows.forEach { (from, to) -> clipRect(left = from, right = to) { drawPath(path, workoutAccent0, style = stroke) } }
         val last = points.last()
-        drawCircle(OpenFitColors.Background, (DOT_RADIUS + DOT_RING).toPx(), last)
-        drawCircle(OpenFitColors.Mint.accent, DOT_RADIUS.toPx(), last)
+        drawCircle(palette0.Background, (DOT_RADIUS + DOT_RING).toPx(), last)
+        drawCircle(palette0.Mint.accent, DOT_RADIUS.toPx(), last)
 
         yLabels(measurer, labelStyle, axis.max, axis.middle, top, bottom)
         xLabels(measurer, labelStyle, xLabels.map { (hour, label) -> left + hour / 24f * width to label }, bottom, centered = true)
@@ -179,6 +181,7 @@ fun PeriodChart(
 ) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    val palette1 = OpenFitColors
     Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
         val left = PLOT_LEFT.toPx()
         val slot = PLOT_WIDTH.toPx() / points.size.coerceAtLeast(1)
@@ -188,7 +191,7 @@ fun PeriodChart(
         fun y(value: Double): Float = yFor(value, axis.max, top, bottom)
 
         points.forEachIndexed { index, point ->
-            point.range?.let { rangeBox(x(index) - slot / 2, x(index) + slot / 2, y(it.high), y(it.low), OpenFitColors.Mint.accent) }
+            point.range?.let { rangeBox(x(index) - slot / 2, x(index) + slot / 2, y(it.high), y(it.low), palette1.Mint.accent) }
         }
         val drawn = points.mapIndexedNotNull { index, point -> point.load?.let { Offset(x(index), y(it)) } }
         if (drawn.size > 1) {
@@ -196,14 +199,14 @@ fun PeriodChart(
                 moveTo(drawn.first().x, drawn.first().y)
                 drawn.drop(1).forEach { lineTo(it.x, it.y) }
             }
-            drawPath(path, OpenFitColors.Mint.accent, style = Stroke(LINE_WIDTH.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
+            drawPath(path, palette1.Mint.accent, style = Stroke(LINE_WIDTH.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round))
         }
         points.forEachIndexed { index, point ->
             val load = point.load ?: return@forEachIndexed
             val center = Offset(x(index), y(load))
             // Dots inside their day's target range get a background ring, as in Fitbit's charts.
-            if (point.range != null && load in point.range) drawCircle(OpenFitColors.Background, (DOT_RADIUS + DOT_RING).toPx(), center)
-            drawCircle(OpenFitColors.Mint.accent, DOT_RADIUS.toPx(), center)
+            if (point.range != null && load in point.range) drawCircle(palette1.Background, (DOT_RADIUS + DOT_RING).toPx(), center)
+            drawCircle(palette1.Mint.accent, DOT_RADIUS.toPx(), center)
         }
 
         yLabels(measurer, labelStyle, axis.max, axis.middle, top, bottom)
@@ -230,6 +233,7 @@ fun BarChart(
 ) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    val palette2 = OpenFitColors
     Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
         val left = PLOT_LEFT.toPx()
         val width = PLOT_WIDTH.toPx()
@@ -248,7 +252,7 @@ fun BarChart(
             val step = if (index == guides.lastIndex) width / 21 else width / 7
             var x = left
             while (x <= left + width + 0.5f) {
-                drawCircle(OpenFitColors.OnSurfaceVariant, 1.dp.toPx(), Offset(x, y(guide)))
+                drawCircle(palette2.OnSurfaceVariant, 1.dp.toPx(), Offset(x, y(guide)))
                 x += step
             }
         }
@@ -261,7 +265,7 @@ fun BarChart(
             drawRoundRect(color, Offset(x - barWidth / 2, barTop), Size(barWidth, barHeight), cornerRadius = CornerRadius(minOf(barWidth, barHeight) / 2))
             if (goal != null && value >= goal && barHeight >= barWidth) {
                 val center = Offset(x, barTop + barWidth / 2)
-                drawCircle(OpenFitColors.Background, barWidth / 2 * 0.75f, center)
+                drawCircle(palette2.Background, barWidth / 2 * 0.75f, center)
                 if (barWidth >= 12.dp.toPx()) {
                     val r = barWidth * 0.18f
                     val check = Path().apply {
@@ -289,10 +293,11 @@ fun GuideLegend(items: List<Pair<Int, String>>, modifier: Modifier = Modifier) {
     Row(modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
         items.forEachIndexed { index, (dots, label) ->
             if (index > 0) Spacer(Modifier.width(32.dp))
+            val palette3 = OpenFitColors
             Canvas(Modifier.size(width = 12.dp, height = 12.dp)) {
                 val gap = 4.dp.toPx()
                 val start = size.width / 2 - gap * (dots - 1) / 2
-                repeat(dots) { drawCircle(OpenFitColors.OnSurfaceVariant, 1.dp.toPx(), Offset(start + it * gap, size.height / 2)) }
+                repeat(dots) { drawCircle(palette3.OnSurfaceVariant, 1.dp.toPx(), Offset(start + it * gap, size.height / 2)) }
             }
             Spacer(Modifier.width(8.dp))
             Text(label, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
@@ -300,13 +305,15 @@ fun GuideLegend(items: List<Pair<Int, String>>, modifier: Modifier = Modifier) {
     }
 }
 
-/** Fitbit's heart-rate zone colors. */
-object ZoneColors {
-    val Light = Color(0xFF95D6FF)
-    val Moderate = Color(0xFFFCF485)
-    val Vigorous = Color(0xFFFCBA66)
-    val Peak = Color(0xFFFF8989)
+class HeartZonePalette(light: Boolean) {
+    val Light = Color(if (light) 0xFF23648A else 0xFF95D6FF)
+    val Moderate = Color(if (light) 0xFF776300 else 0xFFFCF485)
+    val Vigorous = Color(if (light) 0xFF8A4810 else 0xFFFCBA66)
+    val Peak = Color(if (light) 0xFFA82F3F else 0xFFFF8989)
 }
+private val LightZones = HeartZonePalette(true)
+private val DarkZones = HeartZonePalette(false)
+val ZoneColors: HeartZonePalette @Composable get() = if (OpenFitColors.light) LightZones else DarkZones
 
 /**
  * The Heart day chart: per-minute heart rate over shaded zone bands with dotted thresholds. The line takes each
@@ -324,6 +331,7 @@ fun HeartDayChart(
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
     val xLabels = listOf(0 to "12am", 4 to "4am", 8 to "8am", 12 to "12pm", 16 to "4pm", 20 to "8pm", 23 to "11pm")
+    val zonePalette4 = ZoneColors
     Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
         val left = PLOT_LEFT.toPx()
         val width = PLOT_WIDTH.toPx()
@@ -334,9 +342,9 @@ fun HeartDayChart(
 
         val bands = zones?.let {
             listOf(
-                Triple(it.fatBurnFrom.toDouble(), it.cardioFrom.toDouble(), ZoneColors.Moderate),
-                Triple(it.cardioFrom.toDouble(), it.peakFrom.toDouble(), ZoneColors.Vigorous),
-                Triple(it.peakFrom.toDouble(), axisMax, ZoneColors.Peak),
+                Triple(it.fatBurnFrom.toDouble(), it.cardioFrom.toDouble(), zonePalette4.Moderate),
+                Triple(it.cardioFrom.toDouble(), it.peakFrom.toDouble(), zonePalette4.Vigorous),
+                Triple(it.peakFrom.toDouble(), axisMax, zonePalette4.Peak),
             )
         }.orEmpty().filter { (from, _, _) -> from < axisMax }
         bands.forEach { (from, to, color) ->
@@ -353,7 +361,7 @@ fun HeartDayChart(
             previous = minute
         }
         val stroke = Stroke(LINE_WIDTH.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
-        drawPath(path, ZoneColors.Light, style = stroke)
+        drawPath(path, zonePalette4.Light, style = stroke)
         bands.forEach { (from, to, color) ->
             clipRect(top = y(minOf(to, axisMax)), bottom = y(maxOf(from, axisMin))) { drawPath(path, color, style = stroke) }
         }
@@ -427,6 +435,7 @@ fun RangeDotsChart(
 ) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    val palette6 = OpenFitColors
     Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
         val left = PLOT_LEFT.toPx()
         val slot = PLOT_WIDTH.toPx() / values.size.coerceAtLeast(1)
@@ -440,7 +449,7 @@ fun RangeDotsChart(
         values.forEachIndexed { index, value ->
             value ?: return@forEachIndexed
             val inRange = ranges.getOrNull(index)?.let { value in it } ?: true
-            drawCircle(OpenFitColors.Background, (DOT_RADIUS + DOT_RING).toPx(), Offset(x(index), y(value)))
+            drawCircle(palette6.Background, (DOT_RADIUS + DOT_RING).toPx(), Offset(x(index), y(value)))
             drawCircle(if (inRange) color else outColor, DOT_RADIUS.toPx(), Offset(x(index), y(value)))
         }
         val labelX = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
@@ -470,6 +479,7 @@ fun RangeLineChart(
 ) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    val palette7 = OpenFitColors
     Canvas(modifier.fillMaxWidth().height(CHART_HEIGHT)) {
         val left = PLOT_LEFT.toPx()
         val slot = PLOT_WIDTH.toPx() / values.size.coerceAtLeast(1)
@@ -485,7 +495,7 @@ fun RangeLineChart(
         points.forEach { (index, point) ->
             val value = values[index] ?: return@forEach
             val inRange = ranges.getOrNull(index)?.let { value in it } ?: true
-            drawCircle(OpenFitColors.Background, (DOT_RADIUS + DOT_RING).toPx(), point)
+            drawCircle(palette7.Background, (DOT_RADIUS + DOT_RING).toPx(), point)
             drawCircle(if (inRange) color else outColor, DOT_RADIUS.toPx(), point)
         }
         val labelX = (PLOT_LEFT + PLOT_WIDTH + LABEL_GAP).toPx()
