@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="500" viewBox="0 0 1024 500">
+  <title>openFit - Activity, sleep and recovery on your phone</title>
+  <rect width="1024" height="500" fill="#111827"/>
+  <g font-family="Segoe UI, sans-serif">
+    <text x="64" y="147" font-size="72" font-weight="600" fill="#f1f5fb">openFit</text>
+    <text x="64" y="217" font-size="30" fill="#bdcadb">Make room for your health.</text>
+    <text x="64" y="272" font-size="22" fill="#a8c7ff">Activity / Sleep / Recovery</text>
+    <text x="64" y="420" font-size="18" fill="#bdcadb">No openFit account. On your phone.</text>
+  </g>
+  <rect x="660" y="64" width="300" height="372" rx="24" fill="#1b2536"/>
+  <path fill="#a8c7ff" d="M695 250h50v100h-50z M775 200h50v150h-50z M855 150h50v200h-50z"/>
+</svg>
