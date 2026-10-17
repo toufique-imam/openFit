@@ -1,65 +1,61 @@
 package com.openfit.health
 
 import android.content.Context
+import com.openfit.data.DayLoadEntity
+import com.openfit.data.OpenFitDatabase
 import com.openfit.domain.ZoneMinutes
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import java.time.LocalDate
+import java.time.ZoneId
 import java.util.concurrent.atomic.AtomicInteger
 
-/** What a past day earned, computed once from raw heart rate: AZM points, cardio load and minutes per zone. */
+/** Per-day effort minutes, training load and minutes in each heart-rate zone. */
 data class DayLoad(val zoneMinutes: Int, val cardioLoad: Double, val minutes: ZoneMinutes = ZoneMinutes(0, 0, 0)) {
-    companion object {
-        val NONE = DayLoad(zoneMinutes = -1, cardioLoad = -1.0)
-    }
+    companion object { val NONE = DayLoad(zoneMinutes = -1, cardioLoad = -1.0) }
 }
 
-class DayLoadCache(context: Context) {
+class DayLoadCache(context: Context, database: OpenFitDatabase = OpenFitDatabase.get(context)) {
+    private val dao = database.calculations()
+    private val legacy = context.getSharedPreferences("day_load", Context.MODE_PRIVATE)
 
-    private val prefs = context.getSharedPreferences("day_load", Context.MODE_PRIVATE)
+    suspend fun get(profileKey: String, date: LocalDate): DayLoad? = dao.load(key(profileKey, date))?.let {
+        DayLoad(it.zoneMinutes, it.cardioLoad, ZoneMinutes(it.moderate, it.vigorous, it.peak))
+    }
 
-    fun get(profileKey: String, date: LocalDate): DayLoad? =
-        prefs.getString(key(profileKey, date), null)?.split(';')?.let { parts ->
-            DayLoad(
-                zoneMinutes = parts[0].toInt(),
-                cardioLoad = parts[1].toDouble(),
-                minutes = if (parts.size >= 5) ZoneMinutes(parts[2].toInt(), parts[3].toInt(), parts[4].toInt()) else ZoneMinutes(0, 0, 0),
-            )
-        }
-
-    /** Taken before working days out and passed to [putAll]: loads worked out before a [forget] or [clear] are not saved. */
     fun generation(): Int = GENERATION.get()
 
-    fun putAll(profileKey: String, loads: Map<LocalDate, DayLoad>, generation: Int) = synchronized(LOCK) {
-        // Worked out from the copy as it was before a sync changed it: saving it would keep the old figures for good.
-        if (generation != GENERATION.get()) return
-        val editor = prefs.edit()
-        loads.forEach { (date, load) ->
-            val minutes = load.minutes
-            editor.putString(key(profileKey, date), "${load.zoneMinutes};${load.cardioLoad};${minutes.fatBurn};${minutes.cardio};${minutes.peak}")
-        }
-        editor.apply()
+    suspend fun putAll(profileKey: String, loads: Map<LocalDate, DayLoad>, generation: Int): Unit = LOCK.withLock {
+        if (generation != GENERATION.get() || loads.isEmpty()) return@withLock
+        dao.putLoads(loads.map { (date, load) ->
+            DayLoadEntity(key(profileKey, date), date.toString(), load.zoneMinutes, load.cardioLoad,
+                load.minutes.fatBurn, load.minutes.cardio, load.minutes.peak)
+        })
+        // These derived values can be rebuilt entirely from the local copy. Release the old preferences file.
+        legacy.edit().clear().apply()
     }
 
-    /** Forgets [dates] for every profile: their heart rate was read again, so their loads are worked out again. */
-    fun forget(dates: Collection<LocalDate>) = synchronized(LOCK) {
-        if (dates.isEmpty()) return
+    suspend fun forget(dates: Collection<LocalDate>): Unit = LOCK.withLock {
+        if (dates.isEmpty()) return@withLock
         GENERATION.incrementAndGet()
-        val suffixes = dates.map { ":$it" }
-        val editor = prefs.edit()
-        prefs.all.keys.filter { key -> suffixes.any(key::endsWith) }.forEach(editor::remove)
-        editor.apply()
+        dates.map(LocalDate::toString).chunked(500).forEach { dao.forgetLoads(it) }
     }
 
-    /** Forgets every day: the import copied them, maybe after a page had worked them out from a partial copy. */
-    fun clear() = synchronized(LOCK) {
+    suspend fun forgetFrom(date: LocalDate): Unit = LOCK.withLock {
         GENERATION.incrementAndGet()
-        prefs.edit().clear().apply()
+        dao.forgetLoadsFrom(date.toString())
     }
 
-    private fun key(profileKey: String, date: LocalDate) = "$profileKey:$date"
+    suspend fun clear(): Unit = LOCK.withLock {
+        GENERATION.incrementAndGet()
+        dao.clearLoads()
+        legacy.edit().clear().apply()
+    }
+
+    private fun key(profileKey: String, date: LocalDate) = "${ZoneId.systemDefault().id}:$profileKey:$date"
 
     private companion object {
-        /** Shared by every instance: they all write the same preferences. */
         val GENERATION = AtomicInteger()
-        val LOCK = Any()
+        val LOCK = Mutex()
     }
 }

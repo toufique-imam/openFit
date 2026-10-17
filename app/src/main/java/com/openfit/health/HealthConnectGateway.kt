@@ -29,17 +29,22 @@ import kotlin.reflect.KClass
 
 enum class HealthConnectAvailability { Available, UpdateRequired, Unavailable }
 
-class HealthConnectGateway private constructor(private val context: Context) {
+class HealthConnectGateway internal constructor(
+    private val context: Context,
+    clientFactory: () -> HealthConnectClient = { HealthConnectClient.getOrCreate(context) },
+    private val database: com.openfit.data.OpenFitDatabase? = null,
+    private val sdkStatus: () -> Int = { HealthConnectClient.getSdkStatus(context) },
+) {
 
-    private val client: HealthConnectClient by lazy { HealthConnectClient.getOrCreate(context) }
+    private val client: HealthConnectClient by lazy(clientFactory)
 
     /** How much of Health Connect's read quota openFit has used. */
     val budget: HealthConnectBudget by lazy { HealthConnectBudget(context) }
 
     /** openFit's saved copy of Health Connect: every read goes through it. */
-    val store: HealthStore by lazy { HealthStore(context, { client }, budget) }
+    val store: HealthStore by lazy { HealthStore(context, { client }, budget, database = database ?: com.openfit.data.OpenFitDatabase.get(context)) }
 
-    fun availability(): HealthConnectAvailability = when (HealthConnectClient.getSdkStatus(context)) {
+    fun availability(): HealthConnectAvailability = when (sdkStatus()) {
         HealthConnectClient.SDK_AVAILABLE -> HealthConnectAvailability.Available
         HealthConnectClient.SDK_UNAVAILABLE_PROVIDER_UPDATE_REQUIRED -> HealthConnectAvailability.UpdateRequired
         else -> HealthConnectAvailability.Unavailable

@@ -6,7 +6,6 @@ import androidx.health.connect.client.request.ReadRecordsRequest
 import androidx.health.connect.client.time.TimeRangeFilter
 import com.openfit.domain.SleepNight
 import com.openfit.domain.SleepStage
-import com.openfit.domain.minutesOf
 import com.openfit.domain.StageSegment
 import com.openfit.health.HealthConnectGateway.Companion.read
 import java.time.Duration
@@ -31,7 +30,7 @@ class HealthConnectSleep(private val gateway: HealthConnectGateway, private val 
                     start = main.startTime,
                     end = main.endTime,
                     segments = segments(main),
-                    totalAsleepMinutes = minutesOf(sessions.flatMap { session -> segments(session).filter { it.stage != SleepStage.Awake } }).toInt(),
+                    totalAsleepMinutes = totalAsleepDuration(sessions).toMinutes().toInt(),
                 )
             }
     }

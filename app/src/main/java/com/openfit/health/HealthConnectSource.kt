@@ -83,7 +83,7 @@ class HealthConnectSource(
         val weight = async { window.records(WeightRecord::class, start - MEASUREMENT_LOOKBACK) }
         val bodyFat = async { window.records(BodyFatRecord::class, start - MEASUREMENT_LOOKBACK) }
 
-        val heartRate = heartRecords.await().flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val heartRate = heartSamples(heartRecords.await(), start, end)
         val restingBpm = restingRecords.await()
             .maxByOrNull { it.time }
             ?.let { Reading(it.beatsPerMinute.toInt(), it.time) }
@@ -111,7 +111,7 @@ class HealthConnectSource(
             sleep = sleep.await()
                 .filter { it.endTime > start && it.endTime <= end }
                 .takeIf { it.isNotEmpty() }
-                ?.let { sessions -> SleepSummary(sessions.sumDurations(::asleepDuration), sessions.maxOf { it.endTime }) },
+                ?.let { sessions -> SleepSummary(totalAsleepDuration(sessions), sessions.maxOf { it.endTime }) },
             exercises = exercises.await().map { it.toExercise() },
             // Fitbit's day range is the lowest and highest minute average (15 Oct 2026: 49-188 from minutes, 46-190
             // from raw samples).
@@ -163,7 +163,7 @@ class HealthConnectSource(
             sleepMinutes = sleep.await()
                 .filter { it.endTime > start }
                 .groupBy { localDate(it.endTime) }
-                .mapValues { (_, sessions) -> sessions.sumDurations(::asleepDuration).toMinutes().toInt() },
+                .mapValues { (_, sessions) -> totalAsleepDuration(sessions).toMinutes().toInt() },
             pendingDays = pending,
         )
     }
@@ -234,8 +234,7 @@ class HealthConnectSource(
     ): DayLoad {
         val dayStart = day.atStartOfDay(zone).toInstant()
         val dayEnd = day.plusDays(1).atStartOfDay(zone).toInstant()
-        val samples = readAll(HeartRateRecord::class, TimeRangeFilter.between(dayStart, dayEnd))
-            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val samples = heartSamples(readAll(HeartRateRecord::class, TimeRangeFilter.between(dayStart, dayEnd)), dayStart, dayEnd)
         if (samples.isEmpty()) return DayLoad.NONE
         val restingBpm = resting.filter { it.time < dayEnd }.maxByOrNull { it.time }?.beatsPerMinute?.toInt()
             ?: estimateRestingBpm(samples)
@@ -255,8 +254,7 @@ class HealthConnectSource(
         val start = date.atStartOfDay(zone).toInstant()
         val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
         val window = Window(start, end, granted)
-        val samples = window.records(HeartRateRecord::class, start)
-            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val samples = heartSamples(window.records(HeartRateRecord::class, start), start, end)
         val restingBpm = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK).maxByOrNull { it.time }?.beatsPerMinute?.toInt()
             ?: estimateRestingBpm(samples)
             ?: return CardioLoadDay(date, emptyMap(), emptyList())
@@ -271,8 +269,7 @@ class HealthConnectSource(
         val start = date.atStartOfDay(zone).toInstant()
         val end = minOf(date.plusDays(1).atStartOfDay(zone).toInstant(), Instant.now())
         val window = Window(start, end, granted)
-        val samples = window.records(HeartRateRecord::class, start)
-            .flatMap { record -> record.samples.map { HeartRateSample(it.time, it.beatsPerMinute) } }
+        val samples = heartSamples(window.records(HeartRateRecord::class, start), start, end)
         val restingRecords = window.records(RestingHeartRateRecord::class, start - MEASUREMENT_LOOKBACK)
         val restingToday = restingRecords.filter { it.time >= start }.maxByOrNull { it.time }?.beatsPerMinute?.toInt()
         val restingForZones = restingToday ?: restingRecords.maxByOrNull { it.time }?.beatsPerMinute?.toInt() ?: estimateRestingBpm(samples)
@@ -331,16 +328,12 @@ class HealthConnectSource(
         }.toMap()
 
     private suspend fun <T : Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
-        val records = gateway.store.read(type, range)
+        val records = if (type == HeartRateRecord::class) gateway.store.readOverlapping(type, range) else gateway.store.read(type, range)
         return records
     }
 
-    private fun asleepDuration(session: SleepSessionRecord): Duration {
-        val awake = session.stages
-            .filter { it.stage in AWAKE_STAGES }
-            .sumDurations { Duration.between(it.startTime, it.endTime) }
-        return Duration.between(session.startTime, session.endTime) - awake
-    }
+    private fun heartSamples(records: List<HeartRateRecord>, start: Instant, end: Instant): List<HeartRateSample> =
+        records.flatMap { record -> record.samples.filter { it.time >= start && it.time < end }.map { HeartRateSample(it.time, it.beatsPerMinute) } }
 
     private companion object {
         val MEASUREMENT_LOOKBACK: Duration = Duration.ofDays(30)
@@ -351,16 +344,10 @@ class HealthConnectSource(
          * Bump when the day-load formula changes so cached days are recalculated. v5: v4 could keep days worked out while
          * the import was still copying them (no heart rate yet, or no resting heart rate or steps).
          */
-        const val LOAD_FORMULA = "v5"
+        const val LOAD_FORMULA = "v6"
         const val PARALLEL_DAYS = 4
 
 
-
-        val AWAKE_STAGES = setOf(
-            SleepSessionRecord.STAGE_TYPE_AWAKE,
-            SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED,
-            SleepSessionRecord.STAGE_TYPE_OUT_OF_BED,
-        )
 
         fun <T> List<T>.latestAverage(time: (T) -> Instant, value: (T) -> Double): Reading<Double>? {
             val latest = maxOfOrNull(time) ?: return null
@@ -368,7 +355,5 @@ class HealthConnectSource(
             return Reading(night.map(value).average(), latest)
         }
 
-        fun <T> Iterable<T>.sumDurations(duration: (T) -> Duration): Duration =
-            fold(Duration.ZERO) { total, item -> total + duration(item) }
     }
 }

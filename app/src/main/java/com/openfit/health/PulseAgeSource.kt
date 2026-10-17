@@ -21,7 +21,7 @@ import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.reflect.KClass
 
-/** The nine Pulse Age inputs over the [WINDOW_DAYS] days before a date, from Health Connect. */
+/** The nine Health age inputs over the [WINDOW_DAYS] days before a date, from Health Connect. */
 class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: DayLoadCache, private val zone: ZoneId = ZoneId.systemDefault()) {
 
     private val source = HealthConnectSource(gateway, dayLoadCache)

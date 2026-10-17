@@ -7,7 +7,7 @@ import com.openfit.domain.StressDay
 import com.openfit.domain.stressDays
 import java.time.LocalDate
 
-/** Energy Bank days from Health Connect: reads the 30-day stress baseline and a week of warm-up before [from]. */
+/** Vitality reserve days from Health Connect: reads the 30-day stress baseline and a week of warm-up before [from]. */
 class EnergySource(gateway: HealthConnectGateway, cache: SlotCache) {
 
     private val slots = HealthConnectSlots(gateway, cache)
@@ -28,7 +28,7 @@ class EnergySource(gateway: HealthConnectGateway, cache: SlotCache) {
     }
 
     private companion object {
-        /** Pulse: stress needs 5 days of data. */
+        /** Body stress needs 5 days of data. */
         const val MIN_STRESS_BASELINE_DAYS = 5L
 
         /** A 30-day stress baseline before the warm-up week. */

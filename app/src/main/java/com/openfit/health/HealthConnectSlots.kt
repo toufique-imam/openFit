@@ -19,7 +19,7 @@ import kotlin.math.roundToInt
 import kotlin.reflect.KClass
 
 /**
- * Each day as six-minute slots (mean heart rate, asleep, in a workout) for Energy Bank. Days before yesterday are
+ * Each day as six-minute slots (mean heart rate, asleep, in a workout) for Vitality reserve. Days before yesterday are
  * cached, so only the first run reads weeks of heart rate.
  */
 class HealthConnectSlots(private val gateway: HealthConnectGateway, private val cache: SlotCache, private val zone: ZoneId = ZoneId.systemDefault()) {
@@ -66,7 +66,7 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
         if (read(SleepSessionRecord::class) in granted) {
             // Sessions that started the evening before still cover this day's early slots.
             readAll(SleepSessionRecord::class, TimeRangeFilter.between(start.minusSeconds(SLEEP_LOOKBACK_SECONDS), end)).forEach { session ->
-                val stages = session.stages.filter { it.stage != SleepSessionRecord.STAGE_TYPE_AWAKE && it.stage != SleepSessionRecord.STAGE_TYPE_OUT_OF_BED }
+                val stages = session.stages.filter { it.stage != SleepSessionRecord.STAGE_TYPE_AWAKE && it.stage != SleepSessionRecord.STAGE_TYPE_OUT_OF_BED && it.stage != SleepSessionRecord.STAGE_TYPE_AWAKE_IN_BED }
                 if (session.stages.isEmpty()) mark(asleep, session.startTime, session.endTime, start) else stages.forEach { mark(asleep, it.startTime, it.endTime, start) }
             }
         }
@@ -82,16 +82,17 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
     /** Marks every slot whose midpoint lies within [from, to). */
     private fun mark(slots: BooleanArray, from: Instant, to: Instant, dayStart: Instant) {
         for (i in 0 until SLOTS_PER_DAY) {
-            val middle = dayStart.plusSeconds(i * SLOT_SECONDS + SLOT_SECONDS / 2)
-            if (middle >= from && middle < to) slots[i] = true
+            val middle = dayStart.atZone(zone).toLocalDate().atStartOfDay().plusMinutes(i * SLOT_MINUTES.toLong() + SLOT_MINUTES / 2)
+            // Keep a local-clock chart: repeated hours share slots; nonexistent spring-forward times stay empty.
+            if (zone.rules.getValidOffsets(middle).any { offset -> middle.toInstant(offset).let { it >= from && it < to } }) slots[i] = true
         }
     }
 
     private fun slotOf(time: Instant, dayStart: Instant): Int? =
-        ((time.epochSecond - dayStart.epochSecond) / SLOT_SECONDS).toInt().takeIf { it in 0 until SLOTS_PER_DAY }
+        localSlot(time, dayStart.atZone(zone).toLocalDate(), zone)
 
     private suspend fun <T : Record> readAll(type: KClass<T>, range: TimeRangeFilter): List<T> {
-        val records = gateway.store.read(type, range)
+        val records = gateway.store.readOverlapping(type, range)
         return records
     }
 
@@ -99,56 +100,5 @@ class HealthConnectSlots(private val gateway: HealthConnectGateway, private val 
         const val SLOT_SECONDS = SLOT_MINUTES * 60L
         const val SLEEP_LOOKBACK_SECONDS = 18 * 3600L
         val EMPTY_DAY = List(SLOTS_PER_DAY) { Slot(bpm = null, asleep = false, exercise = false) }
-    }
-}
-
-/** Past days' slots, one string per day: `bpm` plus `s` (asleep) or `x` (workout) per slot, empty when not worn. */
-class SlotCache(context: Context) {
-
-    private val prefs = context.getSharedPreferences("day_slots", Context.MODE_PRIVATE)
-
-    fun get(date: LocalDate): List<Slot>? = prefs.getString(key(date), null)?.split(',')?.takeIf { it.size == SLOTS_PER_DAY }?.map { token ->
-        Slot(
-            bpm = token.trimEnd('s', 'x').toIntOrNull(),
-            asleep = token.endsWith('s'),
-            exercise = token.endsWith('x'),
-        )
-    }
-
-    /** Taken before working days out and passed to [putAll]: slots worked out before a [forget] or [clear] are not saved. */
-    fun generation(): Int = GENERATION.get()
-
-    fun putAll(days: Map<LocalDate, List<Slot>>, generation: Int) = synchronized(LOCK) {
-        if (days.isEmpty() || generation != GENERATION.get()) return
-        val editor = prefs.edit()
-        days.forEach { (date, slots) ->
-            editor.putString(key(date), slots.joinToString(",") { "${it.bpm ?: ""}${if (it.asleep) "s" else if (it.exercise) "x" else ""}" })
-        }
-        editor.apply()
-    }
-
-    /** Forgets [dates]: their heart rate, sleep or workouts were read again. */
-    fun forget(dates: Collection<LocalDate>) = synchronized(LOCK) {
-        if (dates.isEmpty()) return
-        GENERATION.incrementAndGet()
-        val editor = prefs.edit()
-        dates.forEach { editor.remove(key(it)) }
-        editor.apply()
-    }
-
-    /** Forgets every day: the import copied them, maybe after a page had worked them out from a partial copy. */
-    fun clear() = synchronized(LOCK) {
-        GENERATION.incrementAndGet()
-        prefs.edit().clear().apply()
-    }
-
-    private fun key(date: LocalDate) = "$VERSION:$date"
-
-    private companion object {
-        /** v2: v1 could keep days worked out while the import was still copying them. */
-        const val VERSION = "v2"
-        /** Shared by every instance: they all write the same preferences. */
-        val GENERATION = AtomicInteger()
-        val LOCK = Any()
     }
 }

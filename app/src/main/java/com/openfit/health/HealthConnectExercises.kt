@@ -36,9 +36,9 @@ class HealthConnectExercises(private val gateway: HealthConnectGateway, private 
         val granted = gateway.grantedPermissions()
         if (read(ExerciseSessionRecord::class) !in granted) return emptyList()
         val range = TimeRangeFilter.between(from.atStartOfDay(zone).toInstant(), until.plusDays(1).atStartOfDay(zone).toInstant())
-        val records = gateway.store.read(ExerciseSessionRecord::class, range)
-        return records.sortedBy { it.startTime }.map { record ->
-            val totals = gateway.store.sessionTotals(record.startTime, record.endTime)
+        val records = gateway.store.read(ExerciseSessionRecord::class, range).sortedBy { it.startTime }
+        val amounts = gateway.store.sessionTotals(records.map { it.startTime to it.endTime })
+        return records.zip(amounts).map { (record, totals) ->
             ExerciseSession(
                 name = record.toExercise().name,
                 type = record.exerciseType,
