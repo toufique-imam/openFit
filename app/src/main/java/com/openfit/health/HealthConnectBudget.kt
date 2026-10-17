@@ -1,9 +1,13 @@
 package com.openfit.health
 
 import android.content.Context
+import android.content.SharedPreferences
 import android.content.pm.ApplicationInfo
 import android.util.Log
 import java.time.LocalDate
+import java.time.Instant
+import java.time.ZoneId
+import kotlin.math.ceil
 import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 import kotlin.coroutines.coroutineContext
@@ -48,11 +52,16 @@ data class BudgetUsage(
  * (background reads keep [RESERVE] of each for the user), spends one, and counts it. A rate-limit error from Health
  * Connect itself (its model can be ahead of ours, say after a reinstall) empties both buckets.
  */
-class HealthConnectBudget(context: Context, private val clock: () -> Long = System::currentTimeMillis) {
-
-    private val debuggable = context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0
-
-    private val prefs = context.getSharedPreferences("hc_budget", Context.MODE_PRIVATE)
+class HealthConnectBudget internal constructor(
+    private val prefs: SharedPreferences,
+    private val debuggable: Boolean = false,
+    private val clock: () -> Long = System::currentTimeMillis,
+) {
+    constructor(context: Context, clock: () -> Long = System::currentTimeMillis) : this(
+        context.getSharedPreferences("hc_budget", Context.MODE_PRIVATE),
+        context.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0,
+        clock,
+    )
 
     private class Bucket(val name: String, val capacity: Int, val windowMs: Long)
 
@@ -62,6 +71,7 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
         val source = if (debuggable) coroutineContext[HcSource]?.name ?: "UNTAGGED ${caller()}" else ""
         synchronized(this) {
             val now = clock()
+            pruneCounters()
             val levels = BUCKETS.map { it to level(it, now) }
             val short = levels.firstOrNull { (bucket, level) -> level < 1 + if (background) bucket.capacity * RESERVE else 0.0 }
             if (short != null) {
@@ -103,10 +113,13 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
      * Connect refills them; zero when they fit now.
      */
     fun waitFor(calls: Int, background: Boolean): java.time.Duration = synchronized(this) {
+        require(calls >= 0 && BUCKETS.all { calls <= it.capacity * if (background) 1 - RESERVE else 1.0 }) {
+            "Requested batch cannot fit in the Health Connect budget"
+        }
         val now = clock()
         val millis = BUCKETS.maxOf { bucket ->
             val short = calls + (if (background) bucket.capacity * RESERVE else 0.0) - level(bucket, now)
-            if (short <= 0) 0L else (short * bucket.windowMs / bucket.capacity).toLong()
+            if (short <= 0) 0L else ceil(short * bucket.windowMs / bucket.capacity).toLong()
         }
         java.time.Duration.ofMillis(millis)
     }
@@ -118,6 +131,7 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
     }
 
     fun usage(): BudgetUsage = synchronized(this) {
+        pruneCounters()
         val now = clock()
         val minute = now / 60_000
         val recent = (0 until RECENT_MINUTES).sumOf { offset ->
@@ -161,11 +175,27 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
         .firstOrNull { frame -> frame.className.startsWith("com.openfit") && INTERNAL.none { frame.className.startsWith(it) } }
         ?.let { "${it.className.substringAfterLast('.')}.${it.methodName}" } ?: "?"
 
-    private fun count(key: String) {
+    private fun count(key: String) = synchronized(this) {
+        pruneCounters()
         prefs.edit().putInt(dayKey(key), prefs.getInt(dayKey(key), 0) + 1).apply()
     }
 
-    private fun dayKey(key: String) = "$key:${LocalDate.now()}"
+    private fun today(): LocalDate = Instant.ofEpochMilli(clock()).atZone(ZoneId.systemDefault()).toLocalDate()
+
+    private fun dayKey(key: String) = "$key:${today()}"
+
+    /** Keep one week of display counters; token levels and the recent-call ring are never pruned. */
+    private fun pruneCounters() {
+        val today = today()
+        if (prefs.getString(KEY_PRUNED, null) == today.toString()) return
+        val oldest = today.minusDays(COUNTER_DAYS - 1).toString()
+        val editor = prefs.edit().putString(KEY_PRUNED, today.toString())
+        prefs.all.keys.filter { key ->
+            val prefix = key.substringBefore(':')
+            prefix in setOf(KEY_CALLS, KEY_SAVED, KEY_DENIED) && key.substringAfter(':') < oldest
+        }.forEach(editor::remove)
+        editor.apply()
+    }
 
     private companion object {
         /**
@@ -187,5 +217,7 @@ class HealthConnectBudget(context: Context, private val clock: () -> Long = Syst
         const val KEY_DENIED = "denied"
         const val KEY_LAST_CALL = "last_call"
         const val KEY_LIMITED = "limited_at"
+        const val KEY_PRUNED = "counters_pruned_on"
+        const val COUNTER_DAYS = 7L
     }
 }
