@@ -22,6 +22,9 @@ import androidx.health.connect.client.records.Vo2MaxRecord
 import androidx.health.connect.client.records.WeightRecord
 import androidx.health.connect.client.records.metadata.Metadata
 import androidx.health.connect.client.units.Mass
+import androidx.health.connect.client.units.Energy
+import androidx.health.connect.client.units.Length
+import androidx.health.connect.client.units.Volume
 import androidx.health.connect.client.units.Percentage
 import androidx.health.connect.client.units.TemperatureDelta
 import kotlinx.serialization.Serializable
@@ -53,8 +56,29 @@ data class SavedRecord(
 )
 
 /** When the record starts: its time, or the start of its interval. Health Connect files a record by this. */
+@OptIn(ExperimentalMindfulnessSessionApi::class)
 val Record.filedAt: Instant
-    get() = Instant.ofEpochMilli(toSaved().start)
+    get() = when (this) {
+        is HeartRateRecord -> startTime
+        is SleepSessionRecord -> startTime
+        is ExerciseSessionRecord -> startTime
+        is SkinTemperatureRecord -> startTime
+        is MindfulnessSessionRecord -> startTime
+        is StepsRecord -> startTime
+        is DistanceRecord -> startTime
+        is FloorsClimbedRecord -> startTime
+        is TotalCaloriesBurnedRecord -> startTime
+        is HydrationRecord -> startTime
+        is NutritionRecord -> startTime
+        is RestingHeartRateRecord -> time
+        is HeartRateVariabilityRmssdRecord -> time
+        is OxygenSaturationRecord -> time
+        is RespiratoryRateRecord -> time
+        is Vo2MaxRecord -> time
+        is WeightRecord -> time
+        is BodyFatRecord -> time
+        else -> error("Unsupported record ${this::class.simpleName}")
+    }
 
 /**
  * The record types openFit copies, by a stable name for the cache. The ones [TotalMetric] adds up (steps, distance,
@@ -165,6 +189,12 @@ fun <T : Record> SavedRecord.toRecord(type: KClass<T>): T {
         MindfulnessSessionRecord::class -> MindfulnessSessionRecord(
             start, startZone, end, endZone, metadata, kind ?: MindfulnessSessionRecord.MINDFULNESS_SESSION_TYPE_UNKNOWN, title, null,
         )
+        StepsRecord::class -> StepsRecord(start, startZone, end, endZone, value!!.toLong(), metadata)
+        DistanceRecord::class -> DistanceRecord(start, startZone, end, endZone, Length.meters(value!!), metadata)
+        FloorsClimbedRecord::class -> FloorsClimbedRecord(start, startZone, end, endZone, value!!, metadata)
+        TotalCaloriesBurnedRecord::class -> TotalCaloriesBurnedRecord(start, startZone, end, endZone, Energy.kilocalories(value!!), metadata)
+        NutritionRecord::class -> NutritionRecord(start, startZone, end, endZone, metadata, energy = value?.let(Energy::kilocalories))
+        HydrationRecord::class -> HydrationRecord(start, startZone, end, endZone, Volume.liters(value!!), metadata)
         else -> error("Unsupported record ${type.simpleName}")
     }
     return record as T

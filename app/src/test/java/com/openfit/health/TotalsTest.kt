@@ -90,6 +90,15 @@ class TotalsTest {
         assertEquals(800.0, dayTotals(listOf(meal, same, later), day, zone, withMinutes = false).total!!, 1e-9)
     }
 
+    @Test fun `overlapping independent food and drink entries add together`() {
+        val a = record(WATCH, 60, 10, 500.0)
+        val b = a.copy(id = "second-item", value = 300.0)
+        assertEquals(800.0, dayTotals(listOf(a, b), day, zone, false, additive = true).total!!, 0.0)
+        val identical = a.copy(id = "another-serving")
+        val cloud = listOf(a, identical).map { it.copy(origin = HealthStore.CLOUD_ORIGIN) }
+        assertEquals(1000.0, dayTotals(listOf(a, identical) + cloud, day, zone, false, additive = true).total!!, 0.0)
+    }
+
     private companion object {
         const val WATCH = "com.fitbit.FitbitMobile"
         const val PHONE = "com.google.android.apps.fitness"

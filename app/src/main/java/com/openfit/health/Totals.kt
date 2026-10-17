@@ -114,10 +114,19 @@ data class DayTotals(val total: Double?, val hours: Map<Int, Double>, val minute
  * [day]'s totals from [records]: those filed on it and on the day before, since an interval can run past midnight.
  * Minutes are worked out only when [withMinutes]; [wearables] as for [merge].
  */
-fun dayTotals(records: List<SavedRecord>, day: LocalDate, zone: ZoneId, withMinutes: Boolean, wearables: Set<String> = emptySet()): DayTotals {
+fun dayTotals(records: List<SavedRecord>, day: LocalDate, zone: ZoneId, withMinutes: Boolean, wearables: Set<String> = emptySet(), additive: Boolean = false): DayTotals {
     val from = day.atStartOfDay(zone).toInstant().toEpochMilli()
     val until = day.plusDays(1).atStartOfDay(zone).toInstant().toEpochMilli()
-    val pieces = merge(records, from, until, wearables)
+    val pieces = if (additive) {
+        // Independent meal/drink entries add together, even over the same time. Match cloud mirrors as a multiset.
+        val originals = records.filter { it.origin != HealthStore.CLOUD_ORIGIN }
+            .groupingBy { Triple(it.start, it.end, it.value) }.eachCount().toMutableMap()
+        records.filter { record ->
+            val key = Triple(record.start, record.end, record.value)
+            val count = originals[key] ?: 0
+            if (record.origin == HealthStore.CLOUD_ORIGIN && count > 0) { originals[key] = count - 1; false } else true
+        }.mapNotNull { clip(it, from, until) }
+    } else merge(records, from, until, wearables)
     if (pieces.isEmpty()) return DayTotals(null, emptyMap(), emptyMap())
     val hours = spread(pieces) { time ->
         val start = Instant.ofEpochMilli(time).atZone(zone).truncatedTo(ChronoUnit.HOURS)
