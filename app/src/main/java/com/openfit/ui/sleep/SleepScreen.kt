@@ -100,13 +100,18 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val ACCENT = OpenFitColors.Lavender
-private val TRACK = Color(0xFF292D2C)
-private val STAGE_COLORS = mapOf(
+private val ACCENT @Composable get() = OpenFitColors.Lavender
+private val TRACK @Composable get() = OpenFitColors.OnSurface.copy(alpha = 0.12f)
+private val STAGE_COLORS @Composable get() = if (OpenFitColors.light) mapOf(
+    SleepStage.Awake to Color(0xFF935B15),
+    SleepStage.Rem to Color(0xFF7453A6),
+    SleepStage.Light to Color(0xFF8554B7),
+    SleepStage.Deep to Color(0xFF503078),
+) else mapOf(
     SleepStage.Awake to Color(0xFFFED59D),
     SleepStage.Rem to Color(0xFFFEF7FF),
     SleepStage.Light to Color(0xFFBC9FE2),
-    SleepStage.Deep to Color(0xFF856BAA),
+    SleepStage.Deep to Color(0xFFB697E0),
 )
 private val STAGE_ORDER = listOf(SleepStage.Awake, SleepStage.Rem, SleepStage.Light, SleepStage.Deep)
 private val CLOCK = DateTimeFormatter.ofPattern("h:mm a")
@@ -117,6 +122,7 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     var sheet by rememberSaveable { mutableStateOf<Int?>(null) }
     var editingGoal by rememberSaveable { mutableStateOf<Goal?>(null) }
+    var planning by rememberSaveable { mutableStateOf(false) }
     val setGoal: (Goal) -> Unit = { editingGoal = it }
     val ready = state as? SleepUiState.Ready
     DetailScaffold(
@@ -128,7 +134,8 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
         menu = if (ready == null) {
             emptyList()
         } else {
-            listOf(Goal.SleepDuration, Goal.SleepSchedule).map { goal -> MenuAction(stringResource(goal.title)) { setGoal(goal) } }
+            listOf(MenuAction(stringResource(R.string.sleep_planner)) { planning = true }) +
+                listOf(Goal.SleepDuration, Goal.SleepSchedule).map { goal -> MenuAction(stringResource(goal.title)) { setGoal(goal) } }
         },
     ) {
         when (val current = state) {
@@ -140,6 +147,7 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 if (current.period == ChartPeriod.Day) {
@@ -151,6 +159,7 @@ fun SleepRoute(viewModel: SleepViewModel, onBack: () -> Unit) {
         }
     }
     sheet?.let { InfoSheet(it) { sheet = null } }
+    if (planning && ready != null) SleepPlanner(ready.profile, viewModel::saveProfile) { planning = false }
     val goal = editingGoal
     if (goal != null && ready != null) {
         GoalEditor(
@@ -286,14 +295,17 @@ private fun Hypnogram(night: SleepNight, modifier: Modifier = Modifier) {
     val labels = STAGE_ORDER.associateWith { stage -> "${stringResource(stageName(stage))} • ${hoursMinutes(night.minutes(stage))}" }
     val zone = ZoneId.systemDefault()
     val middle = night.start.plusSeconds(Duration.between(night.start, night.end).seconds / 2)
-    val times = listOf(night.start, middle, night.end).map { it.atZone(zone).toLocalTime().format(CLOCK).lowercase(Locale.getDefault()) }
+    val times = listOf(night.start, middle, night.end).map { it.atZone(zone).toLocalTime().format(CLOCK).lowercase(com.openfit.ui.currentLocale()) }
+    val palette0 = OpenFitColors
+    val stageColors0 = STAGE_COLORS
+    val track0 = TRACK
     Canvas(modifier.fillMaxWidth().height(ROW_PITCH * 4 + 28.dp)) {
         val span = Duration.between(night.start, night.end).seconds.toFloat().coerceAtLeast(1f)
         fun x(instant: java.time.Instant): Float = Duration.between(night.start, instant).seconds / span * size.width
         fun trackY(row: Int): Float = (ROW_PITCH * row + LABEL_TO_TRACK).toPx()
         val bar = 10.dp.toPx()
         STAGE_ORDER.forEachIndexed { row, _ ->
-            drawLine(TRACK, Offset(0f, trackY(row)), Offset(size.width, trackY(row)), strokeWidth = 2.dp.toPx())
+            drawLine(track0, Offset(0f, trackY(row)), Offset(size.width, trackY(row)), strokeWidth = 2.dp.toPx())
         }
         val segments = night.segments.sortedBy { it.start }
         segments.zipWithNext().forEach { (from, to) ->
@@ -301,7 +313,7 @@ private fun Hypnogram(night: SleepNight, modifier: Modifier = Modifier) {
             val xAt = x(to.start)
             val (top, bottom) = listOf(trackY(STAGE_ORDER.indexOf(from.stage)), trackY(STAGE_ORDER.indexOf(to.stage))).sorted()
             drawLine(
-                STAGE_COLORS.getValue(to.stage).copy(alpha = 0.7f),
+                stageColors0.getValue(to.stage).copy(alpha = 0.7f),
                 Offset(xAt, top),
                 Offset(xAt, bottom),
                 strokeWidth = 1.dp.toPx(),
@@ -313,7 +325,7 @@ private fun Hypnogram(night: SleepNight, modifier: Modifier = Modifier) {
             val left = x(segment.start)
             val width = (x(segment.end) - left).coerceAtLeast(2.dp.toPx())
             drawRoundRect(
-                STAGE_COLORS.getValue(segment.stage),
+                stageColors0.getValue(segment.stage),
                 Offset(left, trackY(row) - bar / 2),
                 Size(width, bar),
                 CornerRadius(minOf(bar, width) / 2),
@@ -323,7 +335,7 @@ private fun Hypnogram(night: SleepNight, modifier: Modifier = Modifier) {
         STAGE_ORDER.forEachIndexed { row, stage ->
             val layout = measurer.measure(labels.getValue(stage), labelStyle)
             val top = (ROW_PITCH * row).toPx()
-            drawRect(OpenFitColors.Background, Offset(0f, top), Size(layout.size.width + 6.dp.toPx(), layout.size.height.toFloat()))
+            drawRect(palette0.Background, Offset(0f, top), Size(layout.size.width + 6.dp.toPx(), layout.size.height.toFloat()))
             drawText(layout, topLeft = Offset(0f, top))
         }
         val axisY = (ROW_PITCH * 4 + 8.dp).toPx()
@@ -354,16 +366,19 @@ private fun StageBars(night: SleepNight, state: SleepUiState.Ready, modifier: Mo
                 color = OpenFitColors.OnSurface,
                 modifier = Modifier.padding(top = 12.dp),
             )
+            val palette1 = OpenFitColors
+            val stageColors1 = STAGE_COLORS
+            val track1 = TRACK
             Canvas(Modifier.fillMaxWidth().padding(top = 8.dp).height(14.dp)) {
                 val bar = 10.dp.toPx()
                 val center = size.height / 2
                 fun x(percent: Double): Float = (percent / 100).toFloat().coerceIn(0f, 1f) * size.width
-                drawRoundRect(TRACK, Offset(0f, center - 2.dp.toPx()), Size(size.width, 4.dp.toPx()), CornerRadius(2.dp.toPx()))
-                drawRoundRect(STAGE_COLORS.getValue(stage), Offset(0f, center - bar / 2), Size(x(percent).coerceAtLeast(bar), bar), CornerRadius(bar / 2))
+                drawRoundRect(track1, Offset(0f, center - 2.dp.toPx()), Size(size.width, 4.dp.toPx()), CornerRadius(2.dp.toPx()))
+                drawRoundRect(stageColors1.getValue(stage), Offset(0f, center - bar / 2), Size(x(percent).coerceAtLeast(bar), bar), CornerRadius(bar / 2))
                 if (state.stageMode == StageMode.Benchmark) {
                     val typical = TYPICAL_STAGE_PERCENT.getValue(stage)
                     drawRoundRect(
-                        STAGE_COLORS.getValue(stage),
+                        stageColors1.getValue(stage),
                         Offset(x(typical.start), center - bar / 2 - 2.dp.toPx()),
                         Size(x(typical.endInclusive) - x(typical.start), bar + 4.dp.toPx()),
                         CornerRadius(bar / 2 + 2.dp.toPx()),
@@ -371,21 +386,22 @@ private fun StageBars(night: SleepNight, state: SleepUiState.Ready, modifier: Mo
                     )
                 } else {
                     val average = Offset(x(state.averagePercent[stage] ?: 0.0), center)
-                    drawCircle(OpenFitColors.Background, 6.dp.toPx(), average)
-                    drawCircle(OpenFitColors.OnSurface, 4.dp.toPx(), average)
+                    drawCircle(palette1.Background, 6.dp.toPx(), average)
+                    drawCircle(palette1.OnSurface, 4.dp.toPx(), average)
                 }
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalArrangement = Arrangement.Center, verticalAlignment = Alignment.CenterVertically) {
+            val palette2 = OpenFitColors
             Canvas(Modifier.size(width = 16.dp, height = 10.dp)) {
                 if (state.stageMode == StageMode.Benchmark) {
                     drawRoundRect(
-                        OpenFitColors.OnSurfaceVariant,
+                        palette2.OnSurfaceVariant,
                         style = Stroke(1.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(2.dp.toPx(), 2.dp.toPx()))),
                         cornerRadius = CornerRadius(3.dp.toPx()),
                     )
                 } else {
-                    drawCircle(OpenFitColors.OnSurface, 4.dp.toPx(), center)
+                    drawCircle(palette2.OnSurface, 4.dp.toPx(), center)
                 }
             }
             Spacer(Modifier.width(8.dp))
@@ -466,7 +482,7 @@ private fun LazyListScope.periodContent(state: SleepUiState.Ready, onChart: (Sle
                     val average = averagePerDay(days, state.nights.mapValues { it.value.minutes(state.chartStage).toDouble() })
                     HeaderValue(
                         average?.let { valueText { duration(Duration.ofMinutes(it.roundToInt().toLong()), false) } } ?: AnnotatedString("–"),
-                        stringResource(R.string.sleep_stage_avg, stringResource(stageName(state.chartStage)).lowercase(Locale.getDefault()).let { if (state.chartStage == SleepStage.Rem) "REM" else it }),
+                        stringResource(R.string.sleep_stage_avg, stringResource(stageName(state.chartStage)).lowercase(com.openfit.ui.currentLocale()).let { if (state.chartStage == SleepStage.Rem) "REM" else it }),
                     )
                 }
             }
@@ -563,6 +579,7 @@ private fun ChartChips(state: SleepUiState.Ready, onChart: (SleepChart, SleepSta
 /** Week and Month "Schedule": a bar from bedtime up to wake time for each night over the dotted usual schedule. */
 @Composable
 private fun ScheduleChart(state: SleepUiState.Ready, labels: List<Pair<Int, String>>) {
+    val locale = com.openfit.ui.currentLocale()
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
     val zone = ZoneId.systemDefault()
@@ -577,6 +594,8 @@ private fun ScheduleChart(state: SleepUiState.Ready, labels: List<Pair<Int, Stri
     val low = ((all.minOrNull() ?: 300) - SCHEDULE_MARGIN).coerceAtLeast(0)
     val high = (all.maxOrNull() ?: 900) + SCHEDULE_MARGIN
     Column {
+        val palette3 = OpenFitColors
+        val accent3 = ACCENT
         Canvas(Modifier.fillMaxWidth().height(201.dp)) {
             val left = 24.dp.toPx()
             val width = 288.dp.toPx()
@@ -586,7 +605,7 @@ private fun ScheduleChart(state: SleepUiState.Ready, labels: List<Pair<Int, Stri
             schedule?.let {
                 listOf(it.startMinute, it.endMinute).forEach { minute ->
                     drawLine(
-                        OpenFitColors.OnSurface,
+                        palette3.OnSurface,
                         Offset(left, y(minute)),
                         Offset(left + width, y(minute)),
                         strokeWidth = 2.dp.toPx(),
@@ -599,11 +618,11 @@ private fun ScheduleChart(state: SleepUiState.Ready, labels: List<Pair<Int, Stri
             spans.forEachIndexed { index, span ->
                 span ?: return@forEachIndexed
                 val x = left + (index + 0.5f) * slot
-                drawRoundRect(ACCENT.accent, Offset(x - bar / 2, y(span.second)), Size(bar, (y(span.first) - y(span.second)).coerceAtLeast(bar)), CornerRadius(bar / 2))
+                drawRoundRect(accent3.accent, Offset(x - bar / 2, y(span.second)), Size(bar, (y(span.first) - y(span.second)).coerceAtLeast(bar)), CornerRadius(bar / 2))
             }
             val labelX = (24 + 288 + 14).dp.toPx()
             listOfNotNull(high, schedule?.endMinute, low).forEach { minute ->
-                val layout = measurer.measure(scheduleTimeText(minute), labelStyle)
+                val layout = measurer.measure(scheduleTimeText(minute, locale), labelStyle)
                 drawText(layout, topLeft = Offset(labelX, y(minute) - layout.size.height / 2f))
             }
             labels.forEach { (index, label) ->
@@ -653,7 +672,7 @@ private fun LazyListScope.sleepRows(state: SleepUiState.Ready, current: Boolean)
             Text(
                 when {
                     current -> periodLabel(state.period, state.anchor, state.today)
-                    state.period == ChartPeriod.Month -> state.anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+                    state.period == ChartPeriod.Month -> state.anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
                     state.period == ChartPeriod.Year -> state.anchor.year.toString()
                     else -> periodLabel(state.period, state.anchor, state.today)
                 },
@@ -707,7 +726,7 @@ private fun sleepRowLabel(state: SleepUiState.Ready, row: PeriodRow): String = w
     else -> if (YearMonth.from(row.start) == YearMonth.from(state.today)) {
         stringResource(R.string.this_month)
     } else {
-        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
     }
 }
 
@@ -728,7 +747,7 @@ private fun ModeChip(label: String, selected: Boolean, dropdown: Boolean = false
             null
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color(0xFF2E2A36),
+            selectedContainerColor = OpenFitColors.PrimaryContainer,
             selectedLabelColor = ACCENT.accent,
             labelColor = OpenFitColors.OnSurface,
         ),
@@ -750,20 +769,23 @@ private fun ratingName(rating: SleepRating): Int = when (rating) {
 }
 
 /** "2:21 – 9:09 am": Fitbit drops the first am/pm when both ends share it. */
+@Composable
 private fun timeRange(night: SleepNight): String {
     val zone = ZoneId.systemDefault()
     val start = night.start.atZone(zone).toLocalTime()
     val end = night.end.atZone(zone).toLocalTime()
-    val startText = start.format(CLOCK).lowercase(Locale.getDefault())
-    val endText = end.format(CLOCK).lowercase(Locale.getDefault())
+    val startText = start.format(CLOCK).lowercase(com.openfit.ui.currentLocale())
+    val endText = end.format(CLOCK).lowercase(com.openfit.ui.currentLocale())
     val sameHalf = (start.hour < 12) == (end.hour < 12)
     return if (sameHalf) "${startText.substringBeforeLast(' ')} – $endText" else "$startText – $endText"
 }
 
+@Composable
 private fun scheduleTime(minuteAfterSixPm: Int, format: DateTimeFormatter = CLOCK): String =
-    LocalTime.of(18, 0).plusMinutes(minuteAfterSixPm.toLong()).format(format).lowercase(Locale.getDefault())
+    LocalTime.of(18, 0).plusMinutes(minuteAfterSixPm.toLong()).format(format).lowercase(com.openfit.ui.currentLocale())
 
-private fun scheduleTimeText(minuteAfterSixPm: Int): String = scheduleTime(minuteAfterSixPm)
+private fun scheduleTimeText(minuteAfterSixPm: Int, locale: Locale): String =
+    LocalTime.of(18, 0).plusMinutes(minuteAfterSixPm.toLong()).format(CLOCK).lowercase(locale)
 
 /** "1 h 40 m", "54 min" as on the timeline rows. */
 private fun hoursMinutes(minutes: Long): String = when {

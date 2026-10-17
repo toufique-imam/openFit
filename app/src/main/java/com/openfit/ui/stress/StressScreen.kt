@@ -76,14 +76,15 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import java.time.LocalDate
 
-private val ACCENT = OpenFitColors.Lavender
+private val ACCENT @Composable get() = OpenFitColors.Lavender
 private val PERIODS = listOf(ChartPeriod.Day, ChartPeriod.Week, ChartPeriod.Month)
 
-/** Pulse's band colours: calm blue, medium mint, high amber. */
+/** Body stress bands: calm blue, medium mint, high amber. */
+@Composable
 fun stressColor(band: StressBand): Color = when (band) {
     StressBand.Low -> OpenFitColors.Blue.accent
     StressBand.Medium -> OpenFitColors.Mint.accent
-    StressBand.High -> Color(0xFFF2A65A)
+    StressBand.High -> OpenFitColors.Pink.accent
 }
 
 fun stressBandName(band: StressBand): Int = when (band) {
@@ -96,7 +97,7 @@ sealed interface StressUiState {
     data object Loading : StressUiState
     data class Failed(val message: String) : StressUiState
     @Serializable
-    data class Ready(val period: ChartPeriod, val anchor: LocalDate, val today: LocalDate, val days: Map<LocalDate, StressDay>) : StressUiState {
+    data class Ready(val period: ChartPeriod, val anchor: LocalDate, val today: LocalDate, val days: Map<LocalDate, StressDay>, val hrv: Map<LocalDate, Double> = emptyMap()) : StressUiState {
         val day: StressDay? get() = days[anchor]
     }
 }
@@ -104,6 +105,7 @@ sealed interface StressUiState {
 class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snapshots: SnapshotStore) : ViewModel() {
 
     private val source = EnergySource(gateway, slotCache)
+    private val vitals = com.openfit.health.HealthConnectVitals(gateway)
 
     private val _state = MutableStateFlow<StressUiState>(StressUiState.Loading)
     val state: StateFlow<StressUiState> = _state.asStateFlow()
@@ -154,7 +156,11 @@ class StressViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snaps
             _state.value = try {
                 val today = LocalDate.now()
                 val days = periodDays(period, anchor).filter { it <= today }
-                StressUiState.Ready(period, anchor, today, source.stress(days.first(), days.last()).associateBy { it.date })
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val hrv = vitals.daily(setOf(com.openfit.domain.HealthMetric.HeartRateVariability), days.first().minusDays(30), days.last())
+                        .get(com.openfit.domain.HealthMetric.HeartRateVariability).orEmpty()
+                    StressUiState.Ready(period, anchor, today, source.stress(days.first(), days.last()).associateBy { it.date }, hrv)
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -175,6 +181,7 @@ fun StressRoute(viewModel: StressViewModel, onBack: () -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     val ready = state as? StressUiState.Ready
     var sheet by rememberSaveable { mutableStateOf(false) }
+    var breathing by rememberSaveable { mutableStateOf(false) }
     DetailScaffold(
         title = stringResource(R.string.stress_title),
         accent = ACCENT.accent,
@@ -182,6 +189,7 @@ fun StressRoute(viewModel: StressViewModel, onBack: () -> Unit) {
         periods = PERIODS,
         onPeriod = viewModel::selectPeriod,
         onBack = onBack,
+        menu = listOf(com.openfit.ui.detail.MenuAction(stringResource(R.string.breathe_title)) { breathing = true }),
     ) {
         when (val current = state) {
             StressUiState.Loading -> DetailLoading(ACCENT.accent)
@@ -192,6 +200,7 @@ fun StressRoute(viewModel: StressViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 if (current.period == ChartPeriod.Day) dayContent(current) else periodContent(current)
@@ -207,15 +216,24 @@ fun StressRoute(viewModel: StressViewModel, onBack: () -> Unit) {
             }
         }
     }
+    if (breathing) BreatheSession { breathing = false }
     if (sheet) InfoSheet(R.string.stress_sheet) { sheet = false }
 }
 
 private fun LazyListScope.dayContent(state: StressUiState.Ready) {
     val day = state.day
     val isToday = state.anchor == state.today
+    state.hrv[state.anchor]?.let { hrv ->
+        item {
+            Column(Modifier.fillMaxWidth().padding(horizontal = PagePadding, vertical = 12.dp)) {
+                Text(stringResource(R.string.stress_hrv, com.openfit.ui.today.oneDecimal(hrv)), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+                Text(stringResource(R.string.stress_hrv_context), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+            }
+        }
+    }
     item {
         Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 13.dp)) {
-            // Today shows the latest reading, past days the day's average, as Pulse does.
+            // Today shows the latest reading; past days show the day's average.
             val value = if (isToday) day?.latest else day?.average
             HeaderValue(value?.toString() ?: "–", value?.let { stringResource(stressBandName(stressBand(it))) } ?: "")
             Text(
@@ -277,6 +295,8 @@ private fun DayChart(day: StressDay, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
     val sleepShade = ACCENT.track
+    val bandColors = StressBand.entries.associateWith { stressColor(it) }
+    val palette0 = OpenFitColors
     Canvas(modifier.fillMaxWidth().height(212.dp)) {
         val left = 24.dp.toPx()
         val width = 288.dp.toPx()
@@ -285,13 +305,13 @@ private fun DayChart(day: StressDay, modifier: Modifier = Modifier) {
         fun y(stress: Int) = plot - stress / 100f * plot
         day.asleep.forEachIndexed { i, asleep -> if (asleep) drawRect(sleepShade, Offset(left + i * slot, 0f), Size(slot + 0.5f, plot)) }
         listOf(0, 30, 60, 100).forEach { level ->
-            drawLine(OpenFitColors.OnSurfaceVariant.copy(alpha = 0.3f), Offset(left, y(level)), Offset(left + width, y(level)), strokeWidth = 1.dp.toPx())
+            drawLine(palette0.OnSurfaceVariant.copy(alpha = 0.3f), Offset(left, y(level)), Offset(left + width, y(level)), strokeWidth = 1.dp.toPx())
             val layout = measurer.measure(level.toString(), labelStyle)
             drawText(layout, topLeft = Offset(left + width + 10.dp.toPx(), y(level) - layout.size.height / 2f))
         }
         day.slots.forEachIndexed { i, stress ->
             stress ?: return@forEachIndexed
-            drawRect(stressColor(stressBand(stress)), Offset(left + i * slot, y(stress)), Size(maxOf(slot - 0.5f, 1f), plot - y(stress)))
+            drawRect(bandColors.getValue(stressBand(stress)), Offset(left + i * slot, y(stress)), Size(maxOf(slot - 0.5f, 1f), plot - y(stress)))
         }
         listOf(0 to "12am", 6 to "6am", 12 to "12pm", 18 to "6pm").forEach { (hour, label) ->
             val layout = measurer.measure(label, labelStyle)
