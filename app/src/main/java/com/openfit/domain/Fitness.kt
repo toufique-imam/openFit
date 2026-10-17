@@ -8,7 +8,7 @@ import java.time.LocalDate
 
 /**
  * VO2 max from heart rate alone (Uth et al. 2004, Eur J Appl Physiol): 15.3 x max heart rate / resting heart rate,
- * with max heart rate 220 - age. Pulse's estimate for this user (47.9 at 190 / 60.7) fits it exactly.
+ * with max heart rate 220 - age. This is a population-derived estimate rather than a direct measurement.
  */
 fun estimateVo2Max(age: Int, restingBpm: Double): Double = UTH_FACTOR * (220 - age) / restingBpm
 

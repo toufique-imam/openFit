@@ -34,7 +34,7 @@ fun stressBaseline(days: Collection<List<Slot>>): IntArray =
 
 enum class StressBand { Low, Medium, High }
 
-/** Pulse's bands: 0-29 low, 30-59 medium, 60-100 high. */
+/** Body stress bands: 0-29 low, 30-59 medium, 60-100 high. */
 fun stressBand(stress: Int): StressBand = when {
     stress < 30 -> StressBand.Low
     stress < 60 -> StressBand.Medium
@@ -42,8 +42,8 @@ fun stressBand(stress: Int): StressBand = when {
 }
 
 /**
- * The stress openFit shows: 0.75 x the heart-rate rank, fitted to Pulse's daily averages and time in each band for
- * 30 Sep - 14 Oct 2026 (3.7 points from Pulse's average; low-stress time within 5%, high within 7%). Energy Bank keeps
+ * The stress openFit shows: 0.75 x the heart-rate rank, calibrated against observed daily averages and time in each band for
+ * 30 Sep - 14 Oct 2026 (3.7 points from the reference average; low-stress time within 5%, high within 7%). Vitality reserve keeps
  * the raw rank, which its own rates were fitted on.
  */
 fun displayedStress(rank: Int): Int = (rank * DISPLAY_SCALE).toInt()
@@ -63,7 +63,7 @@ data class StressDay(val date: LocalDate, val slots: List<Int?>, val asleep: Lis
 
 /**
  * Stress for each day in [days] from [showFrom], ranking every worn slot (asleep too) among the awake, non-workout slots
- * of the 30 days before. Workouts show no stress, as in Pulse.
+ * of the 30 days before. Workouts show no stress.
  */
 fun stressDays(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): List<StressDay> =
     days.withIndex().filter { it.value.first >= showFrom }.map { (index, day) ->
@@ -85,7 +85,7 @@ sealed interface EnergyDrain {
     data class Stress(val hour: Int, override val points: Double) : EnergyDrain
 }
 
-/** A day of Energy Bank: the level after each slot (null before the bank has settled), and what charged and drained it. */
+/** A day of Vitality reserve: the level after each slot (null before the bank has settled), and what charged and drained it. */
 @Serializable
 data class EnergyDay(
     val date: LocalDate,
@@ -94,7 +94,7 @@ data class EnergyDay(
     val drained: Double,
     /** The three biggest drains, largest first. */
     val drains: List<EnergyDrain>,
-    /** The last asleep slot of the morning (before 2 pm) and the level then: Pulse's "Woke at 09:16 with 39%". */
+    /** The last asleep slot of the morning (before 2 pm) and the level then: the estimated level at waking. */
     val wakeSlot: Int? = null,
     val wakeLevel: Double? = null,
 ) {
@@ -114,8 +114,8 @@ fun energyBand(level: Double): EnergyBand = when {
 }
 
 /**
- * The model's rates, per six-minute slot, fitted to Pulse's own Energy Bank for 1-14 Oct 2026 (its wake level, end
- * level, and daily charged and drained totals): about 7.6 points RMS, against 34 for the rates in Pulse's explainer.
+ * The model's rates, per six-minute slot, calibrated against observed reserve levels for 1-14 Oct 2026 (its wake level, end
+ * level, and daily charged and drained totals): about 7.6 points RMS, in the existing calibration sample; this is not physiological validation.
  */
 object EnergyRates {
     /** A 7.5-hour night (75 slots) charges about 41 points. */

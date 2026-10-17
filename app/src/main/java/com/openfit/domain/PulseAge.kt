@@ -9,9 +9,9 @@ import kotlin.math.abs
 import kotlin.math.ln
 
 /**
- * Pulse Age: how old the body behaves, from nine habits and vitals. Each maps to a change in all-cause mortality risk
+ * Health age: how old the body behaves, from nine habits and vitals. Each maps to a change in all-cause mortality risk
  * against a reference for the user's age and sex, through dose-response curves from published studies; the summed log
- * hazard ratio becomes years. Modelled on pulse-mobile's and WHOOP's published method, with openFit's own code.
+ * hazard ratio becomes years. See docs/model-provenance.md for the references and review status.
  */
 enum class AgeFactor(val group: AgeGroup) {
     SleepHours(AgeGroup.Sleep),
@@ -96,7 +96,7 @@ private val VO2_REFERENCE = mapOf(
     Sex.Female to listOf(40, 40, 38, 36, 34, 32, 30, 29, 27, 26, 25, 23, 22, 21, 20, 19, 18),
 )
 
-/** The reference profile: Pulse Age equals the user's age when every factor sits here. */
+/** The reference profile: Health age equals the user's age when every factor sits here. */
 fun ageReference(factor: AgeFactor, age: Int, sex: Sex): Double = when (factor) {
     AgeFactor.Vo2Max -> {
         val table = VO2_REFERENCE.getValue(sex)
@@ -132,16 +132,15 @@ fun ageLnHr(factor: AgeFactor, value: Double, age: Int, sex: Sex): Double {
 }
 
 /**
- * Pulse Age from the factors there is data for ([inputs] in each factor's units). The factors present are scaled up to
- * stand for all nine, and the result is clamped to ±[PulseAgeModel.CLAMP_YEARS]. Null with fewer than
- * [PulseAgeModel.MIN_FACTORS] factors.
+ * Health age from the factors there is data for ([inputs] in each factor's units). The factors present are scaled up to
+ * stand for all nine, and the result is clamped to ±15 years. Null with fewer than five factors.
  */
 fun pulseAge(age: Int, sex: Sex, inputs: Map<AgeFactor, Double>, estimated: Set<AgeFactor> = emptySet()): PulseAge? {
     if (inputs.size < PulseAgeModel.MIN_FACTORS) return null
     val scale = AgeFactor.entries.size.toDouble() / inputs.size
     val effects = AgeFactor.entries.mapNotNull { factor ->
         inputs[factor]?.let { value ->
-            // An estimated input (VO2 max from heart rate) counts at half weight, as in Pulse.
+            // An estimated input (VO2 max from heart rate) counts at half weight.
             val weight = if (factor in estimated) ESTIMATE_WEIGHT else 1.0
             AgeEffect(factor, value, ageReference(factor, age, sex), PulseAgeModel.YEARS_PER_LN_HR * ageLnHr(factor, value, age, sex) * scale * weight, factor in estimated)
         }
