@@ -25,7 +25,8 @@ fun valueText(block: ValueText.() -> Unit): AnnotatedString = ValueText().apply(
 fun ValueText.duration(duration: Duration, padMinutes: Boolean = false) {
     big(duration.toHours().toString())
     small("h ")
-    big(if (padMinutes) "%02d".format(duration.toMinutesPart()) else duration.toMinutesPart().toString())
+    val minutes = duration.toMinutes() % 60
+    big(if (padMinutes) "%02d".format(minutes) else minutes.toString())
     small("m")
 }
 

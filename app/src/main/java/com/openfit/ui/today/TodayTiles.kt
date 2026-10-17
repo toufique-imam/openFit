@@ -487,7 +487,7 @@ private fun TileCard(tile: TodayTile, state: TodayUiState.Ready, onOpen: (Metric
             }
         }
         TodayTile.ExerciseDays -> {
-            val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+            val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, com.openfit.ui.currentLocale()) }
             val workout = state.latestExercise
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 MetricTile(
@@ -622,7 +622,7 @@ private fun TileCard(tile: TodayTile, state: TodayUiState.Ready, onOpen: (Metric
         }
         TodayTile.Stress -> {
             val stress = state.stress
-            // Today: the latest reading; past days: the day's average (Pulse).
+            // Today: the latest reading; past days: the day's average .
             val value = if (state.isToday) stress?.latest else stress?.average
             MetricTile(
                 title = stringResource(R.string.stress_title),
@@ -639,7 +639,7 @@ private fun TileCard(tile: TodayTile, state: TodayUiState.Ready, onOpen: (Metric
             }
         }
         TodayTile.MindfulDays -> {
-            val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+            val labels = state.week.map { it.dayOfWeek.getDisplayName(TextStyle.NARROW, com.openfit.ui.currentLocale()) }
             MetricTile(
                 title = stringResource(R.string.tile_mindful_days),
                 value = valueText { exerciseCount(state.mindfulDays.size, profile.weeklyMindfulDaysGoal) },

@@ -51,7 +51,6 @@ import com.openfit.health.DayLoadCache
 import com.openfit.profile.Profile
 import com.openfit.profile.ProfileStore
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -100,13 +99,13 @@ sealed interface TodayUiState {
         val googleHealth: GoogleHealthStatus,
         val healthMetrics: List<MetricReading> = emptyList(),
         val sleepScore: Int? = null,
-        /** The day's Energy Bank; loaded beside the rest, since its first run reads weeks of heart rate. */
+        /** The day's Vitality reserve; loaded beside the rest, since its first run reads weeks of heart rate. */
         val energy: EnergyDay? = null,
         val energyLoading: Boolean = true,
         val stress: StressDay? = null,
         /** VO2 max (measured, or estimated from resting heart rate) against people of the same age and sex. */
         val fitness: FitnessLevel? = null,
-        /** Pulse Age over the 28 days before the date; loaded beside the rest. */
+        /** Health age over the 28 days before the date; loaded beside the rest. */
         val pulseAge: PulseAge? = null,
         val pulseAgeLoading: Boolean = true,
         /** The pull-to-refresh spinner: only for a refresh the user asked for. */
@@ -131,6 +130,7 @@ class TodayViewModel(
     private val snapshots: SnapshotStore,
     private val sync: HealthSync,
     private val cloud: GoogleHealthHistory,
+    private val autoImport: () -> Boolean = { true },
 ) : ViewModel() {
 
     private val healthConnect = HealthConnectSource(gateway, dayLoadCache)
@@ -264,11 +264,10 @@ class TodayViewModel(
                     else -> it
                 }
             }
-            // Pulse Age covers the 28 days before the date, so a reload of the same day keeps the one on screen.
-            val keptAge = (_state.value as? TodayUiState.Ready)
-                ?.takeIf { it.date == date && it.pendingDate == null && !it.pulseAgeLoading && shownCurrent && shownProfileKey == profileKey }
-                ?.let { Kept(it.pulseAge) }
-            val fetch = fetches[date]?.takeIf { reload != Reload.Pull && it.profileKey == profileKey } ?: startFetch(date, profile, keptAge)
+            // Reload derived values too: measurements in their history may have changed on this sync.
+            val fetch = fetches[date]?.takeIf { reload != Reload.Pull && it.profileKey == profileKey &&
+                sync.lastSync?.isAfter(it.startedAt) != true && cloud.updated.value <= it.startedAt.toEpochMilli()
+            } ?: startFetch(date, profile)
             val main = fetch.main.await()
             if (main !is TodayUiState.Ready) {
                 val failed = main as? TodayUiState.Failed
@@ -290,7 +289,7 @@ class TodayViewModel(
             googleHealth = main.googleHealth
             importIfNeeded()
             _state.update { current ->
-                // Until the new Energy Bank and Pulse Age arrive, the ones on screen for this date stay.
+                // Until the new Vitality reserve and Health age arrive, the ones on screen for this date stay.
                 val previous = (current as? TodayUiState.Ready)?.takeIf { it.date == date && it.pendingDate == null }
                 main.copy(
                     energy = previous?.energy,
@@ -316,7 +315,7 @@ class TodayViewModel(
 
     /** The first time, reads the history into openFit's copy in the background, so every screen opens from it later. */
     private fun importIfNeeded() {
-        if (importing?.isActive == true || sync.imported) return
+        if (!autoImport() || importing?.isActive == true || sync.imported) return
         importing = sync.startImport(background = true)
     }
 
@@ -343,18 +342,14 @@ class TodayViewModel(
         }
     }
 
-    /** One load of a date: the day itself, then Energy Bank and Pulse Age beside it; saved as a snapshot when all three are in. */
-    /** A value already worked out for the date, to reuse instead of reading it again. */
-    private class Kept<T>(val value: T)
-
-    private inner class Fetch(val date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null, background: Boolean = false) {
+    /** One load of a date: the day itself, then Vitality reserve and Health age beside it; saved as a snapshot when all three are in. */
+    private inner class Fetch(val date: LocalDate, profile: Profile, background: Boolean = false) {
         private val context = if (background) Dispatchers.Default + HcPriority.Background else Dispatchers.Default
         val profileKey = profile.snapshotKey()
         val startedAt: Instant = Instant.now()
         val main: Deferred<TodayUiState> = viewModelScope.async(context) { loadMain(date, profile) }
         val energy: Deferred<Pair<EnergyDay?, StressDay?>> = viewModelScope.async(context) { loadEnergy(date) }
-        val pulseAge: Deferred<PulseAge?> = keptAge?.let { CompletableDeferred(it.value) }
-            ?: viewModelScope.async(context) { loadPulseAge(date, profile) }
+        val pulseAge: Deferred<PulseAge?> = viewModelScope.async(context) { loadPulseAge(date, profile) }
         private val save: Job = viewModelScope.launch(Dispatchers.Default) {
             val ready = main.await() as? TodayUiState.Ready
             if (ready == null) {
@@ -376,9 +371,9 @@ class TodayViewModel(
         }
     }
 
-    private fun startFetch(date: LocalDate, profile: Profile, keptAge: Kept<PulseAge?>? = null, background: Boolean = false): Fetch {
+    private fun startFetch(date: LocalDate, profile: Profile, background: Boolean = false): Fetch {
         fetches.remove(date)?.cancel()
-        return Fetch(date, profile, keptAge, background).also { fetches[date] = it }
+        return Fetch(date, profile, background).also { fetches[date] = it }
     }
 
     private suspend fun loadEnergy(date: LocalDate): Pair<EnergyDay?, StressDay?> {

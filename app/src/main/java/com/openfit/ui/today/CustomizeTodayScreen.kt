@@ -4,6 +4,8 @@ import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,6 +67,9 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.listSaver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -81,6 +86,7 @@ import com.openfit.ui.theme.MetricColor
 import com.openfit.ui.theme.OpenFitColors
 import com.openfit.ui.theme.OpenFitIcons
 import com.openfit.ui.theme.SectionHeaderStyle
+import kotlinx.serialization.json.Json
 
 private sealed interface CustomizePage {
     data object Main : CustomizePage
@@ -88,15 +94,28 @@ private sealed interface CustomizePage {
     data class PickMetric(val slot: Int) : CustomizePage
 }
 
+private val LayoutSaver = Saver<TodayLayout, String>(
+    save = { Json.encodeToString(TodayLayout.serializer(), it) },
+    restore = { runCatching { Json.decodeFromString(TodayLayout.serializer(), it) }.getOrNull() },
+)
+private val PageSaver = Saver<CustomizePage, Int>(
+    save = { when (it) { CustomizePage.Main -> -2; CustomizePage.CustomFocus -> -1; is CustomizePage.PickMetric -> it.slot } },
+    restore = { when (it) { -2 -> CustomizePage.Main; -1 -> CustomizePage.CustomFocus; else -> CustomizePage.PickMetric(it.coerceIn(0, TodayLayout.CUSTOM_SLOTS - 1)) } },
+)
+private val SlotsSaver = listSaver<List<TodayTile?>, String>(
+    save = { slots -> slots.map { it?.name.orEmpty() } },
+    restore = { names -> List(TodayLayout.CUSTOM_SLOTS) { index -> TodayTile.entries.find { it.name == names.getOrNull(index) } } },
+)
+
 /**
  * Fitbit's Customize Today: pick a focus (or build one), move sections, show or hide cards. openFit adds the bottom-bar
  * tabs here too. Close discards the changes; Save keeps them.
  */
 @Composable
 fun CustomizeTodayRoute(layout: TodayLayout, onSave: (TodayLayout) -> Unit, onClose: () -> Unit, onOpenHealthConnect: () -> Unit) {
-    var draft by remember { mutableStateOf(layout) }
-    var page by remember { mutableStateOf<CustomizePage>(CustomizePage.Main) }
-    var slots by remember { mutableStateOf(layout.custom) }
+    var draft by rememberSaveable(stateSaver = LayoutSaver) { mutableStateOf(layout) }
+    var page by rememberSaveable(stateSaver = PageSaver) { mutableStateOf<CustomizePage>(CustomizePage.Main) }
+    var slots by rememberSaveable(stateSaver = SlotsSaver) { mutableStateOf(layout.custom) }
 
     BackHandler(enabled = page != CustomizePage.Main) {
         page = if (page is CustomizePage.PickMetric) CustomizePage.CustomFocus else CustomizePage.Main
@@ -117,6 +136,7 @@ fun CustomizeTodayRoute(layout: TodayLayout, onSave: (TodayLayout) -> Unit, onCl
         CustomizePage.CustomFocus -> CustomFocusEditor(
             slots = slots,
             onPick = { page = CustomizePage.PickMetric(it) },
+            onMove = { from, to -> slots = movedFocusSlots(slots, from, to) },
             onSave = {
                 draft = draft.copy(custom = slots, focus = FocusPreset.Custom)
                 page = CustomizePage.Main
@@ -297,7 +317,7 @@ private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean = true, 
                 enabled = enabled,
                 colors = SwitchDefaults.colors(
                     checkedTrackColor = OpenFitColors.Mint.accent,
-                    checkedThumbColor = SWITCH_THUMB,
+                    checkedThumbColor = MaterialTheme.colorScheme.onPrimary,
                     checkedBorderColor = OpenFitColors.Mint.accent,
                 ),
             )
@@ -306,7 +326,6 @@ private fun SwitchRow(label: String, checked: Boolean, enabled: Boolean = true, 
 }
 
 private val CARD_WIDTH = 296.dp
-private val SWITCH_THUMB = Color(0xFF00382E)
 private val PREVIEW_LARGE = 104.dp
 private val PREVIEW_SMALL = 66.dp
 
@@ -404,7 +423,7 @@ private fun HalfCircle(tile: TodayTile, size: Dp, top: Boolean) {
 }
 
 @Composable
-private fun CustomFocusEditor(slots: List<TodayTile?>, onPick: (Int) -> Unit, onSave: () -> Unit, onClose: () -> Unit) {
+private fun CustomFocusEditor(slots: List<TodayTile?>, onPick: (Int) -> Unit, onMove: (Int, Int) -> Unit, onSave: () -> Unit, onClose: () -> Unit) {
     Column(Modifier.fillMaxSize().background(OpenFitColors.Background).systemBarsPadding()) {
         TopBar(
             title = stringResource(R.string.focus_custom),
@@ -412,19 +431,31 @@ private fun CustomFocusEditor(slots: List<TodayTile?>, onPick: (Int) -> Unit, on
             action = stringResource(R.string.save) to onSave,
             actionEnabled = slots.first() != null,
         )
-        Column(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-            FocusPreview(slots, paired = null, numbered = true, large = 160.dp)
-        }
-        slots.forEachIndexed { index, tile ->
-            // Fitbit fills the slots in order: a slot opens once the one before it is set.
-            val enabled = index == 0 || slots[index - 1] != null
-            val tint = if (enabled) OpenFitColors.OnSurface else OpenFitColors.OnSurfaceVariant.copy(alpha = 0.5f)
-            Row(
-                Modifier.fillMaxWidth().clickable(enabled = enabled) { onPick(index) }.padding(horizontal = 24.dp, vertical = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(R.string.custom_metric, index + 1), style = MaterialTheme.typography.titleMedium, color = tint, modifier = Modifier.weight(1f))
-                Text(tile?.let { stringResource(it.focusLabel) } ?: stringResource(R.string.custom_off), style = MaterialTheme.typography.titleMedium, color = tint)
+        Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
+            Column(Modifier.fillMaxWidth().padding(top = 32.dp, bottom = 40.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                FocusPreview(slots, paired = null, numbered = true, large = 160.dp)
+            }
+            slots.forEachIndexed { index, tile ->
+                // Fitbit fills the slots in order: a slot opens once the one before it is set.
+                val enabled = index == 0 || slots[index - 1] != null
+                val tint = if (enabled) OpenFitColors.OnSurface else OpenFitColors.OnSurfaceVariant.copy(alpha = 0.5f)
+                Row(
+                    Modifier.fillMaxWidth().clickable(enabled = enabled) { onPick(index) }.padding(horizontal = 24.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(Modifier.weight(1f)) {
+                        Text(stringResource(R.string.custom_metric, index + 1), style = MaterialTheme.typography.bodySmall, color = tint)
+                        Text(tile?.let { stringResource(it.focusLabel) } ?: stringResource(R.string.custom_off), style = MaterialTheme.typography.titleMedium, color = tint)
+                    }
+                    val label = tile?.let { stringResource(it.focusLabel) }.orEmpty()
+                    IconButton(onClick = { onMove(index, index - 1) }, enabled = tile != null && index > 0) {
+                        Icon(Icons.Filled.KeyboardArrowUp, stringResource(R.string.customize_move_up, label), tint = arrowTint(tile != null && index > 0))
+                    }
+                    val canMoveDown = tile != null && slots.getOrNull(index + 1) != null
+                    IconButton(onClick = { onMove(index, index + 1) }, enabled = canMoveDown) {
+                        Icon(Icons.Filled.KeyboardArrowDown, stringResource(R.string.customize_move_down, label), tint = arrowTint(canMoveDown))
+                    }
+                }
             }
         }
     }
@@ -438,7 +469,7 @@ private fun MetricPicker(slot: Int, selected: TodayTile?, taken: Set<TodayTile>,
             navigation = { IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, stringResource(R.string.back), tint = OpenFitColors.OnSurface) } },
         )
         LazyColumn(contentPadding = PaddingValues(bottom = 32.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            if (selected != null) item(key = "off") { PickRow(stringResource(R.string.custom_off), selected = false) { onPick(null) } }
+            item(key = "off") { PickRow(stringResource(R.string.custom_off), selected = selected == null) { onPick(null) } }
             TodaySection.entries.forEach { section ->
                 val tiles = TodayTile.entries.filter { it.section == section && it !in taken }
                 if (tiles.isEmpty()) return@forEach
@@ -494,7 +525,7 @@ val TodayTile.icon: ImageVector
     }
 
 val TodayTile.color: MetricColor
-    get() = when (this) {
+    @Composable get() = when (this) {
         TodayTile.SleepDuration, TodayTile.Readiness, TodayTile.EnergyBank, TodayTile.Stress, TodayTile.MindfulDays -> OpenFitColors.Lavender
         TodayTile.HealthMetrics, TodayTile.Heart, TodayTile.Vo2Max, TodayTile.PulseAge, TodayTile.Weight, TodayTile.Water -> OpenFitColors.Blue
         TodayTile.Food -> OpenFitColors.Pink

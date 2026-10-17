@@ -76,9 +76,10 @@ fun FocusRing(
     onBottomClick: (() -> Unit)? = null,
 ) {
     Box(modifier.size(size), contentAlignment = Alignment.Center) {
+        val palette0 = OpenFitColors
         Canvas(Modifier.fillMaxSize()) {
             val width = stroke.toPx()
-            val band = Band(outline = 2.dp.toPx(), halo = 2.dp.toPx(), background = OpenFitColors.Background)
+            val band = Band(outline = 2.dp.toPx(), halo = 2.dp.toPx(), background = palette0.Background)
             gauge(top.color, ArcFrame(180f + FOCUS_GAP, FOCUS_SWEEP, inset = width / 2), width, top.progress, top.range, band)
             gauge(bottom.color, ArcFrame(180f - FOCUS_GAP, -FOCUS_SWEEP, inset = width / 2), width, bottom.progress, bottom.range, band)
         }

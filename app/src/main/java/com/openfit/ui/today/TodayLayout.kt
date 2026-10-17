@@ -1,10 +1,12 @@
 package com.openfit.ui.today
 
 import android.content.Context
+import android.content.SharedPreferences
 import androidx.annotation.StringRes
 import com.openfit.R
 import com.openfit.ui.MetricPage
 import com.openfit.ui.RootTab
+import kotlinx.serialization.Serializable
 
 /** Today's sections, in Fitbit's default order. Each can also be a bottom-bar tab. */
 enum class TodaySection(@StringRes val title: Int) {
@@ -41,7 +43,7 @@ enum class TodayTile(val section: TodaySection, @StringRes val label: Int, @Stri
 
 /** Fitbit's focus presets: the first metric large, the rest small beneath it. */
 enum class FocusPreset(@StringRes val title: Int, val metrics: List<TodayTile>, val paired: TodayTile? = null) {
-    /** Daily Readiness shares Cardio load's ring, as on Fitbit. */
+    /** Recovery shares the training ring. */
     CardioFitness(R.string.focus_build_cardio, listOf(TodayTile.CardioLoad, TodayTile.ExerciseDays, TodayTile.SleepDuration, TodayTile.Steps), paired = TodayTile.Readiness),
     GetActive(R.string.focus_get_active, listOf(TodayTile.Steps, TodayTile.ZoneMinutes, TodayTile.Distance, TodayTile.EnergyBurned)),
     SleepBetter(R.string.focus_sleep_better, listOf(TodayTile.SleepDuration, TodayTile.Steps, TodayTile.ZoneMinutes, TodayTile.MindfulDays)),
@@ -51,6 +53,7 @@ enum class FocusPreset(@StringRes val title: Int, val metrics: List<TodayTile>, 
     Custom(R.string.focus_custom, emptyList()),
 }
 
+@Serializable
 data class TodayLayout(
     val focus: FocusPreset = FocusPreset.CardioFitness,
     /** The custom focus: four slots, empty ones null. */
@@ -79,14 +82,19 @@ data class TodayLayout(
     }
 }
 
-class TodayLayoutStore(context: Context) {
+/** Move an occupied focus slot, retaining each metric exactly once. */
+internal fun movedFocusSlots(slots: List<TodayTile?>, from: Int, to: Int): List<TodayTile?> {
+    if (from !in slots.indices || to !in slots.indices || slots[from] == null || slots[to] == null) return slots
+    return slots.toMutableList().apply { add(to, removeAt(from)) }
+}
 
-    private val prefs = context.getSharedPreferences("today_layout", Context.MODE_PRIVATE)
+class TodayLayoutStore internal constructor(private val prefs: SharedPreferences) {
+    constructor(context: Context) : this(context.getSharedPreferences("today_layout", Context.MODE_PRIVATE))
 
     fun load(): TodayLayout {
         val default = TodayLayout()
         // Names from an older version that no longer exist are skipped.
-        val order = names("order").mapNotNull { name -> TodaySection.entries.find { it.name == name } }
+        val order = names("order").mapNotNull { name -> TodaySection.entries.find { it.name == name } }.distinct()
         return TodayLayout(
             focus = prefs.getString("focus", null)?.let { name -> FocusPreset.entries.find { it.name == name } } ?: default.focus,
             custom = prefs.getString("custom", null)?.split(',')?.map { name -> TodayTile.entries.find { it.name == name } }
@@ -94,7 +102,7 @@ class TodayLayoutStore(context: Context) {
             // Sections added in a later version go last.
             order = if (order.isEmpty()) default.order else order + (TodaySection.entries - order.toSet()),
             hidden = names("hidden").mapNotNull { name -> TodayTile.entries.find { it.name == name } }.toSet(),
-            tabs = if (prefs.contains("tabs")) names("tabs").mapNotNull { name -> RootTab.entries.find { it.name == name && it.optional } }.take(TodayLayout.MAX_EXTRA_TABS).toSet() else default.tabs,
+            tabs = if (prefs.contains("tabs")) names("tabs").mapNotNull { name -> RootTab.entries.find { it.name == name && it.optional } }.distinct().take(TodayLayout.MAX_EXTRA_TABS).toSet() else default.tabs,
         )
     }
 

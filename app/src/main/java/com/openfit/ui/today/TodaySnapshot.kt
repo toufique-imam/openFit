@@ -46,7 +46,7 @@ data class TodaySnapshot(
     companion object {
         const val KIND = "today"
         /** Bump when this class or a class in it changes shape, or a value in it is computed differently. */
-        const val VERSION = 2
+        const val VERSION = 3
     }
 }
 
