@@ -1,8 +1,8 @@
-# Energy Bank and Pulse Age (from pulse-mobile)
+# Vitality reserve, health age and body stress
 
-Both are modelled on pulse-mobile's published explainer text (`src/screens/more/howItWorksContent.ts`) and the studies its
-Pulse Age notes cite. openFit's code is its own: pulse-mobile is PolyForm Noncommercial, and its `src/core/engine`
-re-implements another company's decompiled app, so it is not used even as a reference.
+The original feature notes used another app’s explainer and cited studies as references.
+The source-independence audit is still open; see [model-provenance.md](model-provenance.md).
+The comparisons below retain the original calibration evidence and do not establish source independence.
 
 Pulse itself is installed on the test phone (`in.portlabs.pulse`). Its Settings show "Past data: Not allowed", so it only
 sees data since it was installed.
@@ -91,7 +91,9 @@ Ideas not done:
 - Bands are Pulse's: 0-29 low, 30-59 medium, 60-100 high. Today shows the latest reading, past days the day's average. It needs 5 days of data.
 - **Screens:** a Today tile in Stress and mindfulness, where Fitbit's server-only Stress Management Score was. The page has a Day view (bars by band over 24 h with sleep shaded; low, medium and high time) plus Week and Month.
 - **On 16 Oct:** openFit gave 9 h 6 m low, 6 h medium and 1 h high; Pulse gave 10:00, 6:06 and 0:12.
-- **Not done:** Pulse's HRV term during sleep, its "typical Friday" comparison, and Breathe.
+- **Current decision:** Breathe is implemented as a timed, pausable session. HRV is separate context
+  on Body stress, without copying an unvalidated score weighting. A "typical Friday" comparison is
+  deferred pending enough personal history and a separately justified baseline.
 
 ## Cardio fitness / VO2 max (`Fitness.kt`)
 

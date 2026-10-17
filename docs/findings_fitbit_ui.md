@@ -1,12 +1,23 @@
-# Fitbit 4.67 UI spec
+# Historical dashboard measurements
+
+These notes describe an earlier reference implementation. Current openFit uses its own navy, blue,
+teal and apricot palette, the Android system sans-serif font and an original rising-bars launcher mark.
+Reference dimensions below are historical observations, not the current design specification.
+
+## Current implementation decisions (17 October 2026)
+
+Customize Today, bottom navigation, Health metrics, Mindful days, target-range bands and metric
+detail screens are implemented. Body stress has its own meaning and explanatory text. Use Material
+icons and openFit's header. Keep a completed goal ring capped at one lap with a check; do not copy
+second-lap rendering. No quick-add health-record FAB is planned while openFit remains read-only.
+Fresh comparisons of the other focus presets and large single-metric ring remain a device task.
+See `product-decisions.md`; the historical observations below are not a list of missing features.
 
 ## How the numbers were measured
 
-The values come from three sources, cross-checked against each other:
+The retained measurements describe screenshots of a 360dp-wide reference phone:
 
-- The decompiled code (see [findings_jadx.md](findings_jadx.md)).
 - Pixel measurements of screenshots from the live app on a 360dp-wide phone (480 dpi, 3 px/dp).
-- The reference screenshots in `com.fitbit.FitbitMobile_4.67/ss/`.
 
 Unless noted, the values are dp or sp in the dark theme. The openFit implementation is in
 `ui/theme/Theme.kt`, `ui/today/Gauges.kt`, `TodayTiles.kt` and `TodayScreen.kt`.
@@ -47,8 +58,7 @@ opsz = font size. Material 3 sizes:
 2. **Date bar.**
    - Previous and next buttons are 40dp IconButtons with 24dp icons. The title is titleMedium,
      centered, and its slot width = total − 2·max(left slot, right slot).
-   - **Today:** `<  Today  [pencil]`. The pencil customizes the dashboard; openFit doesn't have
-     that yet.
+   - **Today:** `<  Today  [pencil]`. The pencil customizes the dashboard; openFit also supports it.
    - **Other days:** `<  Fri, 25 Sept  [calendar] >`. The calendar icon **jumps back to today**;
      it is not a date picker. openFit also opens a date picker when you tap the title.
 3. **Focus block.** Padding start 16, top 24, end 16, bottom 16.
@@ -66,7 +76,7 @@ opsz = font size. Material 3 sizes:
 - **Progress.** Both arcs fill starting from the 9 o'clock side. Angles use the Compose
   convention: 0° = 3 o'clock, clockwise positive.
 - **Gap.** 7.5° each side of horizontal, so 15° between the arc ends at 3 and 9 o'clock.
-- **Target band (not built yet).**
+- **Target band (implemented).**
   - The track and progress are cut away 2dp around the target range.
   - The range itself is a hollow capsule outline (2dp) in the full accent color.
   - Fitbit uses this for "Target 11–46".
@@ -102,10 +112,10 @@ opsz = font size. Material 3 sizes:
 - **Goal reached:** a 12dp check icon in the bottom opening, 2dp from the bottom. On the 154dp
   gauge it is 20dp, 4dp from the bottom.
 - **Over 100 %:** Fitbit draws only the fractional lap. The track is clipped around the tip with a
-  2dp gap. openFit doesn't do this yet.
+  2dp gap. openFit deliberately keeps its completed ring capped at one lap.
 - **Segmented ring** (Exercise days): 66 / 6, one segment per goal day.
   - Gap between segments is 0.06 × 360° = 21.6° along the centerline, which matches the screenshots.
-  - The segment shape code didn't decompile.
+  - The segment shape was approximated from screenshots.
 - **154dp gauge** (when the primary metric isn't the dual ring): stroke 10, icon 64. Value in
   displayMedium 45 with headlineMedium 28 for units.
 
@@ -117,17 +127,17 @@ opsz = font size. Material 3 sizes:
 - Gaps: title→value 8, value→subtitle 4. Gauge 66dp on the right.
 - Empty values read "No data" or "No score" at 22sp, with a filled circular badge instead of a ring.
 
-## Known differences still open
+## Historical differences and current disposition
 
-- **Icons:** heart-with-ECG (Cardio Load), dumbbell (Exercise), sneaker (Steps), moon with sparkle
-  (Sleep).
-- **Missing tiles:** Health Metrics, Mindful days, Stress Management Score.
-- **Missing chrome:** bottom navigation, the + FAB, the Fitbit header, a sticky date header.
-- **Missing rendering:** target-range band and second-lap rendering.
+- **Icons and header:** use openFit's own choices and Material icons.
+- **Tiles:** Health metrics and Mindful days are implemented. Body stress is a separate local estimate.
+- **Chrome:** bottom navigation and customization are implemented. A health-record quick-add FAB and
+  proprietary header elements are omitted. Sticky date positioning is optional future polish.
+- **Rendering:** target-range bands are implemented. Second-lap rendering is deliberately omitted.
 
 ## Metric detail screens (Cardio Load, Readiness, Steps)
 
-Shared frame (`ui/detail/DetailScaffold.kt`); values from the decompiled Cardio Load screen, cross-checked on screenshots.
+Shared frame (`ui/detail/DetailScaffold.kt`); historical measurements cross-checked on screenshots.
 
 - **Top bar**: back arrow, title in titleLarge 22/28, overflow menu. Cardio Load's menu: "Activity settings", "Manage data".
 - **Tabs**: Day / Week / Month / Year, four 90dp tabs, 16sp Medium. Selected uses the metric accent, unselected #BEC9C3. Indicator is 2dp, full tab width, square; no divider.

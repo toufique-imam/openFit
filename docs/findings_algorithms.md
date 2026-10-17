@@ -1,8 +1,8 @@
 # Algorithms
 
-Fitbit computes Active Zone Minutes, Readiness, Sleep Score and the Cardio Load target on its
-servers. The 4.67 APK only fetches and displays them (see [findings_jadx.md](findings_jadx.md)), so
-openFit computes its own versions on the device. All of them live in `app/src/main/java/com/openfit/domain/`
+openFit computes effort minutes, recovery score, sleep score and training load on the device.
+The historical comparisons below are calibration observations, not validation of physiological accuracy.
+These functions live in `app/src/main/java/com/openfit/domain/`
 and are pure functions with unit tests in `app/src/test/java/com/openfit/domain/`.
 
 ## Heart-rate basics

@@ -1,11 +1,33 @@
 # Data sources
 
-openFit reads from two sources and merges them:
+## Updates from the TODO pass (17 October 2026)
 
-- **Health Connect**, always.
+- Workout, nutrition and hydration imports now request the Google Health API’s reconciled stream
+  across all sources. This delegates source conflict handling to the platform rather than dropping
+  entries merely because their timestamps match. Existing copies refresh those three types once,
+  with per-chunk markers for resume. The request path, filters and paging are tested with a fake transport;
+  no live Google account was used for this validation. See the
+  [reconcile reference](https://developers.google.com/health/reference/rest/v4/users.dataTypes.dataPoints/reconcile)
+  and [data-management guide](https://developers.google.com/health/data-management).
+- Room schema 5 adds calculated day/slot tables and a compressed raw-payload column. JSON rows
+  from previous versions remain readable. Background sync compacts them in bounded batches.
+- Upgrade/history refreshes retain a start timestamp, so days completed before a quota pause do not
+  need refreshing again on resume. Older-history background jobs retry after quota backoff.
+- The existing initial window is 365 days, followed by older data up to two years. Date navigation
+  reads the local copy. System time-zone changes re-file its records locally and rebuild totals.
+- Revoking permissions does not delete saved rows. Today shows the provider/permission connection
+  page when access is missing; local detail sources filter by the current grants. Restoring access
+  makes retained history available again. Delete everything clears the local copy explicitly.
+
+The older observations below are retained as research history.
+
+openFit imports from two sources into one local copy:
+
+- **Health Connect**, when available and granted.
 - **Google Health API**, optional, once signed in.
 
-Both implement `health/DailyMetricsSource` (`load`, `exerciseDays`, `history`).
+`HealthConnectSource` implements `DailyMetricsSource` (`load`, `exerciseDays`, `history`) over
+`HealthStore`; it reads the stored Health Connect and optional cloud records, without remote reads.
 
 ## Health Connect (`health/HealthConnectSource.kt`, `HealthConnectGateway.kt`)
 
@@ -17,9 +39,9 @@ Both implement `health/DailyMetricsSource` (`load`, `exerciseDays`, `history`).
 - **Paging:** `readRecords` returns a `pageToken`. Loop while `!pageToken.isNullOrEmpty()`.
   - *Bug found:* looping on `!= null` never ended, because the last page returns an empty string.
   - That caused "Request rejected. Rate limited" and made the permission screen close itself.
-- **Rate limits are aggressive.**
-  - The ViewModel reloads on resume only if the data is older than 1 minute (`refreshIfStale`).
-  - History backfill is capped at 7 days per load (`MAX_BACKFILL_DAYS`).
+- **Rate limits:** only the sync/import paths make remote reads. A minute-old screen can be computed
+  again from saved data without spending remote quota. The budget uses the smaller background
+  buckets with an additional reserve, and retains recent counters across local deletion.
 - **What Fitbit writes to Health Connect** (from pulse-mobile's notes and observation):
   - Writes: steps, heart rate, sleep, resting HR, and HRV every 5 minutes overnight.
   - Doesn't write: AZM, SpO2 or food. openFit computes AZM itself.
@@ -29,8 +51,9 @@ Both implement `health/DailyMetricsSource` (`load`, `exerciseDays`, `history`).
   - `dayLoad()` computes AZM and Cardio Load for a past day from raw heart rate plus "moving
     minutes".
   - Moving minutes are 1-minute step aggregates plus exercise sessions.
-  - Results are cached in `DayLoadCache`: SharedPreferences `day_load`, value `"zone;cl"`.
-  - The cache key includes `age:sex`, so a profile change invalidates it.
+  - Results are cached in Room's `day_loads`; six-minute series use `day_slots`.
+  - Cache keys include the local zone and, for loads, profile inputs. Old preference caches rebuild
+    from saved records. Invalidation generations reject values computed before a sync changed inputs.
   - Only days before yesterday are cached, so late syncs still land.
 
 ## Google Health API (`googlehealth/`)
