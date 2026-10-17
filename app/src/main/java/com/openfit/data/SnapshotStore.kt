@@ -13,9 +13,9 @@ class Snapshot<T>(val value: T, val savedAt: Instant, val profileKey: String, va
  * Snapshots of computed screens per date: kept in memory for this session and in Room across launches. A row of an older
  * format is still returned while it decodes, so there is something to show before Health Connect answers.
  */
-class SnapshotStore(context: Context) {
+class SnapshotStore(context: Context, database: OpenFitDatabase = OpenFitDatabase.get(context)) {
 
-    private val dao = OpenFitDatabase.get(context).snapshots()
+    private val dao = database.snapshots()
     private val memory = object : LinkedHashMap<String, Snapshot<*>>(MEMORY_ENTRIES, 0.75f, true) {
         override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Snapshot<*>>?): Boolean = size > MEMORY_ENTRIES
     }
