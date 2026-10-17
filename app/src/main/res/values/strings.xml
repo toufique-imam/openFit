@@ -1,9 +1,37 @@
 <resources>
     <string name="app_name">openFit</string>
+    <string name="sleep_planner">Plan your sleep</string>
+    <string name="sleep_planner_body">Choose your next wake time and a window for rest. Actual sleep time can differ from the plan.</string>
+    <string name="sleep_planner_wake">Wake at %s</string>
+    <string name="sleep_planner_duration">Time in bed: %1$d h %2$d min</string>
+    <string name="sleep_planner_wind_down">Wind down: %d min</string>
+    <string name="sleep_planner_plan">Wind down · %1$s\nIn bed · %2$s\nWake up · %3$s</string>
+    <string name="sleep_planner_past">The planned bedtime has already passed. Consider a later wake time or a shorter window.</string>
+    <string name="sleep_planner_save">Save sleep schedule</string>
+    <string name="planner_less">Less</string>
+    <string name="planner_more">More</string>
+    <string name="breathe_title">Breathe</string>
+    <string name="breathe_body">Follow a gentle four-second inhale and four-second exhale at a comfortable pace. Pause whenever you need.</string>
+    <string name="breathe_ready">Ready</string>
+    <string name="breathe_in">Breathe in</string>
+    <string name="breathe_out">Breathe out</string>
+    <string name="breathe_done">Session complete</string>
+    <string name="breathe_minutes">%d min</string>
+    <string name="breathe_pause">Pause</string>
+    <string name="breathe_start">Start</string>
+    <string name="breathe_reset">Reset</string>
     <string name="today">Today</string>
     <string name="profile">Profile</string>
     <string name="previous_day">Previous day</string>
     <string name="next_day">Next day</string>
+    <string name="previous_week">Previous week</string>
+    <string name="next_week">Next week</string>
+    <string name="previous_month">Previous month</string>
+    <string name="next_month">Next month</string>
+    <string name="previous_three_months">Previous three months</string>
+    <string name="next_three_months">Next three months</string>
+    <string name="previous_year">Previous year</string>
+    <string name="next_year">Next year</string>
     <string name="pick_date">Pick a date</string>
     <string name="jump_to_today">Go to today</string>
     <string name="no_data">No data</string>
@@ -13,7 +41,7 @@
     <string name="just_now">Just now</string>
     <string name="minutes_ago">%d min ago</string>
 
-    <string name="focus_zone_minutes">Active Zone Min</string>
+    <string name="focus_zone_minutes">Effort minutes</string>
     <string name="focus_sleep">Sleep</string>
 
     <string name="section_sleep">Sleep</string>
@@ -23,7 +51,7 @@
 
     <string name="tile_sleep_duration">Sleep duration</string>
     <string name="tile_exercise_days">Exercise days</string>
-    <string name="tile_zone_minutes">Active Zone Min</string>
+    <string name="tile_zone_minutes">Effort minutes</string>
     <string name="tile_steps">Steps</string>
     <string name="tile_hourly_activity">Hourly activity</string>
     <string name="tile_distance">Distance</string>
@@ -42,10 +70,10 @@
     <string name="zone_minutes_needs_age">Set your age in Profile</string>
     <string name="week_progress">%1$s of %2$s this week</string>
     <string name="target_range">Target %1$s–%2$s</string>
-    <string name="cardio_load">Cardio load</string>
+    <string name="cardio_load">Training load</string>
     <string name="cardio_value_range">%1$s · Target %2$s–%3$s</string>
     <string name="cardio_value_no_target">%s · No target</string>
-    <string name="readiness">Daily Readiness</string>
+    <string name="readiness">Recovery score</string>
     <string name="readiness_value">%1$d · %2$s</string>
     <string name="readiness_not_enough_data">After sleep syncs</string>
     <string name="readiness_low">Low</string>
@@ -53,7 +81,7 @@
     <string name="readiness_high">High</string>
     <string name="readiness_take_it_easy">Take it easy</string>
     <string name="section_recovery">Recovery</string>
-    <string name="sex">Sex (for Cardio Load)</string>
+    <string name="sex">Sex (for Training load)</string>
     <string name="sex_male">Male</string>
     <string name="sex_female">Female</string>
     <string name="heart_resting">%d bpm resting</string>
@@ -89,10 +117,11 @@
     <string name="hc_unavailable">Health Connect is not available on this device.</string>
     <string name="hc_update_required">Health Connect needs to be installed or updated.</string>
     <string name="hc_open_store">Open Play Store</string>
-    <string name="permissions_rationale">openFit reads your activity, heart rate and sleep from Health Connect to build your dashboard. Make sure the Google Health app is syncing to Health Connect.</string>
+    <string name="permissions_rationale">Choose which Health Connect data openFit may copy to this phone. The saved copy powers your dashboard, charts and estimates.</string>
     <string name="permissions_grant">Grant access</string>
     <string name="permissions_partial">Some data types are not shared with openFit, so a few tiles may be empty.</string>
-    <string name="privacy_policy">openFit only reads health data from Health Connect to show it on this device. Nothing is uploaded or shared.</string>
+    <string name="privacy_policy_title">Privacy policy</string>
+    <string name="privacy_policy">openFit privacy policy · 17 October 2026\n\nData on this phone\nopenFit stores your profile, goals, journal, copied health records and calculated estimates in its private storage on this phone. No openFit account is required. Android backup is disabled for the app. openFit does not send your health records to its developer, advertisers or analytics services.\n\nHealth Connect\nYou choose which types openFit may read. Activity, heart measurements, sleep, nutrition, hydration, body measurements and mindfulness records support your dashboard, history and estimates. History permission allows older records to be copied. Background permission allows scheduled updates while the app is closed. openFit does not write records to Health Connect.\n\nOptional Google Health connection\nIf you choose to connect Google Health, Google handles sign-in and consent. openFit sends authorized requests to Google to download your health history and saves the returned records on this phone. Google processes those requests under its own privacy policy. This connection is optional; Health Connect and local features work without it. Disconnecting stops future Google Health reads but keeps the history already copied. You can also remove the app’s authorization in your Google Account settings.\n\nYour controls\nManage Health Connect permissions in Android settings. Revoking permission stops future reads; previously copied records remain in openFit. In Profile, Delete everything removes your profile, goals, journal, copied records and calculated screens, disconnects the optional Google Health source and returns to setup. It does not delete original records held by Health Connect, Google or another app. Non-health read-quota counters are retained to respect system limits. Uninstalling removes the app’s local storage.\n\nRetention\nCopied records stay on this phone until you delete them, remove the app or a documented cache refresh replaces them. Device access is protected by Android’s app storage controls.\n\nEstimates\nScores are informational estimates from recorded data. They are not medical diagnoses. Missing or delayed records can change them.</string>
 
     <string name="google_health_offer">Connect your Google account to copy your whole Fitbit history from the Google Health API: every day since you started, not just what Health Connect holds. It is copied once and then shown offline.</string>
     <string name="google_health_copy">Copy Fitbit history</string>
@@ -104,7 +133,7 @@
     <string name="google_health_connect">Connect Google Health</string>
     <string name="google_health_disconnect">Disconnect Google Health</string>
 
-    <!-- Cardio load detail -->
+    <!-- Training load detail -->
     <string name="cardio_tab_day">Day</string>
     <string name="cardio_tab_week">Week</string>
     <string name="cardio_tab_month">Month</string>
@@ -118,91 +147,91 @@
     <string name="cardio_in_target">In target</string>
     <string name="cardio_above_target">Above target</string>
     <string name="cardio_below_target">Below target</string>
-    <string name="cardio_day_in_target_today">Great job reaching your target load range of %1$s–%2$s! You can keep pushing for fitness gains or stop now to support recovery.</string>
-    <string name="cardio_day_in_target_past">Great job reaching your target load range of %1$s–%2$s</string>
-    <string name="cardio_day_above_today">Today’s target load is %1$s–%2$s, and you really pushed it! You may want to slow down for the day.</string>
-    <string name="cardio_day_above_past">Your target load was %1$s–%2$s, and you really pushed it</string>
-    <string name="cardio_day_below_today">Making progress. Hit your target load to keep up momentum in your training.</string>
-    <string name="cardio_day_below_today_zero">Hit your target load to keep up momentum in your training.</string>
-    <string name="cardio_day_below_past">Your target load was %1$s–%2$s</string>
-    <string name="cardio_day_no_target">Wear your device to track progress toward your fitness target</string>
+    <string name="cardio_day_in_target_today">Your training load is within today’s suggested range of %1$s–%2$s. Use how you feel to decide what comes next.</string>
+    <string name="cardio_day_in_target_past">Training load finished within the suggested range of %1$s–%2$s.</string>
+    <string name="cardio_day_above_today">Your training load has passed today’s suggested range of %1$s–%2$s. Consider making time for rest.</string>
+    <string name="cardio_day_above_past">Training load finished above the suggested range of %1$s–%2$s.</string>
+    <string name="cardio_day_below_today">Your training load is still below the suggested range. The estimate will update as activity syncs.</string>
+    <string name="cardio_day_below_today_zero">No training load is recorded yet. New activity will appear after your device syncs.</string>
+    <string name="cardio_day_below_past">Training load finished below the suggested range of %1$s–%2$s.</string>
+    <string name="cardio_day_no_target">A suggested range needs more recorded activity. Check your device sync and data permissions.</string>
     <string name="cardio_legend_target_range">Target range</string>
     <string name="cardio_legend_logged_workouts">Logged workouts</string>
     <string name="cardio_workouts">Workouts</string>
-    <string name="cardio_workout_load">Cardio load: %s</string>
-    <string name="cardio_breakdown_title">Your daily cardio load breakdown</string>
-    <string name="cardio_breakdown_subtitle">General activity that contributes to your cardio load includes things like brisk walking or chores</string>
+    <string name="cardio_workout_load">Training load: %s</string>
+    <string name="cardio_breakdown_title">Where your training load came from</string>
+    <string name="cardio_breakdown_subtitle">Load outside recorded workouts can come from everyday movement, including walking and housework.</string>
     <string name="cardio_breakdown_logged">Logged workouts · %d%%</string>
     <string name="cardio_breakdown_general">General activity · %d%%</string>
-    <string name="cardio_needs_sex">Add your sex in your profile for an accurate cardio load: effort is weighted differently for men and women.</string>
-    <string name="cardio_training_title">Your past seven days of training</string>
+    <string name="cardio_needs_sex">Add your sex in your profile for an accurate training load: effort is weighted differently for men and women.</string>
+    <string name="cardio_training_title">Your recent training pattern</string>
     <string name="learn_more">Learn more</string>
-    <string name="cardio_training_uncalibrated">Once you have 7 days of activity data, you’ll see how your cardio load is trending</string>
-    <string name="cardio_training_undertraining">You got much less cardio load, which may mean you’re focused on recovery</string>
-    <string name="cardio_training_undertraining_label">You are undertraining</string>
-    <string name="cardio_training_risk_under">You got less cardio load, which suggests you’re recovering or at risk of undertraining</string>
-    <string name="cardio_training_risk_under_label">At risk of undertraining</string>
-    <string name="cardio_training_maintaining">Your cardio load has been consistent, which is ideal for maintaining fitness</string>
-    <string name="cardio_training_maintaining_label">You are maintaining</string>
-    <string name="cardio_training_improving">You steadily increased cardio load, which is ideal for improving cardio fitness with less risk of overtraining</string>
-    <string name="cardio_training_improving_label">You are improving</string>
-    <string name="cardio_training_risk_over">You quickly increased your cardio load. Be careful – rapid increases can lead to overtraining.</string>
-    <string name="cardio_training_risk_over_label">At risk of overtraining</string>
-    <string name="cardio_training_overtraining">You rapidly increased cardio load. Slow down to avoid overtraining.</string>
-    <string name="cardio_training_overtraining_label">You are overtraining</string>
-    <string name="cardio_training_explainer">openFit compares the cardio load you earned in the past 7 days with your average week over the past 28 days. Much less than usual means you are decreasing; a rapid increase means you may be overreaching, which raises the risk of injury and fatigue.</string>
+    <string name="cardio_training_uncalibrated">Training trends appear when enough activity days have been copied.</string>
+    <string name="cardio_training_undertraining">Your recent load is well below your longer-term pattern. Planned rest or missing recordings can explain a drop.</string>
+    <string name="cardio_training_undertraining_label">Much lower load</string>
+    <string name="cardio_training_risk_under">Your recent load is below your longer-term pattern. Check for missing data when interpreting the change.</string>
+    <string name="cardio_training_risk_under_label">Lower load</string>
+    <string name="cardio_training_maintaining">Your recent load is close to your longer-term pattern.</string>
+    <string name="cardio_training_maintaining_label">Steady load</string>
+    <string name="cardio_training_improving">Your recent load has risen gradually relative to your longer-term pattern.</string>
+    <string name="cardio_training_improving_label">Gradual increase</string>
+    <string name="cardio_training_risk_over">Your recent load has risen quickly relative to your longer-term pattern. Allow time to recover between demanding days.</string>
+    <string name="cardio_training_risk_over_label">Fast increase</string>
+    <string name="cardio_training_overtraining">Your recent load is far above your longer-term pattern. Consider reducing intensity and allowing more recovery time.</string>
+    <string name="cardio_training_overtraining_label">Large increase</string>
+    <string name="cardio_training_explainer">This trend compares seven days of recorded load with your typical week over the preceding four weeks. It describes a change in recorded activity; it cannot establish whether you are gaining fitness or overtraining.</string>
     <string name="cardio_fitness_target_title">Your fitness target</string>
     <string name="cardio_adjust_target">Adjust my target</string>
-    <string name="cardio_fitness_target_maintaining">Your target is currently set to maintaining fitness. This determines how challenging your daily target load will be.</string>
-    <string name="cardio_fitness_target_improving">Your target is currently set to improving fitness. This determines how challenging your daily target load will be.</string>
-    <string name="fitness_target_question">What’s your fitness target?</string>
-    <string name="fitness_target_body">Along with your daily readiness, this is used to set your daily target cardio load</string>
-    <string name="fitness_target_improving_title">Improve cardio fitness</string>
-    <string name="fitness_target_improving_description">To increase your fitness without overtraining</string>
-    <string name="fitness_target_maintaining_title">Maintain cardio fitness</string>
-    <string name="fitness_target_maintaining_description">To keep up your current fitness level</string>
-    <string name="cardio_about_title">About cardio load</string>
-    <string name="cardio_about_body">Learn how cardio load tracks your workout effort, and how to use target load to find a better workout routine</string>
-    <string name="cardio_about_sheet">Cardio load measures how hard your heart works, from brisk walks to peak effort. Each minute your heart rate is at least 30% of your heart-rate reserve while you are moving earns load, and harder minutes earn exponentially more.\n\nYour daily target load is personalized from your cardio load over the past four weeks, your fitness target and your daily readiness. Hitting it regularly maintains your fitness; going above it from time to time builds fitness, but doing so too often raises the risk of overtraining.</string>
-    <string name="cardio_per_day_avg">cardio load per day (avg)</string>
+    <string name="cardio_fitness_target_maintaining">The Maintain setting uses your recent training as the basis for the suggested daily range.</string>
+    <string name="cardio_fitness_target_improving">The Improve setting raises the suggested range relative to your recent training.</string>
+    <string name="fitness_target_question">Choose a training direction</string>
+    <string name="fitness_target_body">Your selection and recovery score help set the suggested daily training load.</string>
+    <string name="fitness_target_improving_title">Build on recent training</string>
+    <string name="fitness_target_improving_description">Use a higher suggested load range.</string>
+    <string name="fitness_target_maintaining_title">Keep a steady routine</string>
+    <string name="fitness_target_maintaining_description">Base the range on your recent training level.</string>
+    <string name="cardio_about_title">How training load works</string>
+    <string name="cardio_about_body">See how recorded heart rate and movement become a daily effort estimate.</string>
+    <string name="cardio_about_sheet">Training load adds up effort from recorded heart rate while you are moving. Minutes above 30% of heart-rate reserve contribute, with more weight at higher intensities.\n\nThe suggested range uses the preceding four weeks of recorded load, your training direction and recovery score. Missing recordings can change the result. Treat the range as context for your routine, alongside how you feel.</string>
+    <string name="cardio_per_day_avg">training load per day (avg)</string>
     <plurals name="cardio_week_in_target">
-        <item quantity="one">You kept your cardio load within your target range on %d day</item>
-        <item quantity="other">You kept your cardio load within your target range on %d days</item>
+        <item quantity="one">Recorded load was within the suggested range on %d day</item>
+        <item quantity="other">Recorded load was within the suggested range on %d days</item>
     </plurals>
-    <string name="cardio_week_range">Over the week, your cardio load ranged from a low of %1$s to a high of %2$s</string>
-    <string name="cardio_week_empty">Wear your device multiple days to track average cardio load across the week, and better understand your training</string>
-    <string name="cardio_month_maintaining_current">Maintaining fitness</string>
-    <string name="cardio_month_maintaining_past">Maintained fitness</string>
-    <string name="cardio_month_improving_current">Improving fitness</string>
-    <string name="cardio_month_improving_past">Improved fitness</string>
-    <string name="cardio_month_overtraining_current">Overtraining</string>
-    <string name="cardio_month_overtraining_past">Overtrained</string>
-    <string name="cardio_month_undertraining_current">Undertraining</string>
-    <string name="cardio_month_undertraining_past">Undertrained</string>
-    <string name="cardio_month_maintaining_current_body">You’re on track to maintain fitness from getting regular cardio load, with an average of %s across the month. Nice job!</string>
-    <string name="cardio_month_maintaining_past_body">You stayed on track, averaging %s cardio load across the month</string>
-    <string name="cardio_month_improving_current_body">You’ve been steadily pushing for gains, averaging %s across the month. Way to go!</string>
-    <string name="cardio_month_improving_past_body">You steadily pushed for gains, averaging %s across the month</string>
-    <string name="cardio_month_overtraining_current_body">You’ve been pushing harder than you normally do, averaging %s across the month</string>
-    <string name="cardio_month_overtraining_past_body">You pushed harder than you normally do, averaging %s across the month</string>
-    <string name="cardio_month_undertraining_current_body">You’ve been getting less cardio load than you usually do, averaging %s across the month</string>
-    <string name="cardio_month_undertraining_past_body">You got less cardio load than you usually do, averaging %s across the month</string>
-    <string name="cardio_month_empty">Wear your device multiple days to track average cardio load across the month, and better understand your training</string>
+    <string name="cardio_week_range">Recorded daily load this week ran from %1$s to %2$s.</string>
+    <string name="cardio_week_empty">No weekly load summary is available. Sync more recorded activity to build a history.</string>
+    <string name="cardio_month_maintaining_current">Steady load</string>
+    <string name="cardio_month_maintaining_past">Steady load</string>
+    <string name="cardio_month_improving_current">Gradual increase</string>
+    <string name="cardio_month_improving_past">Gradual increase</string>
+    <string name="cardio_month_overtraining_current">Large increase</string>
+    <string name="cardio_month_overtraining_past">Large increase</string>
+    <string name="cardio_month_undertraining_current">Lower load</string>
+    <string name="cardio_month_undertraining_past">Lower load</string>
+    <string name="cardio_month_maintaining_current_body">Your recorded load is close to your recent pattern, averaging %s per day this month.</string>
+    <string name="cardio_month_maintaining_past_body">Recorded load stayed near your recent pattern, with a daily average of %s.</string>
+    <string name="cardio_month_improving_current_body">Your recorded load is increasing gradually, with a daily average of %s this month.</string>
+    <string name="cardio_month_improving_past_body">Recorded load rose gradually, with a daily average of %s.</string>
+    <string name="cardio_month_overtraining_current_body">Your recorded load is well above your recent pattern, averaging %s per day this month.</string>
+    <string name="cardio_month_overtraining_past_body">Recorded load was well above your recent pattern, with a daily average of %s.</string>
+    <string name="cardio_month_undertraining_current_body">Your recorded load is below your recent pattern, averaging %s per day this month.</string>
+    <string name="cardio_month_undertraining_past_body">Recorded load was below your recent pattern, with a daily average of %s.</string>
+    <string name="cardio_month_empty">No monthly load summary is available. More recorded activity is needed.</string>
     <string name="daily_average">Daily average</string>
-    <string name="cardio_year_range">Across the year, your daily average ranged from %1$s to %2$s. Over time, increasing cardio load can increase your overall fitness.</string>
-    <string name="cardio_year_empty">Wear your device multiple months to track average cardio load across the year, and better understand your training</string>
+    <string name="cardio_year_range">Monthly daily averages ran from %1$s to %2$s this year. Compare the pattern with your routine and any gaps in recorded data.</string>
+    <string name="cardio_year_empty">No yearly load summary is available. Copied activity will appear here as your history fills in.</string>
     <string name="cardio_backfilling">Calculating past days…</string>
 
-    <!-- Daily Readiness detail -->
+    <!-- Recovery score detail -->
     <string name="readiness_high_label">High readiness</string>
     <string name="readiness_moderate_label">Moderate readiness</string>
     <string name="readiness_low_label">Low readiness</string>
-    <string name="readiness_day_high">A high score indicates that your body is well recovered based on sleep and heart rate</string>
-    <string name="readiness_day_moderate">Moderate readiness means your recovery signals were usual for you. Your body is ready for a workout.</string>
-    <string name="readiness_day_low">A low score indicates your body may need time to rest and recover</string>
-    <string name="readiness_day_none">To get a readiness score, make sure you wear your device to sleep</string>
-    <string name="readiness_impact_title">What impacted your readiness</string>
-    <string name="readiness_impact_subtitle">openFit looks at key indicators of recovery to give you a readiness score each day</string>
+    <string name="readiness_day_high">Sleep and heart-rate signals are favourable relative to your recent baseline.</string>
+    <string name="readiness_day_moderate">Sleep and heart-rate signals are near your recent baseline. Consider how you feel when planning activity.</string>
+    <string name="readiness_day_low">Sleep or heart-rate signals differ from your recent baseline. A lighter day may be helpful.</string>
+    <string name="readiness_day_none">A recovery score needs synced sleep and heart-rate measurements. Check that your device records them overnight.</string>
+    <string name="readiness_impact_title">Signals behind this score</string>
+    <string name="readiness_impact_subtitle">Your score combines recorded sleep, resting heart rate and heart rate variability relative to your own history.</string>
     <string name="readiness_hrv_title">Heart rate variability (HRV)</string>
     <string name="readiness_sleep_title">Past week of sleep</string>
     <string name="readiness_rhr_title">Resting heart rate (RHR)</string>
@@ -216,17 +245,17 @@
     <string name="sleep_good">Good</string>
     <string name="sleep_fair">Fair</string>
     <string name="sleep_poor">Poor</string>
-    <string name="readiness_about_title">About Daily Readiness</string>
-    <string name="readiness_about_body">Your Daily Readiness score ranges from 1–100 and helps you understand how ready you are to work out</string>
-    <string name="readiness_about_sheet">Daily Readiness compares last night’s heart rate variability, your resting heart rate and your past week of sleep with your own 30-day baseline. Wear your device to sleep for at least a week to get a reliable score.\n\nLow (1–29): prioritize recovery, with lighter exercise like stretching or yoga.\nModerate (30–64): your recovery signals are about usual; your body is balancing exercise and stress with recovery.\nHigh (65–100): your body is well rested and recovered.</string>
+    <string name="readiness_about_title">How the recovery score works</string>
+    <string name="readiness_about_body">A 1–100 estimate of recent recovery signals, calculated on your phone.</string>
+    <string name="readiness_about_sheet">The recovery score compares overnight heart rate variability, resting heart rate and a week of sleep with your recent baseline. More consistent overnight recordings make comparisons more useful.\n\n1–29: signals suggest allowing more recovery.\n30–64: signals are near your usual pattern.\n65–100: signals are favourable relative to your baseline.\n\nThis estimate cannot determine whether exercise is safe or how recovered you feel.</string>
     <string name="readiness_mostly_high">Mostly high</string>
     <string name="readiness_mostly_moderate">Mostly moderate</string>
     <string name="readiness_mostly_low">Mostly low</string>
     <string name="readiness_mixed">Mixed</string>
-    <string name="readiness_mostly_high_body">High readiness means you were rested, recovered, and primed to work out</string>
-    <string name="readiness_mostly_moderate_body">Moderate readiness indicates a healthy balance between exercise and recovery</string>
-    <string name="readiness_mostly_low_body">Low readiness scores might suggest you’d benefit from more recovery time, or lighter workouts</string>
-    <string name="readiness_mixed_body">A mix of moderate and low readiness scores could be a sign that you’re challenging yourself. Your body needs time to recover and adapt.</string>
+    <string name="readiness_mostly_high_body">Most recorded days had favourable recovery signals relative to your baseline.</string>
+    <string name="readiness_mostly_moderate_body">Most recorded days had recovery signals near your usual pattern.</string>
+    <string name="readiness_mostly_low_body">Most recorded days had signals suggesting more recovery time. Check sleep, recordings and how you feel.</string>
+    <string name="readiness_mixed_body">Recovery signals varied across the recorded days. Compare the changes with sleep and your routine.</string>
     <string name="readiness_legend_moderate">30 - 64 Moderate</string>
     <string name="readiness_legend_high">65–100 High</string>
 
@@ -282,7 +311,8 @@
     <string name="heart_about_body">Being physically active is one way to keep your heart healthy. Heart health is an important part of your overall good health.</string>
     <string name="heart_about_sheet">Your heart rate shows how hard your heart is working. A lower resting heart rate usually means a fitter heart, and regular time in the moderate zone and above strengthens it.\n\nopenFit reads the heart rate your device writes to Health Connect and places each minute in a zone based on your heart-rate reserve.</string>
     <string name="heart_rhr_sheet">Resting heart rate is the number of times your heart beats per minute while you are still and well rested, usually measured while you sleep. For most adults it is between 60 and 100 bpm; fitter people tend to have lower rates. A rate well above your usual can be a sign of illness, stress or too little recovery.</string>
-    <string name="heart_zones_sheet">openFit sets your zones from your heart-rate reserve (max heart rate 220 − age, minus your resting rate): moderate from 40 %, vigorous from 60 % and peak from 85 %. Below moderate is the light zone.</string>
+    <string name="heart_zones_sheet" formatted="false">openFit sets your zones from your heart-rate reserve (max heart rate 220 − age, minus your resting rate): moderate from 40 %, vigorous from 60 % and peak from 85 %. Below moderate is the light zone.</string>
+    <string name="recorded_energy_note">Energy totals include recorded intervals only. Gaps are left unestimated, so partial days may be lower than totals that include estimated resting energy.</string>
     <string name="heart_chip_resting">Resting heart rate</string>
     <string name="heart_chip_zones">Heart rate zones</string>
     <string name="heart_bpm_avg">bpm (avg)</string>
@@ -489,10 +519,10 @@
     <string name="hm_above_range">Above personal range</string>
     <string name="hm_below_range">Below personal range</string>
 
-    <!-- Active Zone Minutes detail -->
-    <string name="azm_title">Active Zone Min</string>
-    <string name="unit_zone_minutes">Zone min</string>
-    <string name="unit_zone_minutes_long">Zone minutes</string>
+    <!-- Effort minutes detail -->
+    <string name="azm_title">Effort minutes</string>
+    <string name="unit_zone_minutes">Effort min</string>
+    <string name="unit_zone_minutes_long">Effort minutes</string>
     <string name="azm_weekly_target">Weekly target</string>
     <string name="azm_aha">The American Heart Association (AHA) recommends 150 minutes of moderate activity or 75 minutes of vigorous activity per week.</string>
     <string name="azm_week_progress">%1$d%% · %2$s of %3$d target minutes · %4$s</string>
@@ -523,7 +553,7 @@
     <string name="goal_fitness">Fitness goal</string>
     <string name="goal_fitness_maintain">Maintain</string>
     <string name="goal_fitness_improve">Improve</string>
-    <string name="goal_fitness_body">Sets your daily Cardio Load target and your weekly Active Zone Minutes goal.</string>
+    <string name="goal_fitness_body">Sets your daily Training load target and your weekly Effort minutes goal.</string>
     <string name="goal_value_days">%d days</string>
     <string name="goal_meta_daily">Daily</string>
     <string name="goal_meta_weekly">Weekly</string>
@@ -567,7 +597,7 @@
     <string name="journal_edit_behaviours">Edit behaviours</string>
     <string name="journal_insights">Insights</string>
     <string name="journal_insights_body">How each behaviour goes with your next day over the last 90 days. This is an association, not proof of cause.</string>
-    <string name="journal_insights_loading">Reading your scores from Health Connect…</string>
+    <string name="journal_insights_loading">Reading your saved scores…</string>
     <string name="journal_outcome_readiness">Readiness</string>
     <string name="journal_outcome_hrv">HRV</string>
     <string name="journal_verdict_higher">Higher %s the next day</string>
@@ -632,10 +662,10 @@
     <string name="behaviour_menstruating">Menstruating</string>
     <string name="behaviour_menstruating_q">Menstruating?</string>
 
-    <!-- Energy Bank -->
-    <string name="energy_title">Energy Bank</string>
+    <!-- Vitality reserve -->
+    <string name="energy_title">Vitality reserve</string>
     <string name="energy_loading">Loading…</string>
-    <string name="energy_calibrating">Calibrating: Energy Bank shows after a week of wearing your device.</string>
+    <string name="energy_calibrating">Calibrating: Vitality reserve shows after a week of wearing your device.</string>
     <string name="energy_calibrating_short">Calibrating</string>
     <string name="energy_band_plenty">Plenty in reserve</string>
     <string name="energy_band_pace">Pace yourself</string>
@@ -650,22 +680,12 @@
     <string name="energy_peak_avg">% peak per day (avg)</string>
     <string name="energy_peak_body">Your highest level each day, usually after sleep.</string>
     <string name="energy_peak_list">Daily peak</string>
-    <string name="energy_about_title">About Energy Bank</string>
+    <string name="energy_about_title">About Vitality reserve</string>
     <string name="energy_about_body">An estimate of your energy in reserve, from 1 to 100%. Sleep charges it; stress and workouts drain it.</string>
-    <string name="energy_sheet">Energy Bank moves every 6 minutes.
+    <string name="energy_sheet">Vitality reserve updates in six-minute intervals. Recorded sleep adds to the estimate; calm waking periods can add a little, while elevated heart rate and workouts reduce it.\n\nA 7.5-hour night adds roughly 40 points before the limit near 100 slows charging. The level carries across midnight and appears after a week of recordings.\n\nThese are openFit model settings. The estimate cannot observe mental effort that leaves heart rate unchanged, or measure the effects of food and caffeine directly.</string>
 
-Asleep: a full 7.5-hour night charges about 40 points.
-
-Awake and calm: when your heart rate sits low among your usual awake heart rates of the last 30 days, the bank charges a little.
-
-Awake and stressed: a higher heart rate drains it, faster the higher it ranks; about 55 points over a waking day at middling stress. Workouts drain through the same heart rate.
-
-Charging slows as the bank fills and draining as it empties, and the level carries over midnight. It shows after a week of wearing your device. The rates are tuned to match Pulse.
-
-It is a model, not a measurement: it cannot see mental effort that leaves your heart rate unchanged, food or caffeine.</string>
-
-    <!-- Pulse Age -->
-    <string name="age_title">Pulse Age</string>
+    <!-- Health age -->
+    <string name="age_title">Health age</string>
     <string name="age_years">years</string>
     <string name="age_younger">%1$s years younger than your age, %2$d</string>
     <string name="age_older">%1$s years older than your age, %2$d</string>
@@ -678,7 +698,7 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
     <string name="age_average">28-day average: %s</string>
     <string name="age_per_week">%s a week</string>
     <string name="age_per_day">%s a day</string>
-    <string name="age_needs_profile">Pulse Age compares you with people of your age and sex. Add both in your profile.</string>
+    <string name="age_needs_profile">Health age compares you with people of your age and sex. Add both in your profile.</string>
     <string name="age_tile_needs_profile">Add age and sex</string>
     <string name="age_tile_window">Last 28 days</string>
     <string name="age_group_sleep">Sleep</string>
@@ -693,9 +713,9 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
     <string name="age_factor_vo2max">VO2 max</string>
     <string name="age_factor_resting_hr">Resting heart rate</string>
     <string name="age_factor_body_fat">Body fat</string>
-    <string name="age_about_title">About Pulse Age</string>
-    <string name="age_about_body">How old your body behaves, from nine habits and vitals compared with references for your age and sex.</string>
-    <string name="age_sheet">Each input maps to a change in the risk of dying from any cause, against a reference for your age and sex, using published studies: VO2 max (Kodama 2009), resting heart rate (Zhang 2016), steps (Paluch 2022), sleep hours (Saint-Maurice 2024), sleep consistency (Windred 2024), moderate and vigorous minutes (Arem 2015, Ahmadi 2022), strength training (Momma 2022) and body fat (Jayedi 2022).\n\nThe changes add up and turn into years: about 5 years per unit of log hazard ratio, half the 10 a year of age implies, because separate studies overstate their joint effect. Inputs without data are left out and the ones present scaled up to stand for all nine; at least 5 are needed. Pulse Age stays within 15 years of your age.\n\nModerate minutes are openFit’s fat-burn and cardio zones, vigorous the peak zone. Strength counts strength, weight, calisthenics, HIIT, Pilates and yoga workouts.\n\nIt rests on population studies, not a clinical test of your body.</string>
+    <string name="age_about_title">About Health age</string>
+    <string name="age_about_body">An age-style estimate from recorded habits and vitals, compared with population reference values.</string>
+    <string name="age_sheet">Each input maps to a change in the risk of dying from any cause, against a reference for your age and sex, using published studies: VO2 max (Kodama 2009), resting heart rate (Zhang 2016), steps (Paluch 2022), sleep hours (Saint-Maurice 2024), sleep consistency (Windred 2024), moderate and vigorous minutes (Arem 2015, Ahmadi 2022), strength training (Momma 2022) and body fat (Jayedi 2022).\n\nThe changes add up and turn into years: about 5 years per unit of log hazard ratio, half the 10 a year of age implies, because separate studies overstate their joint effect. Inputs without data are left out and the ones present scaled up to stand for all nine; at least 5 are needed. Health age stays within 15 years of your age.\n\nModerate minutes are openFit’s fat-burn and cardio zones, vigorous the peak zone. Strength counts strength, weight, calisthenics, HIIT, Pilates and yoga workouts.\n\nIt rests on population studies, not a clinical test of your body.</string>
 
     <!-- Stress and mindfulness -->
     <string name="section_stress_mindfulness">Stress and mindfulness</string>
@@ -704,16 +724,18 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
     <string name="unit_bpm_range">BPM</string>
 
     <!-- Stress -->
-    <string name="stress_title">Stress</string>
+    <string name="stress_title">Body stress</string>
+    <string name="stress_hrv">Overnight HRV · %s ms</string>
+    <string name="stress_hrv_context">HRV is shown alongside your day for context. The body stress score uses heart rate only.</string>
     <string name="stress_low">Low</string>
     <string name="stress_medium">Medium</string>
     <string name="stress_high">High</string>
     <string name="stress_calibrating">Stress shows after 5 days of wearing your device.</string>
     <string name="stress_day_average">Day average</string>
     <string name="stress_average_label">per day (avg)</string>
-    <string name="stress_about_title">About stress</string>
-    <string name="stress_about_body">How hard your body is working while you are not exercising, from 0 to 100, from your heart rate against your own usual.</string>
-    <string name="stress_sheet">Each 6-minute stretch of your day gets a stress score: where its heart rate ranks among your awake, non-workout heart rates of the last 30 days. The higher it ranks, the higher the stress.\n\n0-29 Low: calm.\n30-59 Medium: more active than your calm level.\n60-100 High: well above your usual heart rate while you are not exercising.\n\nToday shows the latest reading; past days show the day\'s average. Workouts show no stress. It needs 5 days of data.\n\nIt reads heart rate only, so caffeine, heat, illness or walking about raise it too. It is not a measure of how you feel. Modelled on Pulse\'s Stress Monitor.</string>
+    <string name="stress_about_title">Understanding body stress</string>
+    <string name="stress_about_body">Higher means more physiological stress: heart rate is elevated relative to your usual non-workout readings. Lower means calmer readings.</string>
+    <string name="stress_sheet">Body stress rises when your heart rate is high relative to your own awake, non-workout readings from the preceding 30 days. Higher values mean more physiological stress; this is not a score where higher means better stress management.\n\nThe heart-rate rank is scaled by 0.75. Values under 30 are labelled Low, 30–59 Medium, and 60 or more High.\n\nToday shows the latest six-minute reading; past days show an average. Workouts are excluded, and five recorded days are needed.\n\nHeat, caffeine, illness and ordinary movement can raise heart rate. This estimate does not measure emotions or diagnose stress.</string>
 
     <!-- Cardio fitness -->
     <string name="fitness_poor">Poor</string>
@@ -726,8 +748,8 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
 
     <!-- Customize Today -->
     <string name="customize_title">Customize Today</string>
-    <string name="customize_focus">Set your focus</string>
-    <string name="customize_show_hide">Show/hide other metrics</string>
+    <string name="customize_focus">Dashboard highlights</string>
+    <string name="customize_show_hide">Cards on Today</string>
     <string name="customize_move_up">Move %s up</string>
     <string name="customize_move_down">Move %s down</string>
     <string name="customize_tabs">Bottom bar</string>
@@ -736,16 +758,16 @@ It is a model, not a measurement: it cannot see mental effort that leaves your h
     <string name="customize_health_connect">Health Connect settings</string>
     <string name="customize_health_connect_body">Choose which data openFit can read</string>
     <string name="close">Close</string>
-    <string name="focus_build_cardio">Build cardio fitness</string>
-    <string name="focus_get_active">Get more active</string>
-    <string name="focus_sleep_better">Sleep better</string>
-    <string name="focus_manage_weight">Manage weight</string>
-    <string name="focus_manage_stress">Manage stress</string>
-    <string name="focus_heart_health">Improve heart health</string>
+    <string name="focus_build_cardio">Training routine</string>
+    <string name="focus_get_active">Everyday movement</string>
+    <string name="focus_sleep_better">Nightly rest</string>
+    <string name="focus_manage_weight">Weight and nutrition</string>
+    <string name="focus_manage_stress">Calm and recovery</string>
+    <string name="focus_heart_health">Heart and fitness</string>
     <string name="focus_custom">Custom focus</string>
     <string name="focus_add_metrics">Add metrics</string>
-    <string name="focus_readiness">Readiness</string>
-    <string name="focus_zone_min_short">Zone Min</string>
+    <string name="focus_readiness">Recovery</string>
+    <string name="focus_zone_min_short">Effort min</string>
     <string name="custom_metric">Metric #%d</string>
     <string name="custom_off">Off</string>
     <string name="tab_recovery">Recovery</string>
@@ -777,7 +799,7 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
 
     <!-- Onboarding -->
     <string name="onboarding_welcome_title">Your day, scored on your phone</string>
-    <string name="onboarding_welcome_body">Cardio load, readiness, sleep and more, worked out from Health Connect right here.</string>
+    <string name="onboarding_welcome_body">Training load, readiness, sleep and more, worked out from Health Connect right here.</string>
     <string name="onboarding_get_started">Get started</string>
     <string name="onboarding_private">Stays on this phone. No account needed.</string>
     <string name="onboarding_profile_title">A few details for your scores</string>
@@ -788,14 +810,14 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="onboarding_name_help">Shown on the You tab. Stays on this phone.</string>
     <string name="onboarding_birth_date">Birth date</string>
     <string name="onboarding_birth_date_hint">Choose your birth date</string>
-    <string name="onboarding_birth_date_help">For heart rate zones, cardio load and VO2 max.</string>
+    <string name="onboarding_birth_date_help">For heart rate zones, training load and VO2 max.</string>
     <string name="onboarding_sex_help">Sex at birth. Reference ranges differ by sex.</string>
     <string name="onboarding_sex">Sex</string>
     <string name="onboarding_units">Units</string>
     <string name="onboarding_units_help">For distance and weight.</string>
     <string name="onboarding_save_continue">Save and continue</string>
     <string name="onboarding_reads_title">What openFit reads</string>
-    <string name="onboarding_reads_body">From Health Connect, kept on this phone. openFit copies the last year once, then only what is new.</string>
+    <string name="onboarding_reads_body">With your permission, openFit saves a local copy of Health Connect data. It imports the latest year first, then older available history in the background.</string>
     <string name="onboarding_reads_activity">Steps, distance, floors and workouts</string>
     <string name="onboarding_reads_heart">Heart rate, resting heart rate and HRV</string>
     <string name="onboarding_reads_sleep">Sleep and its stages</string>
@@ -806,7 +828,7 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="onboarding_connect">Connect Health Connect</string>
     <string name="onboarding_not_now">Not now</string>
     <string name="onboarding_import_title">Getting your data ready</string>
-    <string name="onboarding_import_body">Copying the last year from Health Connect and working out your scores. Older history follows in the background.</string>
+    <string name="onboarding_import_body">Copying the latest year and calculating your scores. Older available history follows in the background.</string>
     <string name="onboarding_import_reading">Reading Health Connect…</string>
     <string name="onboarding_import_scoring">Working out your scores…</string>
     <string name="onboarding_import_finishing">Almost done…</string>
@@ -843,6 +865,10 @@ The bands compare you with people of your age and sex in the FRIEND treadmill re
     <string name="hc_partial">Showing saved days. Health Connect is limiting reads, so some are missing for now.</string>
     <!-- Sync -->
     <string name="sync_title">Health Connect data</string>
+    <string name="sync_show_types">Show copied data types</string>
+    <string name="sync_hide_types">Hide copied data types</string>
+    <string name="sync_type_coverage">%1$s · %2$s to %3$s · %4$d days copied</string>
+    <string name="sync_other_type">Other health data</string>
     <string name="sync_since">Saved on this phone from %s</string>
     <string name="sync_not_imported">Not copied yet. Sync reads everything Health Connect has.</string>
     <string name="sync_last">Last read %s</string>
