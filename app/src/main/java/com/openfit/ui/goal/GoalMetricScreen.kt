@@ -92,9 +92,14 @@ fun GoalMetricRoute(viewModel: GoalMetricViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 if (current.period == ChartPeriod.Day) dayContent(current, setGoal) else periodContent(current)
+                if (current.metric == GoalMetric.Energy) item {
+                    Text(stringResource(R.string.recorded_energy_note), style = MaterialTheme.typography.bodyMedium,
+                        color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(horizontal = PagePadding, vertical = 16.dp))
+                }
             }
         }
     }
@@ -216,11 +221,12 @@ private fun WeeklyTarget(state: GoalMetricUiState.Ready) {
             color = OpenFitColors.OnSurface,
             modifier = Modifier.padding(top = 16.dp),
         )
+        val palette0 = OpenFitColors
         Canvas(Modifier.fillMaxWidth().padding(top = 8.dp).height(10.dp)) {
             val track = 4.dp.toPx()
-            drawRoundRect(OpenFitColors.Mint.track, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
+            drawRoundRect(palette0.Mint.track, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
             val share = (total / target).coerceIn(0.0, 1.0).toFloat()
-            if (share > 0f) drawRoundRect(OpenFitColors.Mint.accent, size = Size(maxOf(size.width * share, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
+            if (share > 0f) drawRoundRect(palette0.Mint.accent, size = Size(maxOf(size.width * share, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
         }
     }
 }
@@ -288,7 +294,7 @@ private val GoalMetric.format: (Double) -> String
 
 /** Fitbit's colors: activity in mint, water in blue, food in pink. */
 private val GoalMetric.color: MetricColor
-    get() = when (this) {
+    @Composable get() = when (this) {
         GoalMetric.Water -> OpenFitColors.Blue
         GoalMetric.Food -> OpenFitColors.Pink
         else -> OpenFitColors.Mint

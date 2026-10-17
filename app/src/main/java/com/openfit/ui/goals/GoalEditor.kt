@@ -38,8 +38,6 @@ import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
 import com.openfit.profile.WeightUnit
 import com.openfit.ui.theme.OpenFitColors
-import com.openfit.ui.today.oneDecimal
-import com.openfit.ui.today.twoDecimals
 import java.time.LocalTime
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
@@ -93,7 +91,7 @@ private fun GoalInput(goal: Goal, profile: Profile, onChange: (Profile?) -> Unit
         }
         Goal.Distance -> NumberGoal(
             if (imperial) R.string.goal_input_distance_mi else R.string.goal_input_distance_km,
-            profile.dailyDistanceGoalMeters?.let { twoDecimals(if (imperial) it / METERS_PER_MILE else it / 1_000) },
+            profile.dailyDistanceGoalMeters?.let { goalNumberText(if (imperial) it / METERS_PER_MILE else it / 1_000) },
             0.01..500.0,
             decimal = true,
         ) { onChange(it?.let { value -> profile.copy(dailyDistanceGoalMeters = if (imperial) value * METERS_PER_MILE else value * 1_000) }) }
@@ -114,13 +112,13 @@ private fun GoalInput(goal: Goal, profile: Profile, onChange: (Profile?) -> Unit
         }
         Goal.Water -> NumberGoal(
             if (imperial) R.string.goal_input_water_oz else R.string.goal_input_water_ml,
-            profile.dailyWaterGoalLiters?.let { if (imperial) oneDecimal(it * FL_OZ_PER_LITER) else (it * 1_000).roundToInt().toString() },
+            profile.dailyWaterGoalLiters?.let { if (imperial) goalNumberText(it * FL_OZ_PER_LITER, 1) else (it * 1_000).roundToInt().toString() },
             1.0..20_000.0,
             decimal = imperial,
         ) { onChange(it?.let { value -> profile.copy(dailyWaterGoalLiters = if (imperial) value / FL_OZ_PER_LITER else value / 1_000) }) }
         Goal.Weight -> NumberGoal(
             if (pounds) R.string.goal_input_weight_lb else R.string.goal_input_weight_kg,
-            profile.weightGoalKg?.let { oneDecimal(if (pounds) it * POUNDS_PER_KG else it) },
+            profile.weightGoalKg?.let { goalNumberText(if (pounds) it * POUNDS_PER_KG else it, 1) },
             1.0..700.0,
             decimal = true,
         ) { onChange(it?.let { value -> profile.copy(weightGoalKg = if (pounds) value / POUNDS_PER_KG else value) }) }
@@ -135,10 +133,10 @@ private fun GoalInput(goal: Goal, profile: Profile, onChange: (Profile?) -> Unit
 
 @Composable
 private fun NumberGoal(label: Int, initial: String?, range: ClosedFloatingPointRange<Double>, decimal: Boolean = false, onChange: (Double?) -> Unit) {
-    var text by remember { mutableStateOf(initial.orEmpty().filter { it.isDigit() || it == '.' }) }
+    var text by remember { mutableStateOf(initial.orEmpty()) }
     NumberField(stringResource(label), text, decimal) { input ->
         text = input
-        onChange(input.toDoubleOrNull()?.takeIf { it in range })
+        onChange(parseGoalNumber(input, decimal)?.takeIf { it in range })
     }
 }
 
@@ -146,7 +144,7 @@ private fun NumberGoal(label: Int, initial: String?, range: ClosedFloatingPointR
 private fun NumberField(label: String, value: String, decimal: Boolean, modifier: Modifier = Modifier, onValueChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
-        onValueChange = { input -> onValueChange(input.filter { it.isDigit() || (decimal && it == '.') }) },
+        onValueChange = onValueChange,
         label = { Text(label) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = if (decimal) KeyboardType.Decimal else KeyboardType.Number),
