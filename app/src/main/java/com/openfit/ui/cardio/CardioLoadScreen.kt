@@ -78,11 +78,11 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import kotlin.math.roundToInt
 
-private val ACCENT = OpenFitColors.Mint.accent
-private val TEAL = Color(0xFF008773)
-private val TRAINING_COLORS = listOf(WorkoutYellow, ACCENT, ACCENT, TEAL, TEAL, WorkoutYellow)
+private val ACCENT @Composable get() = OpenFitColors.Mint.accent
+private val TEAL @Composable get() = OpenFitColors.Blue.accent
+private val TRAINING_COLORS @Composable get() = listOf(WorkoutYellow, ACCENT, ACCENT, TEAL, TEAL, WorkoutYellow)
 private val CLOCK = DateTimeFormatter.ofPattern("h:mm a")
-private val BREAKDOWN_TRACK = Color(0xFF292D2C)
+private val BREAKDOWN_TRACK @Composable get() = OpenFitColors.OnSurface.copy(alpha = 0.12f)
 
 @Composable
 fun CardioLoadRoute(viewModel: CardioLoadViewModel, onBack: () -> Unit) {
@@ -115,7 +115,7 @@ fun CardioLoadScreen(
             CardioLoadUiState.Loading -> DetailLoading(ACCENT)
             is CardioLoadUiState.Failed -> DetailFailed(state.message)
             is CardioLoadUiState.Ready -> DetailList(state.period, state.anchor) {
-                item { PeriodNavigator(periodLabel(state.period, state.anchor, state.today), state.canGoForward, onShift) }
+                item { PeriodNavigator(periodLabel(state.period, state.anchor, state.today), state.canGoForward, onShift, period = state.period) }
                 when (state.period) {
                     ChartPeriod.Day -> dayContent(state, onAdjustTarget = { choosingGoal = true }, onLearnMore = { sheet = it })
                     else -> periodContent(state)
@@ -179,7 +179,7 @@ private fun LazyListScope.dayContent(state: CardioLoadUiState.Ready, onAdjustTar
             GroupedCard(index, workouts.size, minHeight = 92.dp) {
                 Row(Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                     Text(
-                        workout.start.atZone(ZoneId.systemDefault()).toLocalTime().format(CLOCK).lowercase(Locale.getDefault()),
+                        workout.start.atZone(ZoneId.systemDefault()).toLocalTime().format(CLOCK).lowercase(com.openfit.ui.currentLocale()),
                         style = MaterialTheme.typography.titleSmall,
                         color = OpenFitColors.OnSurface,
                     )
@@ -274,10 +274,12 @@ private fun ShareBar(label: String, fraction: Float, modifier: Modifier = Modifi
     Column(modifier) {
         Text(label, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
         // A 4dp track with a 10dp pill on top, as Fitbit draws the breakdown.
+        val accent0 = ACCENT
+        val breakdownTrack0 = BREAKDOWN_TRACK
         Canvas(Modifier.fillMaxWidth().padding(top = 10.dp).height(10.dp)) {
             val track = 4.dp.toPx()
-            drawRoundRect(BREAKDOWN_TRACK, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
-            if (fraction > 0f) drawRoundRect(ACCENT, size = Size(maxOf(size.width * fraction, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
+            drawRoundRect(breakdownTrack0, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
+            if (fraction > 0f) drawRoundRect(accent0, size = Size(maxOf(size.width * fraction, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
         }
     }
 }
@@ -309,24 +311,26 @@ private fun TrainingSection(training: TrainingView, onLearnMore: () -> Unit) {
 
 @Composable
 private fun TrainingBar(position: Float, modifier: Modifier = Modifier) {
+    val palette1 = OpenFitColors
+    val trainingColors1 = TRAINING_COLORS
     Canvas(modifier.fillMaxWidth().height(14.dp)) {
         val gap = 1.dp.toPx()
         val barHeight = 10.dp.toPx()
         val top = (size.height - barHeight) / 2
-        val segment = (size.width - gap * (TRAINING_COLORS.size - 1)) / TRAINING_COLORS.size
+        val segment = (size.width - gap * (trainingColors1.size - 1)) / trainingColors1.size
         val end = CornerRadius(barHeight / 2)
-        TRAINING_COLORS.forEachIndexed { index, color ->
+        trainingColors1.forEachIndexed { index, color ->
             val left = index * (segment + gap)
             val first = if (index == 0) end else CornerRadius.Zero
-            val last = if (index == TRAINING_COLORS.lastIndex) end else CornerRadius.Zero
+            val last = if (index == trainingColors1.lastIndex) end else CornerRadius.Zero
             val path = Path().apply {
                 addRoundRect(RoundRect(left, top, left + segment, top + barHeight, first, last, last, first))
             }
             drawPath(path, color)
         }
         val center = Offset(position.coerceIn(0f, 1f) * size.width, size.height / 2)
-        drawCircle(OpenFitColors.Background, radius = 6.dp.toPx(), center = center)
-        drawCircle(OpenFitColors.OnSurface, radius = 4.dp.toPx(), center = center)
+        drawCircle(palette1.Background, radius = 6.dp.toPx(), center = center)
+        drawCircle(palette1.OnSurface, radius = 4.dp.toPx(), center = center)
     }
 }
 

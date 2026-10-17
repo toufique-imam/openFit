@@ -58,8 +58,8 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val ACCENT = OpenFitColors.Mint
-private val CHIP_SELECTED = Color(0xFF1F3D37)
+private val ACCENT @Composable get() = OpenFitColors.Mint
+private val CHIP_SELECTED @Composable get() = OpenFitColors.PrimaryContainer
 
 /** The Journal tab: the day's check-in, then how each behaviour goes with the next day's scores. */
 @Composable
@@ -106,7 +106,7 @@ fun JournalRoute(viewModel: JournalViewModel, onEditBehaviours: () -> Unit, onBa
             )
         }
         item {
-            val labels = state.week.map { it.first.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()) }
+            val labels = state.week.map { it.first.dayOfWeek.getDisplayName(TextStyle.NARROW, com.openfit.ui.currentLocale()) }
             Row(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 16.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     stringResource(R.string.journal_week_count, state.week.count { it.second }),

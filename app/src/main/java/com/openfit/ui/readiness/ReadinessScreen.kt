@@ -56,7 +56,7 @@ import com.openfit.ui.today.ArcGauge
 import com.openfit.ui.today.IconBadge
 import kotlin.math.abs
 
-private val ACCENT = OpenFitColors.Lavender.accent
+private val ACCENT @Composable get() = OpenFitColors.Lavender.accent
 private val GUIDES = listOf(30.0, 65.0)
 
 @Composable
@@ -80,6 +80,7 @@ fun ReadinessRoute(viewModel: ReadinessViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 if (current.period == ChartPeriod.Day) dayContent(current) else periodContent(current)

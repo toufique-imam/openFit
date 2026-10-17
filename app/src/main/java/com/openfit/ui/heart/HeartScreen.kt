@@ -84,8 +84,8 @@ import kotlin.math.ceil
 import kotlin.math.floor
 import kotlin.math.roundToInt
 
-private val ACCENT = OpenFitColors.Blue.accent
-private val TRACK = Color(0xFF292D2C)
+private val ACCENT @Composable get() = OpenFitColors.Blue.accent
+private val TRACK @Composable get() = OpenFitColors.OnSurface.copy(alpha = 0.12f)
 private val PERIODS = listOf(ChartPeriod.Day, ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.ThreeMonths, ChartPeriod.Year)
 
 @Composable
@@ -110,6 +110,7 @@ fun HeartRoute(viewModel: HeartViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 if (current.period == ChartPeriod.Day) {
@@ -229,9 +230,10 @@ private fun quantity(value: String, unit: String) = buildAnnotatedString {
 private fun ZoneBar(label: String, fraction: Float, color: Color) {
     Column(Modifier.padding(top = 12.dp)) {
         Text(label, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+        val track0 = TRACK
         Canvas(Modifier.fillMaxWidth().padding(top = 10.dp).height(10.dp)) {
             val track = 4.dp.toPx()
-            drawRoundRect(TRACK, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
+            drawRoundRect(track0, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
             if (fraction > 0f) drawRoundRect(color, size = Size(maxOf(size.width * fraction, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
         }
     }
@@ -348,7 +350,7 @@ private fun ModeChip(label: String, selected: Boolean, modifier: Modifier, onCli
             null
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color(0xFF263238),
+            selectedContainerColor = OpenFitColors.PrimaryContainer,
             selectedLabelColor = ACCENT,
             labelColor = OpenFitColors.OnSurface,
         ),
@@ -358,6 +360,7 @@ private fun ModeChip(label: String, selected: Boolean, modifier: Modifier, onCli
 
 @Composable
 private fun Sparkline(values: List<Double>, modifier: Modifier) {
+    val zonePalette1 = ZoneColors
     Canvas(modifier) {
         val low = values.min()
         val high = values.max().let { if (it <= low) low + 1 else it }
@@ -367,7 +370,7 @@ private fun Sparkline(values: List<Double>, modifier: Modifier) {
             val y = size.height - ((value - low) / (high - low)).toFloat() * size.height
             if (index == 0) path.moveTo(x, y) else path.lineTo(x, y)
         }
-        drawPath(path, ZoneColors.Vigorous, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
+        drawPath(path, zonePalette1.Vigorous, style = Stroke(1.5.dp.toPx(), cap = StrokeCap.Round))
     }
 }
 
@@ -388,14 +391,14 @@ private fun rowLabel(state: HeartUiState.Ready, row: HeartRow): String = when (s
     ChartPeriod.Year -> if (YearMonth.from(row.start) == YearMonth.from(state.today)) {
         stringResource(R.string.this_month)
     } else {
-        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
     }
     else -> if (state.today in row.start..row.end) stringResource(R.string.this_week_label) else weekRange(row.start, row.end)
 }
 
 @Composable
 private fun listTitle(state: HeartUiState.Ready): String = when (state.period) {
-    ChartPeriod.Month -> state.anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+    ChartPeriod.Month -> state.anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
     ChartPeriod.Year -> state.anchor.year.toString()
     else -> periodLabel(state.period, state.anchor, state.today)
 }

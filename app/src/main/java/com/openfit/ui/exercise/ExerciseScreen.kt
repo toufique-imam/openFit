@@ -78,7 +78,7 @@ import java.time.temporal.ChronoUnit
 import java.util.Locale
 import kotlin.math.ceil
 
-private val ACCENT = OpenFitColors.Mint
+private val ACCENT @Composable get() = OpenFitColors.Mint
 private const val METERS_PER_MILE = 1_609.344
 
 @Composable
@@ -107,6 +107,7 @@ fun ExerciseRoute(viewModel: ExerciseViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 content(current, viewModel::selectMode, setGoal)
@@ -203,7 +204,7 @@ private fun DayPills(state: ExerciseUiState.Ready) {
                     if (done) Icon(Icons.Filled.Check, contentDescription = null, tint = OpenFitColors.Background, modifier = Modifier.size(18.dp))
                 }
                 Text(
-                    day.dayOfWeek.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    day.dayOfWeek.getDisplayName(TextStyle.NARROW, com.openfit.ui.currentLocale()),
                     style = MaterialTheme.typography.bodySmall,
                     color = OpenFitColors.OnSurfaceVariant,
                     modifier = Modifier.padding(top = 8.dp),
@@ -229,7 +230,7 @@ private fun MonthCalendar(state: ExerciseUiState.Ready) {
         Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
             (0L until 7L).map { DayOfWeek.SUNDAY.plus(it) }.forEach { weekday ->
                 Text(
-                    weekday.getDisplayName(TextStyle.NARROW, Locale.getDefault()),
+                    weekday.getDisplayName(TextStyle.NARROW, com.openfit.ui.currentLocale()),
                     style = MaterialTheme.typography.bodySmall,
                     color = OpenFitColors.OnSurfaceVariant,
                     textAlign = TextAlign.Center,
@@ -288,7 +289,7 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
             null
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color(0xFF1F3D37),
+            selectedContainerColor = OpenFitColors.PrimaryContainer,
             selectedLabelColor = ACCENT.accent,
             labelColor = OpenFitColors.OnSurface,
         ),
@@ -356,7 +357,7 @@ private fun LazyListScope.weekList(state: ExerciseUiState.Ready, current: Boolea
     item {
         Row(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = SectionGap, bottom = 16.dp)) {
             Text(
-                if (current) stringResource(R.string.this_month) else state.anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault()),
+                if (current) stringResource(R.string.this_month) else state.anchor.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale()),
                 style = MaterialTheme.typography.titleMedium,
                 color = OpenFitColors.OnSurface,
                 modifier = Modifier.weight(1f),

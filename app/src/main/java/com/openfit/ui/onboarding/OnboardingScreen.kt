@@ -61,7 +61,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.input.KeyboardCapitalization
@@ -147,13 +146,17 @@ fun OnboardingRoute(
     }
 }
 
-/** openFit's mark: the launcher ring, in mint, over a soft glow. */
+/** The rising-bars launcher mark over a soft glow. */
 @Composable
 private fun Logo(size: Dp) {
+    val palette0 = OpenFitColors
     Canvas(Modifier.size(size)) {
-        val mint = OpenFitColors.Mint.accent
+        val mint = palette0.Mint.accent
         drawCircle(Brush.radialGradient(listOf(mint.copy(alpha = 0.22f), Color.Transparent)), radius = this.size.minDimension / 2)
-        drawCircle(mint, radius = this.size.minDimension * 0.2f, style = Stroke(width = this.size.minDimension * 0.055f))
+        val unit = this.size.minDimension / 108f
+        listOf(32f to 53f, 49f to 42f, 66f to 31f).forEach { (left, top) ->
+            drawRect(mint, topLeft = Offset(left * unit, top * unit), size = androidx.compose.ui.geometry.Size(11f * unit, (75f - top) * unit))
+        }
     }
 }
 
@@ -326,6 +329,7 @@ private fun ReadsStep(availability: HealthConnectAvailability, onConnect: () -> 
             )
         }
         Spacer(Modifier.height(32.dp))
+        com.openfit.ui.PrivacyPolicyLink(Modifier.align(Alignment.CenterHorizontally))
         PrimaryButton(
             stringResource(if (availability == HealthConnectAvailability.Available) R.string.onboarding_connect else R.string.hc_open_store),
             icon = Icons.Outlined.HealthAndSafety,
@@ -347,7 +351,7 @@ private val READS = listOf(
     Icons.Outlined.SelfImprovement to R.string.onboarding_reads_mindfulness,
 )
 
-/** The first load: today, then Energy Bank, then Pulse Age; Today opens from the snapshot it leaves. */
+/** The first load: today, then Vitality reserve, then Health age; Today opens from the snapshot it leaves. */
 @Composable
 private fun ImportStep(sync: HealthSync, todayViewModel: TodayViewModel, onFinish: () -> Unit) {
     val syncState by sync.state.collectAsStateWithLifecycle()
@@ -441,7 +445,7 @@ private fun Helper(text: String) {
     Text(text, style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(top = 8.dp))
 }
 
-/** Fitbit's two-way switch: the chosen option is a mint pill inside a card-coloured track. */
+/** A two-way switch with a filled selection inside a card track. */
 @Composable
 private fun <T> Segmented(options: List<Pair<T, Int>>, selected: T?, onSelect: (T) -> Unit) {
     Surface(shape = RoundedCornerShape(28.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
@@ -468,7 +472,7 @@ private fun <T> Segmented(options: List<Pair<T, Int>>, selected: T?, onSelect: (
     }
 }
 
-private val ON_MINT = Color(0xFF00382E)
+private val ON_MINT @Composable get() = androidx.compose.material3.MaterialTheme.colorScheme.onPrimary
 
 @Composable
 private fun PrimaryButton(text: String, icon: ImageVector? = null, enabled: Boolean = true, onClick: () -> Unit) {

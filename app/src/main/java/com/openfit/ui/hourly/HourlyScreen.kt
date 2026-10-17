@@ -79,9 +79,9 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.roundToInt
 
-private val ACCENT = OpenFitColors.Mint
-private val TEAL = Color(0xFF008673)
-private val TRACK = Color(0xFF292D2C)
+private val ACCENT @Composable get() = OpenFitColors.Mint
+private val TEAL @Composable get() = OpenFitColors.Blue.accent
+private val TRACK @Composable get() = OpenFitColors.OnSurface.copy(alpha = 0.12f)
 
 @Composable
 fun HourlyRoute(viewModel: HourlyViewModel, onBack: () -> Unit) {
@@ -105,6 +105,7 @@ fun HourlyRoute(viewModel: HourlyViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 val window = current.window
@@ -207,9 +208,10 @@ private const val MAX_WIDE_PILLS = 9
 private fun GlanceBar(label: String, fraction: Float, color: Color) {
     Column(Modifier.padding(top = 16.dp)) {
         Text(label, style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+        val track0 = TRACK
         Canvas(Modifier.fillMaxWidth().padding(top = 10.dp).height(10.dp)) {
             val track = 4.dp.toPx()
-            drawRoundRect(TRACK, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
+            drawRoundRect(track0, Offset(0f, (size.height - track) / 2), Size(size.width, track), CornerRadius(track / 2))
             if (fraction > 0f) drawRoundRect(color, size = Size(maxOf(size.width * fraction, size.height), size.height), cornerRadius = CornerRadius(size.height / 2))
         }
     }
@@ -298,7 +300,7 @@ private fun hoursDescription(state: HourlyUiState.Ready, current: Boolean): Stri
             val bestTotal = YearMonth.of(state.anchor.year, best).let { ym -> (1..ym.lengthOfMonth()).sumOf { state.hoursByDay[ym.atDay(it)] ?: 0.0 } }
             stringResource(
                 if (current) R.string.hourly_year_best else R.string.hourly_year_best_past,
-                java.time.Month.of(best).getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault()),
+                java.time.Month.of(best).getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale()),
                 bestTotal.roundToInt().toString(),
             )
         }
@@ -317,7 +319,7 @@ private fun ModeChip(label: String, selected: Boolean, onClick: () -> Unit) {
             null
         },
         colors = FilterChipDefaults.filterChipColors(
-            selectedContainerColor = Color(0xFF1F3D37),
+            selectedContainerColor = OpenFitColors.PrimaryContainer,
             selectedLabelColor = ACCENT.accent,
             labelColor = OpenFitColors.OnSurface,
         ),

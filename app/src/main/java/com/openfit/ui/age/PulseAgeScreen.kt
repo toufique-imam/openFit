@@ -84,9 +84,9 @@ import java.time.LocalDate
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-/** Better than the reference reads mint, worse reads amber, as on Pulse's scales. */
-val OLDER = Color(0xFFF2A65A)
-private val YOUNGER = OpenFitColors.Mint.accent
+/** Better than the reference reads mint, worse reads amber, on the factor scales. */
+val OLDER @Composable get() = OpenFitColors.Pink.accent
+private val YOUNGER @Composable get() = OpenFitColors.Mint.accent
 
 sealed interface PulseAgeUiState {
     data object Loading : PulseAgeUiState
@@ -272,6 +272,9 @@ private fun FactorRow(factor: AgeFactor, value: Double?, effect: AgeEffect?, age
 private fun Scale(factor: AgeFactor, value: Double?, age: Int, sex: Sex, modifier: Modifier = Modifier) {
     val (low, high) = SCALES.getValue(factor)
     val reference = com.openfit.domain.ageReference(factor, age, sex)
+    val palette0 = OpenFitColors
+    val younger0 = YOUNGER
+    val older0 = OLDER
     Canvas(modifier.fillMaxWidth().height(26.dp)) {
         val cells = 10
         val gap = 2.dp.toPx()
@@ -283,9 +286,9 @@ private fun Scale(factor: AgeFactor, value: Double?, age: Int, sex: Sex, modifie
             val middle = low + (high - low) * (i + 0.5) / cells
             val risk = ageLnHr(factor, middle, age, sex)
             val t = (0.5 - risk / RISK_SPAN).coerceIn(0.0, 1.0).toFloat()
-            drawRoundRect(lerp(OLDER, YOUNGER, t).copy(alpha = 0.55f), Offset(i * (cell + gap), top), Size(cell, height), CornerRadius(3.dp.toPx()))
+            drawRoundRect(lerp(older0, younger0, t).copy(alpha = 0.55f), Offset(i * (cell + gap), top), Size(cell, height), CornerRadius(3.dp.toPx()))
         }
-        drawLine(OpenFitColors.OnSurface.copy(alpha = 0.6f), Offset(x(reference), top), Offset(x(reference), size.height), strokeWidth = 2.dp.toPx())
+        drawLine(palette0.OnSurface.copy(alpha = 0.6f), Offset(x(reference), top), Offset(x(reference), size.height), strokeWidth = 2.dp.toPx())
         value?.let {
             val markerX = x(it)
             val marker = Path().apply {
@@ -294,7 +297,7 @@ private fun Scale(factor: AgeFactor, value: Double?, age: Int, sex: Sex, modifie
                 lineTo(markerX, top - 1.dp.toPx())
                 close()
             }
-            drawPath(marker, OpenFitColors.OnSurface)
+            drawPath(marker, palette0.OnSurface)
         }
     }
 }
@@ -363,5 +366,5 @@ private fun groupTitle(group: AgeGroup): Int = when (group) {
     AgeGroup.Fitness -> R.string.age_group_fitness
 }
 
-/** Pulse Age always shows one decimal: 33.0, +0.4. */
+/** Health age always shows one decimal: 33.0, +0.4. */
 fun fixed(value: Double): String = "%.1f".format(value)

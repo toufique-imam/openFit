@@ -46,11 +46,11 @@ import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.LocalContext
 import com.openfit.googlehealth.CloudHistoryState
 import com.openfit.googlehealth.GoogleHealthHistory
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
@@ -66,7 +66,6 @@ import com.openfit.domain.Sex
 import com.openfit.health.BudgetUsage
 import com.openfit.health.HealthSync
 import com.openfit.health.SyncState
-import androidx.compose.material3.LinearProgressIndicator
 import com.openfit.domain.maxHeartRate
 import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
@@ -77,6 +76,8 @@ import com.openfit.ui.today.TodayUiState
 import com.openfit.ui.today.TodayViewModel
 import com.openfit.ui.today.googleHealthNotice
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.time.Instant
 import java.time.LocalDate
 import java.time.Period
@@ -88,12 +89,15 @@ import java.time.format.FormatStyle
 private enum class Editing { None, Name, BirthDate, Sex, Units, WeightUnit, Delete }
 
 /**
- * The user's details, laid out as a list (after Pulse's profile page): each row opens its own editor. Age follows the
+ * The user's details, laid out as a list (with a separate editor for each field): each row opens its own editor. Age follows the
  * birth date; heart rate zones use 220 − age as the maximum.
  */
 @Composable
 fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit, onDeleteEverything: () -> Unit) {
     val syncState by sync.state.collectAsStateWithLifecycle()
+    val coverage by produceState(emptyList<com.openfit.data.CopyCoverage>(), syncState) {
+        value = withContext(Dispatchers.IO) { sync.copyCoverage() }
+    }
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val history = remember { GoogleHealthHistory.get(context) }
@@ -164,9 +168,10 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
             }
 
             Spacer(Modifier.height(16.dp))
-            SyncCard(syncState, onSync = { sync.startImport() })
+            SyncCard(syncState, coverage, onSync = { sync.startImport() })
             Spacer(Modifier.height(16.dp))
             HealthConnectUsageCard(remember(state, syncState) { viewModel.healthConnectUsage() })
+            com.openfit.ui.PrivacyPolicyLink(Modifier.align(Alignment.CenterHorizontally))
 
             OutlinedButton(
                 onClick = { editing = Editing.Delete },
@@ -324,12 +329,26 @@ private fun GoogleHealthCard(
  * still missing (then recent days) without leaving the page waiting: it runs on its own.
  */
 @Composable
-private fun SyncCard(state: SyncState, onSync: () -> Unit) {
+private fun SyncCard(state: SyncState, coverage: List<com.openfit.data.CopyCoverage>, onSync: () -> Unit) {
+    var expanded by rememberSaveable { mutableStateOf(false) }
     val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM)
     val clock = DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM, FormatStyle.SHORT)
     Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(stringResource(R.string.sync_title), style = MaterialTheme.typography.titleMedium, color = OpenFitColors.OnSurface)
+            if (coverage.isNotEmpty()) {
+                TextButton(onClick = { expanded = !expanded }) {
+                    Text(stringResource(if (expanded) R.string.sync_hide_types else R.string.sync_show_types))
+                }
+                if (expanded) coverage.forEach { copied ->
+                    Text(
+                        stringResource(R.string.sync_type_coverage, stringResource(copyTypeLabel(copied.type)),
+                            LocalDate.parse(copied.firstDay).format(date), LocalDate.parse(copied.lastDay).format(date), copied.days),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = OpenFitColors.OnSurfaceVariant,
+                    )
+                }
+            }
             when (state) {
                 is SyncState.Importing -> {
                     val progress = state.progress
@@ -375,6 +394,28 @@ private fun SyncCard(state: SyncState, onSync: () -> Unit) {
             }
         }
     }
+}
+
+private fun copyTypeLabel(type: String): Int = when (type) {
+    "steps" -> R.string.tile_steps
+    "distance" -> R.string.tile_distance
+    "floors" -> R.string.tile_floors
+    "calories" -> R.string.tile_energy_burned
+    "nutrition" -> R.string.tile_food
+    "hydration" -> R.string.tile_water
+    "heart_rate" -> R.string.tile_heart
+    "resting_heart_rate" -> R.string.hm_resting_heart_rate
+    "hrv" -> R.string.tile_hrv
+    "spo2" -> R.string.tile_spo2
+    "breathing_rate" -> R.string.tile_breathing_rate
+    "skin_temperature" -> R.string.tile_skin_temperature
+    "vo2_max" -> R.string.vo2_title
+    "weight" -> R.string.tile_weight
+    "body_fat" -> R.string.age_factor_body_fat
+    "sleep" -> R.string.section_sleep
+    "exercise" -> R.string.tile_exercise_days
+    "mindfulness" -> R.string.tile_mindful_days
+    else -> R.string.sync_other_type
 }
 
 /** How much of Health Connect's read quota openFit has used, so a lockout is never a surprise. */

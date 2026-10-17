@@ -90,8 +90,8 @@ import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
 
-private val ACCENT = OpenFitColors.Blue.accent
-private val OUT_OF_RANGE = OpenFitColors.Pink.accent
+private val ACCENT @Composable get() = OpenFitColors.Blue.accent
+private val OUT_OF_RANGE @Composable get() = OpenFitColors.Pink.accent
 private val PERIODS = listOf(ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.Year)
 
 /** A row of Fitbit's list under the chart: a day, week or month, its average and how often it left the range. */
@@ -234,6 +234,7 @@ fun MetricDetailRoute(viewModel: MetricDetailViewModel, metric: HealthMetric, on
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 item { Header(current) }
@@ -336,18 +337,21 @@ private fun axis(metric: HealthMetric, values: List<Double>): Triple<Double, Dou
 private fun Legend() {
     Column(Modifier.fillMaxWidth().padding(top = 16.dp), horizontalAlignment = Alignment.CenterHorizontally) {
         Row(verticalAlignment = Alignment.CenterVertically) {
+            val accent0 = ACCENT
             Canvas(Modifier.size(width = 16.dp, height = 10.dp)) {
-                drawRect(ACCENT.copy(alpha = 0.16f), Offset(0f, 2.dp.toPx()), Size(size.width, size.height - 4.dp.toPx()))
+                drawRect(accent0.copy(alpha = 0.16f), Offset(0f, 2.dp.toPx()), Size(size.width, size.height - 4.dp.toPx()))
             }
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.hm_legend_personal_range), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
             Spacer(Modifier.width(24.dp))
-            Canvas(Modifier.size(8.dp)) { drawCircle(ACCENT) }
+            val accent1 = ACCENT
+            Canvas(Modifier.size(8.dp)) { drawCircle(accent1) }
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.hm_legend_in_range), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
         }
         Row(Modifier.padding(top = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Canvas(Modifier.size(8.dp)) { drawCircle(OUT_OF_RANGE) }
+            val outOfRange2 = OUT_OF_RANGE
+            Canvas(Modifier.size(8.dp)) { drawCircle(outOfRange2) }
             Spacer(Modifier.width(8.dp))
             Text(stringResource(R.string.hm_legend_out_of_range), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
         }
@@ -387,7 +391,7 @@ private fun rowLabel(state: MetricDetailUiState.Ready, row: MetricListRow): Stri
     ChartPeriod.Year -> if (YearMonth.from(row.start) == YearMonth.from(state.today)) {
         stringResource(R.string.this_month)
     } else {
-        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, Locale.getDefault())
+        row.start.month.getDisplayName(TextStyle.FULL_STANDALONE, com.openfit.ui.currentLocale())
     }
     ChartPeriod.Month -> if (state.today in row.start..row.end) stringResource(R.string.this_week) else weekRange(row.start, row.end)
     else -> when (row.start) {

@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.openfit.R
 import com.openfit.domain.HealthMetric
+import java.time.LocalDate
 import com.openfit.ui.detail.DetailFailed
 import com.openfit.ui.detail.DetailLoading
 import com.openfit.ui.detail.GroupedCard
@@ -42,13 +43,13 @@ import com.openfit.ui.today.count
 import com.openfit.ui.today.relativeDay
 import com.openfit.ui.today.valueText
 
-private val ACCENT = OpenFitColors.Blue
-private val OUT_OF_RANGE = OpenFitColors.Pink.accent
+private val ACCENT @Composable get() = OpenFitColors.Blue
+private val OUT_OF_RANGE @Composable get() = OpenFitColors.Pink.accent
 
 /** Fitbit's Health metrics page: a day's five metrics against their personal ranges; each opens its own chart. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HealthMetricsRoute(viewModel: HealthMetricsViewModel, onBack: () -> Unit, onOpenMetric: (HealthMetric) -> Unit) {
+fun HealthMetricsRoute(viewModel: HealthMetricsViewModel, onBack: () -> Unit, onOpenMetric: (HealthMetric, LocalDate) -> Unit) {
     val state by viewModel.state.collectAsStateWithLifecycle()
     Scaffold(
         containerColor = OpenFitColors.Background,
@@ -68,7 +69,7 @@ fun HealthMetricsRoute(viewModel: HealthMetricsViewModel, onBack: () -> Unit, on
             when (val current = state) {
                 HealthMetricsUiState.Loading -> DetailLoading(ACCENT.accent)
                 is HealthMetricsUiState.Failed -> DetailFailed(current.message)
-                is HealthMetricsUiState.Ready -> Content(current, viewModel::shift, onOpenMetric)
+                is HealthMetricsUiState.Ready -> Content(current, viewModel::shift) { onOpenMetric(it, current.date) }
             }
         }
     }

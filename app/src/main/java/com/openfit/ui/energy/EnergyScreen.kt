@@ -85,7 +85,7 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
-private val ACCENT = OpenFitColors.Lavender
+private val ACCENT @Composable get() = OpenFitColors.Lavender
 private val PERIODS = listOf(ChartPeriod.Day, ChartPeriod.Week)
 private val CLOCK = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -157,15 +157,17 @@ class EnergyViewModel(gateway: HealthConnectGateway, slotCache: SlotCache, snaps
             restoreSaved(name)
             var kept = false
             _state.value = try {
-                val today = LocalDate.now()
-                val days = periodDays(period, anchor).filter { it <= today }
-                EnergyUiState.Ready(
-                    period = period,
-                    anchor = anchor,
-                    today = today,
-                    days = energy.days(days.first(), days.last()).associateBy { it.date },
-                    workouts = if (period == ChartPeriod.Day) exercises.sessions(anchor, anchor) else emptyList(),
-                )
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+                    val today = LocalDate.now()
+                    val days = periodDays(period, anchor).filter { it <= today }
+                    EnergyUiState.Ready(
+                        period = period,
+                        anchor = anchor,
+                        today = today,
+                        days = energy.days(days.first(), days.last()).associateBy { it.date },
+                        workouts = if (period == ChartPeriod.Day) exercises.sessions(anchor, anchor) else emptyList(),
+                    )
+                }
             } catch (error: CancellationException) {
                 throw error
             } catch (error: Exception) {
@@ -203,6 +205,7 @@ fun EnergyRoute(viewModel: EnergyViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 if (current.period == ChartPeriod.Day) dayContent(current) else weekContent(current)
@@ -339,6 +342,8 @@ private fun LazyListScope.weekContent(state: EnergyUiState.Ready) {
 private fun DayChart(day: EnergyDay, modifier: Modifier = Modifier) {
     val measurer = rememberTextMeasurer()
     val labelStyle = MaterialTheme.typography.bodySmall.copy(color = OpenFitColors.OnSurfaceVariant)
+    val palette0 = OpenFitColors
+    val accent0 = ACCENT
     Canvas(modifier.fillMaxWidth().height(212.dp)) {
         val left = 24.dp.toPx()
         val width = 288.dp.toPx()
@@ -346,21 +351,21 @@ private fun DayChart(day: EnergyDay, modifier: Modifier = Modifier) {
         fun x(slot: Int) = left + slot * width / SLOTS_PER_DAY
         fun y(level: Double) = plot - (level / 100).toFloat() * plot
         listOf(0.0, 50.0, 100.0).forEach { level ->
-            drawLine(OpenFitColors.OnSurfaceVariant.copy(alpha = 0.3f), Offset(left, y(level)), Offset(left + width, y(level)), strokeWidth = 1.dp.toPx())
+            drawLine(palette0.OnSurfaceVariant.copy(alpha = 0.3f), Offset(left, y(level)), Offset(left + width, y(level)), strokeWidth = 1.dp.toPx())
             val layout = measurer.measure(level.toInt().toString(), labelStyle)
             drawText(layout, topLeft = Offset(left + width + 10.dp.toPx(), y(level) - layout.size.height / 2f))
         }
         var path: Path? = null
         day.levels.forEachIndexed { slot, level ->
             if (level == null) {
-                path?.let { drawPath(it, ACCENT.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round)) }
+                path?.let { drawPath(it, accent0.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round)) }
                 path = null
             } else {
                 val point = Offset(x(slot), y(level))
                 path = (path ?: Path().apply { moveTo(point.x, point.y) }).apply { lineTo(point.x, point.y) }
             }
         }
-        path?.let { drawPath(it, ACCENT.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round)) }
+        path?.let { drawPath(it, accent0.accent, style = Stroke(3.dp.toPx(), cap = StrokeCap.Round)) }
         listOf(0 to "12am", 6 to "6am", 12 to "12pm", 18 to "6pm").forEach { (hour, label) ->
             val layout = measurer.measure(label, labelStyle)
             drawText(layout, topLeft = Offset(x(hour * 60 / SLOT_MINUTES), plot + 8.dp.toPx()))

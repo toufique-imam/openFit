@@ -39,7 +39,7 @@ data class JournalUiState(
 }
 
 class JournalViewModel(
-    gateway: HealthConnectGateway,
+    private val gateway: HealthConnectGateway,
     private val profileStore: ProfileStore,
     dayLoadCache: DayLoadCache,
     private val store: JournalStore,
@@ -54,11 +54,12 @@ class JournalViewModel(
     /** Daily outcome values over the insight window, loaded once per day. */
     private var outcomes: Map<JournalOutcome, Map<LocalDate, Double>>? = null
     private var outcomesDay: LocalDate? = null
+    private var outcomesGeneration = -1
     private var loading: Job? = null
 
     fun refresh() {
         _state.value = build(_state.value.date.coerceAtMost(LocalDate.now()), _state.value.outcome)
-        if (outcomesDay != LocalDate.now()) loadOutcomes()
+        if (outcomesDay != LocalDate.now() || outcomesGeneration != gateway.store.revision) loadOutcomes()
     }
 
     fun showDate(date: LocalDate) {
@@ -116,6 +117,7 @@ class JournalViewModel(
         loading = viewModelScope.launch {
             try {
                 val today = LocalDate.now()
+                val generation = gateway.store.revision
                 val from = today.minusDays(INSIGHT_DAYS)
                 val history = source.history(from.minusDays(BASELINE_LEAD_DAYS), today, profileStore.load(), backfillDays = 0)
                 val days = generateSequence(from) { it.plusDays(1) }.takeWhile { it <= today }.toList()
@@ -125,6 +127,7 @@ class JournalViewModel(
                     JournalOutcome.Hrv to history.hrvMs.filterKeys { it >= from },
                 )
                 outcomesDay = today
+                outcomesGeneration = generation
                 _state.value = build(_state.value.date, _state.value.outcome)
             } catch (error: CancellationException) {
                 throw error

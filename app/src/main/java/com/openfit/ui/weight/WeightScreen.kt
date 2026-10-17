@@ -74,7 +74,7 @@ import kotlin.math.abs
 import kotlin.math.ceil
 import kotlin.math.floor
 
-private val ACCENT = OpenFitColors.Blue
+private val ACCENT @Composable get() = OpenFitColors.Blue
 private const val POUNDS_PER_KG = 2.20462
 private val PERIODS = listOf(ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.ThreeMonths, ChartPeriod.Year)
 
@@ -201,6 +201,7 @@ fun WeightRoute(viewModel: WeightViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 item { Header(current, setGoal) }

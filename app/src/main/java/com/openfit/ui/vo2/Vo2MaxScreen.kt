@@ -79,7 +79,7 @@ import java.time.YearMonth
 import kotlin.math.ceil
 import kotlin.math.floor
 
-private val ACCENT = OpenFitColors.Blue.accent
+private val ACCENT @Composable get() = OpenFitColors.Blue.accent
 private val PERIODS = listOf(ChartPeriod.Week, ChartPeriod.Month, ChartPeriod.Year)
 
 sealed interface Vo2MaxUiState {
@@ -203,6 +203,7 @@ fun Vo2MaxRoute(viewModel: Vo2MaxViewModel, onBack: () -> Unit) {
                         periodLabel(current.period, current.anchor, current.today),
                         canGoForward(current.period, current.anchor, current.today),
                         viewModel::shift,
+                        period = current.period,
                     )
                 }
                 item { Header(current) }
@@ -254,6 +255,8 @@ private fun BandScale(state: Vo2MaxUiState.Ready) {
     val value = state.latest?.vo2Max
     val bands = listOf(R.string.fitness_poor, R.string.fitness_fair, R.string.fitness_good, R.string.fitness_excellent, R.string.fitness_superior)
     Column(Modifier.fillMaxWidth().padding(start = PagePadding, end = PagePadding, top = 28.dp)) {
+        val palette0 = OpenFitColors
+        val accent0 = ACCENT
         Canvas(Modifier.fillMaxWidth().height(20.dp)) {
             val bar = 8.dp.toPx()
             val gap = 3.dp.toPx()
@@ -264,13 +267,13 @@ private fun BandScale(state: Vo2MaxUiState.Ready) {
                 val start = x(bounds[index]) + if (index > 0) gap / 2 else 0f
                 val end = x(bounds[index + 1]) - if (index < bands.lastIndex) gap / 2 else 0f
                 drawRoundRect(
-                    ACCENT.copy(alpha = 0.2f + 0.2f * index),
+                    accent0.copy(alpha = 0.2f + 0.2f * index),
                     Offset(start, top),
                     Size(end - start, bar),
                     CornerRadius(bar / 2),
                 )
             }
-            value?.let { drawCircle(OpenFitColors.OnSurface, radius = 7.dp.toPx(), center = Offset(x(it), size.height / 2)) }
+            value?.let { drawCircle(palette0.OnSurface, radius = 7.dp.toPx(), center = Offset(x(it), size.height / 2)) }
         }
         Row(Modifier.fillMaxWidth().padding(top = 6.dp)) {
             bands.forEach { band ->
