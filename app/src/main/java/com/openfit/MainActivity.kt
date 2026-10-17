@@ -1,6 +1,11 @@
 package com.openfit
 
 import android.content.Intent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.IntentFilter
+import androidx.core.content.ContextCompat
+import java.time.ZoneId
 import android.widget.Toast
 import com.openfit.ui.Notices
 import androidx.lifecycle.lifecycleScope
@@ -97,7 +102,7 @@ import java.time.LocalDate
 
 /** Every preferences file openFit writes, for Delete everything. */
 // The quota model (hc_budget) stays: Health Connect's own count of openFit's reads does not reset with it.
-private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "onboarding", "hc_changes", "hc_import")
+private val LOCAL_PREFS = listOf("profile", "today_layout", "journal", "day_load", "day_slots", "google_health", "google_health_history", "onboarding", "hc_changes", "hc_import")
 
 /** Tells this process apart from an earlier one whose saved state was restored. */
 private val PROCESS = UUID.randomUUID().toString()
@@ -141,6 +146,22 @@ class MainActivity : ComponentActivity() {
     private lateinit var layoutStore: TodayLayoutStore
     private lateinit var onboardingStore: OnboardingStore
     private lateinit var healthSync: HealthSync
+    private var startedZone = ZoneId.systemDefault()
+    private val zoneChanges = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) { restartForZoneChange() }
+    }
+
+    private fun restartForZoneChange(): Boolean {
+        if (startedZone == ZoneId.systemDefault()) return false
+        startedZone = ZoneId.systemDefault()
+        lifecycleScope.launch {
+            healthSync.stopAndJoin()
+            GoogleHealthHistory.get(applicationContext).stopAndJoin()
+            viewModelStore.clear()
+            recreate()
+        }
+        return true
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -154,7 +175,8 @@ class MainActivity : ComponentActivity() {
         layoutStore = TodayLayoutStore(applicationContext)
         onboardingStore = OnboardingStore(applicationContext)
         healthSync = HealthSync.get(applicationContext)
-        SyncWorker.schedule(applicationContext)
+        ContextCompat.registerReceiver(this, zoneChanges, IntentFilter(Intent.ACTION_TIMEZONE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
+        if (onboardingStore.done) SyncWorker.schedule(applicationContext)
         setContent {
             OpenFitTheme {
                 val backStack = rememberSaveable(saver = BackStackSaver) { mutableStateListOf<Screen>(Screen.Tab(RootTab.Today)) }
@@ -162,7 +184,7 @@ class MainActivity : ComponentActivity() {
                 // Each screen keeps its saved state (scroll position, selected period) while it is on the back stack.
                 val screenStates = rememberSaveableStateHolder()
                 val todayViewModel = viewModel {
-                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore, healthSync, GoogleHealthHistory.get(applicationContext))
+                    TodayViewModel(gateway, profileStore, GoogleHealthAuth(applicationContext), dayLoadCache, slotCache, snapshotStore, healthSync, GoogleHealthHistory.get(applicationContext), autoImport = { onboardingStore.done })
                 }
                 LaunchedEffect(Unit) {
                     Notices.messages.collect { Toast.makeText(applicationContext, it, Toast.LENGTH_SHORT).show() }
@@ -172,6 +194,8 @@ class MainActivity : ComponentActivity() {
                     OnboardingRoute(todayViewModel, healthSync, profileStore, gateway, onOpenHealthConnectStore = ::openHealthConnectStore) {
                         onboardingStore.done = true
                         onboarded = true
+                        SyncWorker.schedule(applicationContext)
+                        todayViewModel.refresh()
                     }
                     return@OpenFitTheme
                 }
@@ -228,9 +252,17 @@ class MainActivity : ComponentActivity() {
     /** Opening the app (or coming back to it): reads the last days from Health Connect, at most every few minutes. */
     override fun onStart() {
         super.onStart()
+        if (restartForZoneChange()) return
+        if (!onboardingStore.done) return
+        gateway.invalidatePermissions()
         healthSync.startRecent()
         // The cloud history's last days too, once it is copied (the app is in front: the API needs the network).
         GoogleHealthHistory.get(applicationContext).startTopUp()
+    }
+
+    override fun onDestroy() {
+        unregisterReceiver(zoneChanges)
+        super.onDestroy()
     }
 
     /** Back-stack entries are unique by position, so the same page opened twice keeps two states. */
@@ -308,7 +340,7 @@ class MainActivity : ComponentActivity() {
             MetricPage.HealthMetrics -> {
                 val model = viewModel { HealthMetricsViewModel(gateway, profileStore, snapshotStore) }
                 OpenOnce { model.open(screen.date) }
-                HealthMetricsRoute(model, onBack, onOpenMetric = { metric -> onOpen(page(metric), screen.date) })
+                HealthMetricsRoute(model, onBack, onOpenMetric = { metric, date -> onOpen(page(metric), date) })
             }
             MetricPage.MetricBreathingRate, MetricPage.MetricRestingHeartRate, MetricPage.MetricHrv, MetricPage.MetricBloodOxygen,
             MetricPage.MetricSkinTemperature -> {
@@ -382,12 +414,18 @@ class MainActivity : ComponentActivity() {
      */
     private fun deleteEverything() {
         lifecycleScope.launch {
-            healthSync.stop()
+            onboardingStore.done = false
+            viewModelStore.clear()
+            SyncWorker.cancel(applicationContext)
+            healthSync.stopAndJoin()
+            GoogleHealthHistory.get(applicationContext).stopAndJoin()
             withContext(Dispatchers.IO) {
                 gateway.store.clear()
                 OpenFitDatabase.get(applicationContext).clearAllTables()
             }
             LOCAL_PREFS.forEach { getSharedPreferences(it, MODE_PRIVATE).edit().clear().commit() }
+            healthSync.onDataDeleted()
+            GoogleHealthHistory.get(applicationContext).onDataDeleted()
             finish()
             startActivity(Intent(this@MainActivity, MainActivity::class.java))
         }
