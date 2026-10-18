@@ -40,8 +40,8 @@ class FitnessTest {
         val day = java.time.LocalDate.of(2026, 10, 16)
         val resting = (0L until 40L).associate { day.minusDays(it) to if (it < 30) 60.0 else 90.0 }
         val values = dailyVo2Max(30, listOf(day.minusDays(1), day), measured = mapOf(day to 50.0), resting = resting)
-        assertEquals(50.0 to false, values[day])
+        assertEquals(50.0 to Vo2Source.Measured, values[day])
         assertEquals(estimateVo2Max(30, (29 * 60.0 + 90.0) / 30), values.getValue(day.minusDays(1)).first, 1e-9)
-        assertEquals(true, values.getValue(day.minusDays(1)).second)
+        assertEquals(Vo2Source.RestingHeartRate, values.getValue(day.minusDays(1)).second)
     }
 }

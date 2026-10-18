@@ -79,6 +79,6 @@ class SnapshotSerializationTest {
         roundTrip(HealthMetricsUiState.Ready(day, day, profile, emptyList()), HealthMetricsUiState.Ready.serializer())
         roundTrip(MetricDetailUiState.Ready(HealthMetric.entries.first(), period, day, day, profile, mapOf(day to 62.5), emptyMap(), emptyList()), MetricDetailUiState.Ready.serializer())
         roundTrip(WeightUiState.Ready(period, day, day, profile, mapOf(day to 67.25), day to 67.25), WeightUiState.Ready.serializer())
-        roundTrip(Vo2MaxUiState.Ready(period, day, day, 35, Sex.Female, mapOf(day to (41.5 to true))), Vo2MaxUiState.Ready.serializer())
+        roundTrip(Vo2MaxUiState.Ready(period, day, day, 35, Sex.Female, mapOf(day to (41.5 to com.openfit.domain.Vo2Source.Runs))), Vo2MaxUiState.Ready.serializer())
     }
 }

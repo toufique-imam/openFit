@@ -787,14 +787,17 @@
     <string name="vo2_title">VO2 max</string>
     <string name="vo2_unit">mL/kg/min</string>
     <string name="vo2_band_line">%1$s · %2$s percentile for your age and sex</string>
-    <string name="vo2_estimated_note">Estimated from your resting heart rate. A watch that measures VO2 max on runs gives a better value.</string>
+    <string name="vo2_estimated_note">Estimated from your resting heart rate. Runs of 6 minutes or more that bring your heart rate close to its maximum give a better estimate.</string>
+    <string name="vo2_runs_note">Estimated from your runs over the last 6 weeks, to within about 10%.</string>
     <string name="vo2_needs_profile">Add your age and sex in your profile to see VO2 max.</string>
     <string name="vo2_no_data">No resting heart rate or VO2 max in this period.</string>
     <string name="vo2_band_edges">Band edges for your age and sex: %s</string>
     <string name="vo2_about">About VO2 max</string>
     <string name="vo2_about_body">VO2 max is the most oxygen your body can use in hard exercise, in millilitres per kilogram of body weight per minute. The higher it is, the fitter your heart and lungs.
 
-openFit uses a measured value when a watch or app has written one to Health Connect. Otherwise it estimates one from your resting heart rate over the last 30 days: 15.3 × maximum heart rate ÷ resting heart rate, with maximum heart rate 220 − age (Uth et al. 2004).
+openFit uses a measured value when a watch or app has written one to Health Connect. Otherwise it estimates one from your runs over the last 6 weeks: the pace you held for 6–20 minutes while your heart rate climbed to 95% of its maximum. Oxygen use at that pace (ACSM: 0.2 × metres per minute + 3.5) is taken as 92% of VO2 max, and the median of these runs is shown. This assumes flat running and the distance your watch records, so it is good to about ±10%.
+
+Without such runs, it estimates one from your resting heart rate over the last 30 days: 15.3 × maximum heart rate ÷ resting heart rate, with maximum heart rate 220 − age (Uth et al. 2004).
 
 The bands compare you with people of your age and sex in the FRIEND treadmill registry (Kaminsky et al. 2015): Poor below the 20th percentile, then Fair, Good, Excellent, and Superior from the 80th.</string>
     <string name="hc_rate_limited">Health Connect is limiting how often openFit can read your data. Try again in a few minutes.</string>

@@ -42,6 +42,9 @@ import com.openfit.domain.HealthMetric
 import com.openfit.domain.Sex
 import com.openfit.domain.ESTIMATE_DAYS
 import com.openfit.domain.dailyVo2Max
+import com.openfit.domain.RUN_WINDOW_DAYS
+import com.openfit.domain.Vo2Source
+import com.openfit.health.RunFitnessSource
 import com.openfit.domain.fitnessBandEdges
 import com.openfit.domain.fitnessPercentile
 import com.openfit.domain.periodDays
@@ -93,18 +96,21 @@ sealed interface Vo2MaxUiState {
         val today: LocalDate,
         val age: Int,
         val sex: Sex,
-        /** Each day's VO2 max and whether it was estimated from resting heart rate. */
-        val values: Map<LocalDate, Pair<Double, Boolean>>,
+        /** Each day's VO2 max and where it came from. */
+        val values: Map<LocalDate, Pair<Double, Vo2Source>>,
     ) : Vo2MaxUiState {
         /** The period's latest value against the FRIEND reference for the user's age and sex. */
         val latest: FitnessLevel?
-            get() = values.maxByOrNull { it.key }?.value?.let { (vo2, estimated) -> FitnessLevel(vo2, estimated, fitnessPercentile(vo2, age, sex)) }
+            get() = values.maxByOrNull { it.key }?.value?.let { (vo2, source) ->
+                FitnessLevel(vo2, source != Vo2Source.Measured, fitnessPercentile(vo2, age, sex), source)
+            }
     }
 }
 
 class Vo2MaxViewModel(gateway: HealthConnectGateway, private val profileStore: ProfileStore, snapshots: SnapshotStore) : ViewModel() {
 
     private val vitals = HealthConnectVitals(gateway)
+    private val runs = RunFitnessSource(gateway)
 
     private val _state = MutableStateFlow<Vo2MaxUiState>(Vo2MaxUiState.Loading)
     val state: StateFlow<Vo2MaxUiState> = _state.asStateFlow()
@@ -163,7 +169,8 @@ class Vo2MaxViewModel(gateway: HealthConnectGateway, private val profileStore: P
                     val days = periodDays(period, anchor).filter { it <= today }
                     val resting = vitals.daily(setOf(HealthMetric.RestingHeartRate), days.first().minusDays(ESTIMATE_DAYS.toLong()), days.last())[HealthMetric.RestingHeartRate].orEmpty()
                     val measured = vitals.vo2Max(days.first(), days.last())
-                    Vo2MaxUiState.Ready(period, anchor, today, age, sex, dailyVo2Max(age, days, measured, resting))
+                    val bouts = runs.bouts(days.first().minusDays(RUN_WINDOW_DAYS - 1L), days.last(), age)
+                    Vo2MaxUiState.Ready(period, anchor, today, age, sex, dailyVo2Max(age, days, measured, resting, bouts))
                 }
             } catch (error: CancellationException) {
                 throw error
@@ -240,8 +247,13 @@ private fun Header(state: Vo2MaxUiState.Ready) {
             style = MaterialTheme.typography.bodyMedium,
             color = OpenFitColors.OnSurface,
         )
-        if (latest.estimated) {
-            Text(stringResource(R.string.vo2_estimated_note), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
+        val note = when (latest.source) {
+            Vo2Source.Measured -> null
+            Vo2Source.Runs -> R.string.vo2_runs_note
+            Vo2Source.RestingHeartRate -> R.string.vo2_estimated_note
+        }
+        if (note != null) {
+            Text(stringResource(note), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant, modifier = Modifier.padding(top = 4.dp))
         }
     }
 }

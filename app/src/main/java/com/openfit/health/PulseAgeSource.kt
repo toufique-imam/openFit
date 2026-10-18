@@ -27,6 +27,7 @@ class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: Da
     private val source = HealthConnectSource(gateway, dayLoadCache)
     private val totals = HealthConnectTotals(gateway)
     private val sleep = HealthConnectSleep(gateway)
+    private val runs = RunFitnessSource(gateway, zone)
 
     /** Null without the user's age and sex, or with fewer than five inputs. */
     suspend fun pulseAge(until: LocalDate, profile: Profile): PulseAge? {
@@ -36,7 +37,7 @@ class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: Da
         return pulseAge(age, sex, inputs, estimated(inputs))
     }
 
-    /** The factors [inputs] filled by an estimate: VO2 max from heart rate when Health Connect had none. */
+    /** The factors [inputs] filled by an estimate: VO2 max from runs or heart rate when Health Connect had none. */
     fun estimated(inputs: Map<AgeFactor, Double>): Set<AgeFactor> =
         if (AgeFactor.Vo2Max in inputs && measuredVo2 == null) setOf(AgeFactor.Vo2Max) else emptySet()
 
@@ -68,7 +69,8 @@ class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: Da
         measuredVo2 = latestAverage(Vo2MaxRecord::class, until, granted) { it.time to it.vo2MillilitersPerMinuteKilogram }
         val age = profile.age
         val resting = inputs[AgeFactor.RestingHeartRate]
-        (measuredVo2 ?: if (age != null && resting != null) estimateVo2Max(age, resting) else null)?.let { inputs[AgeFactor.Vo2Max] = it }
+        val fromRuns = age?.let { runs.vo2Max(until, it) }
+        (measuredVo2 ?: fromRuns ?: if (age != null && resting != null) estimateVo2Max(age, resting) else null)?.let { inputs[AgeFactor.Vo2Max] = it }
         latestAverage(BodyFatRecord::class, until, granted) { it.time to it.percentage.value }?.let { inputs[AgeFactor.BodyFat] = it }
         return inputs
     }

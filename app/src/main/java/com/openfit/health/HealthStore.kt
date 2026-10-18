@@ -102,7 +102,8 @@ class HealthStore(
     // ---- What pages read ----
 
     /** Records of [type] starting in [start, end), as Health Connect's readRecords would return them. */
-    suspend fun <T : Record> read(type: KClass<T>, start: Instant, end: Instant): List<T> {
+    /** [type]'s records starting in [start]..[end]; only those written by [origins] (package names) when given. */
+    suspend fun <T : Record> read(type: KClass<T>, start: Instant, end: Instant, origins: Set<String>? = null): List<T> {
         ensureZone()
         if (end <= start) return emptyList()
         val days = days(day(start), day(end.minusMillis(1)))
@@ -113,12 +114,12 @@ class HealthStore(
         val from = start.toEpochMilli()
         val until = end.toEpochMilli()
         return days.flatMap { day -> records[day].orEmpty() }
-            .filter { it.start in from until until }
+            .filter { it.start in from until until && (origins == null || it.origin in origins) }
             .map { it.toRecord(type) }
     }
 
-    suspend fun <T : Record> read(type: KClass<T>, range: TimeRangeFilter): List<T> =
-        read(type, range.startTime ?: error("Instant ranges only"), range.endTime ?: error("Instant ranges only"))
+    suspend fun <T : Record> read(type: KClass<T>, range: TimeRangeFilter, origins: Set<String>? = null): List<T> =
+        read(type, range.startTime ?: error("Instant ranges only"), range.endTime ?: error("Instant ranges only"), origins)
 
     /** Include intervals filed earlier; callers still clip samples/stages to the requested instant range. */
     suspend fun <T : Record> readOverlapping(type: KClass<T>, range: TimeRangeFilter): List<T> {

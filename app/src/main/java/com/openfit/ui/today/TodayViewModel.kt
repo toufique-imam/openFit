@@ -45,6 +45,7 @@ import com.openfit.health.ExerciseSession
 import com.openfit.health.HealthConnectExercises
 import com.openfit.health.HealthConnectMindfulness
 import com.openfit.health.PulseAgeSource
+import com.openfit.health.RunFitnessSource
 import com.openfit.domain.PulseAge
 import com.openfit.health.SlotCache
 import com.openfit.health.DayLoadCache
@@ -427,6 +428,7 @@ class TodayViewModel(
         val latestExercise = async { runCatching { HealthConnectExercises(gateway).sessions(date, date).maxByOrNull { it.start } }.getOrNull() }
         val mindfulDays = async { runCatching { HealthConnectMindfulness(gateway).mindfulDays(week.first(), week.last()) }.getOrDefault(emptySet()) }
         val sleepScore = async { runCatching { HealthConnectSleep(gateway).nights(date, date)[date]?.let(::sleepScore) }.getOrNull() }
+        val runVo2Max = async { profile.age?.let { age -> runCatching { RunFitnessSource(gateway).vo2Max(date, age) }.getOrNull() } }
         val healthMetrics = async {
             runCatching { metricReadings(date, vitals.daily(HealthMetric.entries.toSet(), date.minusDays(HEALTH_METRIC_DAYS), date)) }.getOrDefault(emptyList())
         }
@@ -464,7 +466,7 @@ class TodayViewModel(
                 profile.sex?.let { sex ->
                     // The same 30 days to the date as the VO2 max page.
                     val resting = history.restingBpm.filterKeys { it > date.minusDays(ESTIMATE_DAYS.toLong()) }.values
-                    fitnessLevel(age, sex, metrics.vo2Max?.value, resting.takeIf { it.isNotEmpty() }?.average())
+                    fitnessLevel(age, sex, metrics.vo2Max?.value, resting.takeIf { it.isNotEmpty() }?.average(), runVo2Max.await())
                 }
             },
             sleepScore = sleepScore.await(),

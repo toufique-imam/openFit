@@ -16,8 +16,16 @@ private const val UTH_FACTOR = 15.3
 
 enum class FitnessBand { Poor, Fair, Good, Excellent, Superior }
 
+/** Where a VO2 max comes from, best first: a watch's measurement, openFit's estimate from runs, or from resting heart rate. */
+enum class Vo2Source { Measured, Runs, RestingHeartRate }
+
 @Serializable
-data class FitnessLevel(val vo2Max: Double, val estimated: Boolean, val percentile: Double) {
+data class FitnessLevel(
+    val vo2Max: Double,
+    val estimated: Boolean,
+    val percentile: Double,
+    val source: Vo2Source = if (estimated) Vo2Source.RestingHeartRate else Vo2Source.Measured,
+) {
     val band: FitnessBand
         get() = when {
             percentile >= 80 -> FitnessBand.Superior
@@ -64,10 +72,15 @@ fun fitnessPercentile(vo2Max: Double, age: Int, sex: Sex): Double {
     return p0 + (p1 - p0) * (vo2Max - v0) / (v1 - v0)
 }
 
-/** A measured VO2 max when there is one, else the Uth estimate from the average resting heart rate. */
-fun fitnessLevel(age: Int, sex: Sex, measured: Double?, averageRestingBpm: Double?): FitnessLevel? {
-    val vo2 = measured ?: averageRestingBpm?.let { estimateVo2Max(age, it) } ?: return null
-    return FitnessLevel(vo2, estimated = measured == null, percentile = fitnessPercentile(vo2, age, sex))
+/** A measured VO2 max when there is one, else the estimate from runs ([fromRuns]), else Uth's from the average resting heart rate. */
+fun fitnessLevel(age: Int, sex: Sex, measured: Double?, averageRestingBpm: Double?, fromRuns: Double? = null): FitnessLevel? {
+    val (vo2, source) = when {
+        measured != null -> measured to Vo2Source.Measured
+        fromRuns != null -> fromRuns to Vo2Source.Runs
+        averageRestingBpm != null -> estimateVo2Max(age, averageRestingBpm) to Vo2Source.RestingHeartRate
+        else -> return null
+    }
+    return FitnessLevel(vo2, estimated = source != Vo2Source.Measured, percentile = fitnessPercentile(vo2, age, sex), source = source)
 }
 
 /** The VO2 max at [percentile] in the user's FRIEND row (the inverse of [fitnessPercentile]), clamped to the 5th-95th. */
@@ -86,14 +99,23 @@ fun fitnessBandEdges(age: Int, sex: Sex): List<Double> = BAND_EDGES.map { vo2AtP
 private val BAND_EDGES = listOf(20.0, 40.0, 60.0, 80.0)
 
 /**
- * VO2 max per day in [days]: the day's measurement if there is one, else the estimate from the average resting heart
- * rate over the [ESTIMATE_DAYS] days to that day (as on Today). Days with neither are left out.
+ * VO2 max per day in [days]: the day's measurement if there is one, else the estimate from the runs ([runs], by day) in
+ * the [RUN_WINDOW_DAYS] days to that day, else the one from the average resting heart rate over the [ESTIMATE_DAYS]
+ * days to it (as on Today). Days with none of these are left out.
  */
-fun dailyVo2Max(age: Int, days: List<LocalDate>, measured: Map<LocalDate, Double>, resting: Map<LocalDate, Double>): Map<LocalDate, Pair<Double, Boolean>> =
+fun dailyVo2Max(
+    age: Int,
+    days: List<LocalDate>,
+    measured: Map<LocalDate, Double>,
+    resting: Map<LocalDate, Double>,
+    runs: Map<LocalDate, List<RunBout>> = emptyMap(),
+): Map<LocalDate, Pair<Double, Vo2Source>> =
     days.mapNotNull { day ->
-        measured[day]?.let { return@mapNotNull day to (it to false) }
+        measured[day]?.let { return@mapNotNull day to (it to Vo2Source.Measured) }
+        runVo2Max((0 until RUN_WINDOW_DAYS).flatMap { runs[day.minusDays(it.toLong())].orEmpty() })
+            ?.let { return@mapNotNull day to (it to Vo2Source.Runs) }
         val window = (0 until ESTIMATE_DAYS).mapNotNull { resting[day.minusDays(it.toLong())] }
-        window.takeIf { it.isNotEmpty() }?.let { day to (estimateVo2Max(age, it.average()) to true) }
+        window.takeIf { it.isNotEmpty() }?.let { day to (estimateVo2Max(age, it.average()) to Vo2Source.RestingHeartRate) }
     }.toMap()
 
 const val ESTIMATE_DAYS = 30
