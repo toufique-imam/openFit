@@ -94,7 +94,7 @@ import com.openfit.ui.vitals.metricOf
 import com.openfit.ui.vitals.page
 import com.openfit.ui.sleep.SleepViewModel
 import com.openfit.ui.theme.OpenFitColors
-import com.openfit.ui.theme.OpenFitTheme
+import com.openfit.ui.theme.SavedOpenFitTheme
 import com.openfit.ui.today.TodayRoute
 import com.openfit.ui.today.TodayViewModel
 import com.openfit.ui.you.YouRoute
@@ -178,7 +178,7 @@ class MainActivity : ComponentActivity() {
         ContextCompat.registerReceiver(this, zoneChanges, IntentFilter(Intent.ACTION_TIMEZONE_CHANGED), ContextCompat.RECEIVER_NOT_EXPORTED)
         if (onboardingStore.done) SyncWorker.schedule(applicationContext)
         setContent {
-            OpenFitTheme {
+            SavedOpenFitTheme {
                 val backStack = rememberSaveable(saver = BackStackSaver) { mutableStateListOf<Screen>(Screen.Tab(RootTab.Today)) }
                 var layout by remember { mutableStateOf(layoutStore.load()) }
                 // Each screen keeps its saved state (scroll position, selected period) while it is on the back stack.
@@ -197,7 +197,7 @@ class MainActivity : ComponentActivity() {
                         SyncWorker.schedule(applicationContext)
                         todayViewModel.refresh()
                     }
-                    return@OpenFitTheme
+                    return@SavedOpenFitTheme
                 }
                 val top = backStack.last()
                 val showTab: (RootTab) -> Unit = { tab ->

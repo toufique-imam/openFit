@@ -5,6 +5,7 @@ import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -70,7 +71,14 @@ import com.openfit.domain.maxHeartRate
 import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
 import com.openfit.profile.WeightUnit
+import com.openfit.ui.theme.Appearance
+import com.openfit.ui.theme.AppearanceStore
+import com.openfit.ui.theme.ColorTheme
 import com.openfit.ui.theme.OpenFitColors
+import com.openfit.ui.theme.ThemeSurfaces
+import com.openfit.ui.theme.dynamicColorAvailable
+import com.openfit.ui.theme.isDark
+import com.openfit.ui.theme.themeSurfaces
 import com.openfit.ui.today.GoogleHealthStatus
 import com.openfit.ui.today.TodayUiState
 import com.openfit.ui.today.TodayViewModel
@@ -86,7 +94,7 @@ import java.time.ZoneOffset
 import java.time.format.DateTimeFormatter
 import java.time.format.FormatStyle
 
-private enum class Editing { None, Name, BirthDate, Sex, Units, WeightUnit, Delete }
+private enum class Editing { None, Name, BirthDate, Sex, Units, WeightUnit, Appearance, Colors, Delete }
 
 /**
  * The user's details, laid out as a list (with a separate editor for each field): each row opens its own editor. Age follows the
@@ -104,6 +112,8 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
     val state by viewModel.state.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val history = remember { GoogleHealthHistory.get(context) }
+    val appearanceStore = remember { AppearanceStore.get(context) }
+    val look by appearanceStore.settings.collectAsStateWithLifecycle()
     val historyState by history.state.collectAsStateWithLifecycle()
     val ready = state as? TodayUiState.Ready
     val profile = ready?.profile ?: viewModel.profile()
@@ -159,6 +169,15 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
                 }
             }
 
+            Spacer(Modifier.height(16.dp))
+            Surface(shape = RoundedCornerShape(24.dp), color = OpenFitColors.Card, modifier = Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(horizontal = 20.dp, vertical = 4.dp)) {
+                    InfoRow(stringResource(R.string.appearance_title), stringResource(appearanceLabel(look.appearance))) { editing = Editing.Appearance }
+                    Divider()
+                    InfoRow(stringResource(R.string.color_theme_title), stringResource(colorThemeLabel(look.theme))) { editing = Editing.Colors }
+                }
+            }
+
             ready?.let { current ->
                 Spacer(Modifier.height(16.dp))
                 GoogleHealthCard(
@@ -211,6 +230,28 @@ fun ProfileRoute(viewModel: TodayViewModel, sync: HealthSync, onBack: () -> Unit
             selected = profile.weightUnit,
             onDismiss = { editing = Editing.None },
         ) { save(profile.copy(weightUnit = it)) }
+        Editing.Appearance -> ChoiceDialog(
+            title = stringResource(R.string.appearance_title),
+            options = Appearance.entries.map { it to stringResource(appearanceLabel(it)) },
+            selected = look.appearance,
+            onDismiss = { editing = Editing.None },
+        ) {
+            editing = Editing.None
+            appearanceStore.save(look.copy(appearance = it))
+        }
+        Editing.Colors -> {
+            val light = !look.appearance.isDark()
+            ChoiceDialog(
+                title = stringResource(R.string.color_theme_title),
+                options = ColorTheme.entries.filter { it != ColorTheme.Dynamic || dynamicColorAvailable }.map { it to stringResource(colorThemeLabel(it)) },
+                selected = look.theme,
+                onDismiss = { editing = Editing.None },
+                leading = { theme -> if (theme != ColorTheme.Dynamic) ThemeSwatch(themeSurfaces(theme, light, black = look.appearance == Appearance.Black)) },
+            ) {
+                editing = Editing.None
+                appearanceStore.save(look.copy(theme = it))
+            }
+        }
         Editing.Delete -> AlertDialog(
             onDismissRequest = { editing = Editing.None },
             title = { Text(stringResource(R.string.profile_delete_title)) },
@@ -507,7 +548,14 @@ private fun BirthDateDialog(profile: Profile, onDismiss: () -> Unit, onSave: (Lo
 private fun utcDate(millis: Long): LocalDate = Instant.ofEpochMilli(millis).atZone(ZoneOffset.UTC).toLocalDate()
 
 @Composable
-private fun <T> ChoiceDialog(title: String, options: List<Pair<T, String>>, selected: T?, onDismiss: () -> Unit, onPick: (T) -> Unit) {
+private fun <T> ChoiceDialog(
+    title: String,
+    options: List<Pair<T, String>>,
+    selected: T?,
+    onDismiss: () -> Unit,
+    leading: (@Composable (T) -> Unit)? = null,
+    onPick: (T) -> Unit,
+) {
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -520,7 +568,8 @@ private fun <T> ChoiceDialog(title: String, options: List<Pair<T, String>>, sele
                             onClick = { onPick(value) },
                             colors = RadioButtonDefaults.colors(selectedColor = OpenFitColors.Mint.accent),
                         )
-                        Text(label, style = MaterialTheme.typography.bodyLarge)
+                        Text(label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
+                        leading?.invoke(value)
                     }
                 }
             }
@@ -528,6 +577,32 @@ private fun <T> ChoiceDialog(title: String, options: List<Pair<T, String>>, sele
         confirmButton = {},
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(R.string.cancel)) } },
     )
+}
+
+/** A theme's background with its main accent on it. */
+@Composable
+private fun ThemeSwatch(surfaces: ThemeSurfaces) {
+    Box(
+        Modifier.size(32.dp).clip(CircleShape).background(surfaces.background).border(1.dp, surfaces.outlineVariant, CircleShape),
+        contentAlignment = Alignment.Center,
+    ) {
+        Box(Modifier.size(14.dp).clip(CircleShape).background(surfaces.primary))
+    }
+}
+
+private fun appearanceLabel(appearance: Appearance): Int = when (appearance) {
+    Appearance.System -> R.string.appearance_system
+    Appearance.Light -> R.string.appearance_light
+    Appearance.Dark -> R.string.appearance_dark
+    Appearance.Black -> R.string.appearance_black
+}
+
+private fun colorThemeLabel(theme: ColorTheme): Int = when (theme) {
+    ColorTheme.Ocean -> R.string.color_theme_ocean
+    ColorTheme.Forest -> R.string.color_theme_forest
+    ColorTheme.Rose -> R.string.color_theme_rose
+    ColorTheme.Graphite -> R.string.color_theme_graphite
+    ColorTheme.Dynamic -> R.string.color_theme_dynamic
 }
 
 private fun sexLabel(sex: Sex): Int = when (sex) {

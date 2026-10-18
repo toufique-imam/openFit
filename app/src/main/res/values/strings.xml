@@ -105,6 +105,17 @@
     <string name="age">Age</string>
     <string name="fitness_goal_maintain">Maintain · 150/wk</string>
     <string name="fitness_goal_improve">Improve · 300/wk</string>
+    <string name="appearance_title">Theme</string>
+    <string name="appearance_system">System default</string>
+    <string name="appearance_light">Light</string>
+    <string name="appearance_dark">Dark</string>
+    <string name="appearance_black">Black (OLED)</string>
+    <string name="color_theme_title">Colours</string>
+    <string name="color_theme_ocean">Ocean</string>
+    <string name="color_theme_forest">Forest</string>
+    <string name="color_theme_rose">Rose</string>
+    <string name="color_theme_graphite">Graphite</string>
+    <string name="color_theme_dynamic">From wallpaper</string>
     <string name="units_distance">Distance and water</string>
     <string name="units_metric">km, ml</string>
     <string name="units_imperial">mi, fl oz</string>
