@@ -55,4 +55,12 @@ class TargetsTest {
         assertEquals(10.0, dailyTarget(200.0, 0.0, 0.0, saturday, readiness = null, chronicWeekly = 200.0, previousSixDays = 250.0).daily, 1e-9)
         assertEquals(0.0, dailyTarget(200.0, 250.0, 0.0, saturday, readiness = null).daily, 0.0)
     }
+
+    @Test
+    fun restDaysShareTheWeekOut() {
+        // Wednesday with Friday as the rest day: what is left is spread over Wednesday, Thursday and Saturday.
+        val wednesday = dailyTarget(210.0, doneBeforeToday = 90.0, doneToday = 0.0, dayIndex = 3, readiness = null, trainingDaysLeft = 3)
+        assertEquals(40.0, wednesday.daily, 1e-9)
+        assertEquals(0.0, dailyTarget(210.0, 90.0, 0.0, dayIndex = 5, readiness = null, restDay = true).daily, 0.0)
+    }
 }

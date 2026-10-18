@@ -128,6 +128,13 @@ object EnergyRates {
     const val DRAIN = 0.33
     const val BASE_STRESS = 40.0
 
+    /**
+     * A daytime slot without heart rate (watch off, not asleep) drains like waking time at [BASE_STRESS]: the day goes
+     * on without the watch. Night slots without heart rate or a sleep record are left alone.
+     */
+    const val UNWORN_DAY_FROM_SLOT = 7 * 60 / SLOT_MINUTES
+    const val UNWORN_DAY_UNTIL_SLOT = 23 * 60 / SLOT_MINUTES
+
     /** Below this stress, waking time charges instead of draining. */
     const val CALM_BELOW = 20
 
@@ -160,7 +167,7 @@ fun energyBank(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): Li
         var wakeSlot: Int? = null
         var wakeLevel: Double? = null
         slots.forEachIndexed { i, slot ->
-            val change = slotChange(slot, level, baseline)
+            val change = slotChange(slot, i, level, baseline)
             if (slot.exercise) {
                 if (workoutStart < 0 || !slots[i - 1].exercise) workoutStart = i
             } else {
@@ -169,12 +176,12 @@ fun energyBank(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): Li
             if (change != null) {
                 level = (level + change).coerceIn(EnergyRates.MIN, EnergyRates.MAX)
                 if (change > 0) charged += change else drained -= change
-                if (change < 0) {
+                if (change < 0 && slot.bpm != null) {
                     if (slot.exercise) workoutDrain[workoutStart] = (workoutDrain[workoutStart] ?: 0.0) - change
                     else stressDrain[i * SLOT_MINUTES / 60] -= change
                 }
             }
-            levels += if (change == null && slot.bpm == null) null else level
+            levels += if (slot.bpm == null && !slot.asleep) null else level
             if (slot.asleep && i < MORNING_END_SLOT) {
                 wakeSlot = i
                 wakeLevel = level
@@ -189,12 +196,12 @@ fun energyBank(days: List<Pair<LocalDate, List<Slot>>>, showFrom: LocalDate): Li
     return result
 }
 
-/** How one slot moves the bank, or null when it cannot (not worn, and not asleep). */
-private fun slotChange(slot: Slot, level: Double, baseline: IntArray): Double? {
+/** How slot [index] moves the bank, or null when it cannot (not worn at night, and not asleep). */
+private fun slotChange(slot: Slot, index: Int, level: Double, baseline: IntArray): Double? {
     val toTop = min(1.0, (EnergyRates.MAX - level) / EnergyRates.EDGE)
     val toBottom = min(1.0, (level - EnergyRates.MIN) / EnergyRates.EDGE)
     if (slot.asleep) return EnergyRates.ASLEEP * toTop
-    val bpm = slot.bpm ?: return null
+    val bpm = slot.bpm ?: return if (index in EnergyRates.UNWORN_DAY_FROM_SLOT until EnergyRates.UNWORN_DAY_UNTIL_SLOT) -EnergyRates.DRAIN * toBottom else null
     val stress = slotStress(bpm, baseline) ?: return null
     return if (stress < EnergyRates.CALM_BELOW) {
         EnergyRates.CALM * toTop

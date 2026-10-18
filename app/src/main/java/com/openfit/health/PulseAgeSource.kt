@@ -123,8 +123,12 @@ class PulseAgeSource(private val gateway: HealthConnectGateway, dayLoadCache: Da
         const val WINDOW_DAYS = 28L
         private const val LOOKBACK_DAYS = 90L
 
-        /** Workouts that count as strength: strength training, weightlifting, calisthenics, HIIT, Pilates and yoga. */
+        /**
+         * Workouts that count as strength: strength training, weightlifting, calisthenics, HIIT, Pilates and yoga, and
+         * "other workout", which is how Fitbit writes its generic Workout (mostly gym sessions) to Health Connect.
+         */
         private val STRENGTH_TYPES = setOf(
+            ExerciseSessionRecord.EXERCISE_TYPE_OTHER_WORKOUT,
             ExerciseSessionRecord.EXERCISE_TYPE_STRENGTH_TRAINING,
             ExerciseSessionRecord.EXERCISE_TYPE_WEIGHTLIFTING,
             ExerciseSessionRecord.EXERCISE_TYPE_CALISTHENICS,

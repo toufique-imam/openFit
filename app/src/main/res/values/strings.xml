@@ -555,6 +555,11 @@
     <string name="goal_fitness_improve">Improve</string>
     <string name="goal_fitness_body">Sets your daily Training load target and your weekly Effort minutes goal.</string>
     <string name="goal_value_days">%d days</string>
+    <string name="goal_week_start">Week starts on</string>
+    <string name="goal_week_start_body">Used for week charts, the week on Today and weekly goals.</string>
+    <string name="goal_rest_days">Rest days</string>
+    <string name="goal_rest_days_body">On a rest day your Training load target is an easy day. The rest of the week shares out your usual load.</string>
+    <string name="goal_rest_days_none">None</string>
     <string name="goal_meta_daily">Daily</string>
     <string name="goal_meta_weekly">Weekly</string>
     <string name="goal_meta_target_value">Target value</string>

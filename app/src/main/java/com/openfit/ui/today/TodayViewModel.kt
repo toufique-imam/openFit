@@ -63,12 +63,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import java.time.DayOfWeek
 import java.time.Duration
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
-import java.time.temporal.TemporalAdjusters
 
 sealed interface GoogleHealthStatus {
     data object Off : GoogleHealthStatus
@@ -449,13 +447,15 @@ class TodayViewModel(
             latestExercise = latestExercise.await(),
             mindfulDays = mindfulDays.await(),
             readiness = readiness,
-            cardioRange = dailyCardioRange(date, profile.fitnessGoal, loaded.history.cardioLoad, readiness),
+            cardioRange = dailyCardioRange(date, profile.fitnessGoal, loaded.history.cardioLoad, readiness, profile.restDays),
             zoneTarget = dailyTarget(
                 weekly = weeklyZoneTarget(profile.fitnessGoal, zoneWeeks.filterNotNull()),
                 doneBeforeToday = week.take(dayIndex).sumOf { zoneMinutes[it] ?: 0.0 },
                 doneToday = metrics.zoneMinutes?.total?.toDouble() ?: 0.0,
                 dayIndex = dayIndex,
                 readiness = readiness,
+                trainingDaysLeft = week.drop(dayIndex).count { it.dayOfWeek !in profile.restDays },
+                restDay = date.dayOfWeek in profile.restDays,
             ),
             profile = profile,
             missingPermissions = missing,
@@ -480,7 +480,12 @@ class TodayViewModel(
     ): Loaded = coroutineScope {
         val metrics = sources.map { async { it.load(date, profile) } }
         val exerciseDays = sources.map { async { it.exerciseDays(week.first(), week.last()) } }
-        val history = sources.map { async { it.history(week.first().minusWeeks(HISTORY_WEEKS), date.minusDays(1), profile) } }
+        val from = week.first().minusWeeks(HISTORY_WEEKS)
+        val until = date.minusDays(1)
+        // Every day of the window: the target's 28-day average and 6-day sum are wrong with any day still pending, and
+        // the loads come from the local copy, not Health Connect.
+        val backfill = (until.toEpochDay() - from.toEpochDay()).toInt() + 1
+        val history = sources.map { async { it.history(from, until, profile, backfillDays = backfill) } }
         Loaded(
             metrics = mergeMetrics(metrics.awaitAll()),
             exerciseDays = exerciseDays.awaitAll().flatten().toSet(),
@@ -519,7 +524,7 @@ class TodayViewModel(
     }
 
     private fun weekOf(date: LocalDate): List<LocalDate> {
-        val start = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+        val start = com.openfit.domain.weekStart(date)
         return (0L until 7L).map(start::plusDays)
     }
 

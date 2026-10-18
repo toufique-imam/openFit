@@ -13,6 +13,8 @@ import android.content.Context
 import android.content.SharedPreferences
 import com.openfit.domain.FitnessGoal
 import com.openfit.domain.Sex
+import com.openfit.domain.WeekStart
+import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalTime
 import java.time.Period
@@ -50,10 +52,18 @@ data class Profile(
     val dailyCaloriesInGoal: Int? = null,
     val dailyWaterGoalLiters: Double? = null,
     val weightGoalKg: Double? = null,
+    /** The first day of the week for week charts, the Today week strip and weekly goals. */
+    val weekStart: DayOfWeek = DayOfWeek.SUNDAY,
+    /** Planned rest days: Cardio Load asks only for an easy day on them, and weekly goals spread over the other days. */
+    val restDays: Set<DayOfWeek> = emptySet(),
 )
 
 class ProfileStore internal constructor(private val prefs: SharedPreferences, private val today: () -> LocalDate = LocalDate::now) {
     constructor(context: Context) : this(context.getSharedPreferences("profile", Context.MODE_PRIVATE))
+
+    init {
+        WeekStart.first = weekStart()
+    }
 
     fun load(): Profile {
         val imperial = Locale.getDefault().country in IMPERIAL_COUNTRIES
@@ -80,6 +90,8 @@ class ProfileStore internal constructor(private val prefs: SharedPreferences, pr
             dailyCaloriesInGoal = int(KEY_FOOD_GOAL),
             dailyWaterGoalLiters = double(KEY_WATER_GOAL),
             weightGoalKg = double(KEY_WEIGHT_GOAL),
+            weekStart = weekStart(),
+            restDays = prefs.getStringSet(KEY_REST_DAYS, null).orEmpty().mapNotNull { name -> DayOfWeek.entries.firstOrNull { it.name == name } }.toSet(),
         )
     }
 
@@ -109,8 +121,14 @@ class ProfileStore internal constructor(private val prefs: SharedPreferences, pr
             putInt(KEY_FOOD_GOAL, profile.dailyCaloriesInGoal ?: 0)
             putFloat(KEY_WATER_GOAL, profile.dailyWaterGoalLiters?.toFloat() ?: 0f)
             putFloat(KEY_WEIGHT_GOAL, profile.weightGoalKg?.toFloat() ?: 0f)
+            putString(KEY_WEEK_START, profile.weekStart.name)
+            putStringSet(KEY_REST_DAYS, profile.restDays.mapTo(HashSet()) { it.name })
         }.apply()
+        WeekStart.first = profile.weekStart
     }
+
+    private fun weekStart(): DayOfWeek =
+        prefs.getString(KEY_WEEK_START, null)?.let { name -> DayOfWeek.entries.firstOrNull { it.name == name } } ?: DayOfWeek.SUNDAY
 
     private fun ageOn(birthDate: LocalDate): Int = Period.between(birthDate, today()).years
 
@@ -162,6 +180,8 @@ class ProfileStore internal constructor(private val prefs: SharedPreferences, pr
         const val KEY_FOOD_GOAL = "daily_food_goal_kcal"
         const val KEY_WATER_GOAL = "daily_water_goal_l"
         const val KEY_WEIGHT_GOAL = "weight_goal_kg"
+        const val KEY_WEEK_START = "week_start"
+        const val KEY_REST_DAYS = "rest_days"
 
         val IMPERIAL_COUNTRIES = setOf("US", "LR", "MM")
     }

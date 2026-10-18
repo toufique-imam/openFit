@@ -73,6 +73,58 @@ class CardioTargetsTest {
     }
 
     @Test
+    fun highReadinessLiftsTheFloorAfterAHardWeek() {
+        // 18 Oct 2026: 307 over the six days before against a usual week of 264 leaves Fitbit's minimum, 4-24.
+        assertEquals(LoadRange(4.0, 24.0, 0.45 * 264), dailyCardioRange(FitnessGoal.Maintain, 264.0, 307.0, moderate))
+
+        // Readiness 74 asks for 75% + 9/35 of the last quarter of a usual day (264 / 7): 30.7, and half of it at the low end.
+        val recovered = dailyCardioRange(FitnessGoal.Maintain, 264.0, 307.0, Readiness(74, illness = false))
+        val floor = 264.0 / 7 * (0.75 + 0.25 * 9 / 35)
+        assertEquals(floor, recovered.high, 1e-9)
+        assertEquals(floor / 2, recovered.low, 1e-9)
+        assertEquals(264.0 / 7, recoveryFloor(264.0, 100), 1e-9)
+    }
+
+    @Test
+    fun aRestDayAsksForAnEasyDay() {
+        val fresh = dailyCardioRange(FitnessGoal.Maintain, chronicWeekly = 300.0, previousSixDays = 100.0, readiness = Readiness(90, illness = false), restDay = true)
+        assertEquals(0.0, fresh.low, 0.0)
+        assertEquals(24.0, fresh.high, 0.0)
+
+        // Illness still wins.
+        val ill = dailyCardioRange(FitnessGoal.Maintain, chronicWeekly = 300.0, previousSixDays = 100.0, readiness = Readiness(50, illness = true), restDay = true)
+        assertEquals(15.0, ill.high, 1e-9)
+
+        val saturday = LocalDate.of(2026, 9, 26)
+        assertEquals(24.0, dailyCardioRange(saturday, FitnessGoal.Maintain, fitbitLoads, moderate, setOf(java.time.DayOfWeek.SATURDAY))!!.high, 0.0)
+    }
+
+    @Test
+    fun weeklyRestDaysSpreadTheLoadOverTheOtherDays() {
+        // Six days of 40 and a rest day each week: every training day gets the same target, the rest day the minimum.
+        val friday = java.time.DayOfWeek.FRIDAY
+        val start = LocalDate.of(2026, 8, 30)
+        val loads = (0L until 42L).map(start::plusDays).associateWith { if (it.dayOfWeek == friday) 0.0 else 40.0 }
+        val days = (35L until 42L).map(start::plusDays)
+        val highs = days.associateWith { day -> dailyCardioRange(day, FitnessGoal.Maintain, loads.filterKeys { it < day }, moderate, setOf(friday))!!.high }
+        val training = highs.filterKeys { it.dayOfWeek != friday }.values
+        assertEquals(1.144 * 240 - 200, training.first(), 1e-9)
+        training.forEach { assertEquals(training.first(), it, 1e-9) }
+        assertEquals(24.0, highs.getValue(days.first { it.dayOfWeek == friday }), 0.0)
+    }
+
+    @Test
+    fun aDayUnderItsTargetCarriesOverToTheNext() {
+        // 40 every day, then one day of 15 where 40 was the plan: the next day's target rises by most of the 25, less
+        // what the lighter day takes off the usual week (25 / 4 weeks, times the goal's ratio).
+        val date = LocalDate.of(2026, 10, 1)
+        val steady = (1L..28L).associate { date.minusDays(it) to 40.0 }
+        val light = steady + (date.minusDays(1) to 15.0)
+        val carried = dailyCardioRange(date, FitnessGoal.Maintain, light, moderate)!!.high - dailyCardioRange(date, FitnessGoal.Maintain, steady, moderate)!!.high
+        assertEquals(25 - 1.144 * 25 / 4, carried, 1e-9)
+    }
+
+    @Test
     fun trainingStatusComparesTheLastWeekWithTheMonth() {
         val steady = (0L until 28L).associate { LocalDate.of(2026, 9, 28).minusDays(it) to 40.0 }
         val ratio = acuteChronicRatio(LocalDate.of(2026, 9, 28), steady)!!

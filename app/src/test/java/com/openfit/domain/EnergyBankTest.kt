@@ -65,6 +65,26 @@ class EnergyBankTest {
     }
 
     @Test
+    fun `a daytime without the watch still drains, a night without it does not`() {
+        // Worn until noon, then off: the afternoon (to 23:00) drains like an average waking day, and the gap is not drawn.
+        val offAtNoon = List(SLOTS_PER_DAY) { i -> if (i < 120) day(70)[i] else Slot(null) }
+        val warmUp = (0L until 8L).map { start.plusDays(it) to day(70) }
+        val nextNight = List(SLOTS_PER_DAY) { i -> if (i == 0) Slot(55, asleep = true) else Slot(null) }
+        val result = energyBank(warmUp + (start.plusDays(8) to offAtNoon) + (start.plusDays(9) to nextNight), showFrom = start.plusDays(8))
+        val (off, next) = result
+        val noon = off.levels[119]!!
+        assertTrue(off.levels.drop(120).all { it == null })
+        assertTrue(off.drains.none { it is EnergyDrain.Stress && it.hour >= 12 })
+
+        // 110 slots at the base drain from noon's level; nothing moves between 23:00 and the next sleep record.
+        var expected = noon
+        repeat(110) { expected -= EnergyRates.DRAIN * minOf(1.0, (expected - EnergyRates.MIN) / EnergyRates.EDGE) }
+        val midnight = next.levels[0]!! - EnergyRates.ASLEEP * minOf(1.0, (EnergyRates.MAX - expected) / EnergyRates.EDGE)
+        assertEquals(expected, midnight, 1e-9)
+        assertTrue("noon $noon, midnight $midnight", noon - midnight > 20)
+    }
+
+    @Test
     fun `bands follow the thirds`() {
         assertEquals(EnergyBand.Plenty, energyBand(67.0))
         assertEquals(EnergyBand.PaceYourself, energyBand(34.0))

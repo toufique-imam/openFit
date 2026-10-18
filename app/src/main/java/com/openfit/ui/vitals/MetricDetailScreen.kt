@@ -81,11 +81,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
-import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -188,11 +186,11 @@ class MetricDetailViewModel(private val metric: HealthMetric, gateway: HealthCon
         }
     }
 
-    /** Week: each day with a value; Month: each Sunday week; Year: each month. Newest first. */
+    /** Week: each day with a value; Month: each week; Year: each month. Newest first. */
     private fun rows(days: List<LocalDate>, values: Map<LocalDate, Double>, ranges: Map<LocalDate, PersonalRange>): List<MetricListRow> {
         val groups: List<List<LocalDate>> = when (period) {
             ChartPeriod.Year -> days.groupBy { YearMonth.from(it) }.values.toList()
-            ChartPeriod.Month -> days.groupBy { it.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY)) }.values.toList()
+            ChartPeriod.Month -> days.groupBy { com.openfit.domain.weekStart(it) }.values.toList()
             else -> days.map { listOf(it) }
         }
         return groups.mapNotNull { group ->

@@ -210,7 +210,7 @@ class HeartViewModel(
         )
     }
 
-    /** Sunday weeks within the days shown (the first and last may be partial). */
+    /** Weeks within the days shown (the first and last may be partial). */
     private fun List<LocalDate>.chunkedByWeek(): List<List<LocalDate>> =
         groupBy { com.openfit.domain.weekStart(it) }.values.toList()
 

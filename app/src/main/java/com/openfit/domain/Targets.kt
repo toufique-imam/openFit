@@ -65,11 +65,15 @@ fun dailyTarget(
     readiness: Readiness?,
     chronicWeekly: Double? = null,
     previousSixDays: Double? = null,
+    /** Today and the days after it this week that are not planned rest days; the rest of the week is spread over them. */
+    trainingDaysLeft: Int = 7 - dayIndex.coerceIn(0, 6),
+    restDay: Boolean = false,
 ): LoadTarget {
     val evenShare = weekly / 7
     val remaining = max(0.0, weekly - doneBeforeToday)
+    if (restDay) return LoadTarget(weekly = weekly, daily = 0.0, doneThisWeek = doneBeforeToday + doneToday)
     val multiplier = readiness?.let { min(MAX_READINESS_BOOST, 0.5 + it.score / 100.0) } ?: 1.0
-    var daily = remaining / (7 - dayIndex.coerceIn(0, 6)) * multiplier
+    var daily = remaining / trainingDaysLeft.coerceAtLeast(1) * multiplier
     daily = min(daily, CATCH_UP_LIMIT * evenShare)
     if (chronicWeekly != null && previousSixDays != null && chronicWeekly >= MIN_CHRONIC_FOR_CAP) {
         daily = min(daily, MAX_ACUTE_TO_CHRONIC * chronicWeekly - previousSixDays)

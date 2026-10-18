@@ -79,6 +79,13 @@ The bounds move day to day by exactly the load that enters or leaves a rolling 7
 - **No target** only without a week of history.
 - **Ring and Day-chart scale** = 0.45 x chronic (Fitbit's day-chart axis of 139 = 0.45 x 310).
 - **Fit:** 17 of 19 days within 2 of both of Fitbit's bounds (sum of squared errors 59, down from 89 before the refit). 11 Sept is off by 6 at the top (Fitbit 6-35, model 4-29).
+- **Carry-over** comes from the rolling window: a day under target leaves more for the next days (a 25 shortfall raises tomorrow's top by 25 - 1.144 x 25 / 4 = 17.9, since the light day also lowers the chronic). Fitbit did the same: 20 Sept (18, under 57-89) was followed by 67-98.
+
+openFit's own changes to Fitbit's model (Oct 2026, at the user's request):
+
+- **Recovery floor:** with high readiness (65 or above) the range never falls below a part of a usual day (chronic / 7): from 75% of it at 65 to 100% at 100, low end half of that. A hard week then ends in a small real target instead of 4-24 (18 Oct 2026: readiness 74, 4-24 became 15-31). Fitbit did not do this.
+- **Rest days** (profile): the rest day itself gets 0-24. The rolling window already spreads the week over the other days (one rest day a week: each training day's target is 1.144 x chronic - 5 training days).
+- **Week start** (profile) sets week charts, the Today week and the weekly zone-minutes plan; the rolling Cardio Load target does not depend on it.
 
 ### Training status ("Your past seven days of training")
 

@@ -4,6 +4,7 @@ package com.openfit.domain
 
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
+import java.time.DayOfWeek
 import java.time.LocalDate
 import kotlin.math.floor
 import kotlin.math.max
@@ -38,6 +39,14 @@ private const val ILLNESS_HIGH_SHARE = 0.05
  */
 private const val MIN_TARGET_LOW = 4.0
 private const val MIN_TARGET_HIGH = 24.0
+/**
+ * openFit's own addition, not Fitbit's: with high readiness the range never drops below part of a usual day (the 28-day
+ * average day), from 75% of it at readiness 65 to all of it at 100, so a well-recovered day after a hard week still has a
+ * real target. The low end is half of that.
+ */
+private const val RECOVERY_FLOOR_AT_HIGH = 0.75
+private const val RECOVERY_FLOOR_AT_TOP = 1.0
+private const val RECOVERY_FLOOR_LOW_SHARE = 0.5
 private const val RING_SCALE_SHARE = 0.45
 private const val RING_HEADROOM = 1.25
 // Fitbit 4.67's acute:chronic bands and bar segments (decompiled; the ratio itself is computed on Fitbit's server).
@@ -76,22 +85,49 @@ fun previousSixDays(date: LocalDate, daily: Map<LocalDate, Double>): Double = (1
  * brings the rolling 7-day load to a window around the chronic weekly load, never below Fitbit's minimum target. The
  * window is set by the fitness goal. Readiness from 43 to 88 left it unchanged, so only low readiness moves it
  * (assumed; untested), and a day without a readiness score still gets a target, as on Fitbit.
+ *
+ * Because the window rolls, load carries over: a day under its target leaves more for the next days, a day over it
+ * less. Planned rest days need nothing more than an easy target on the day itself ([restDay]): with them in the window,
+ * the 7-day load spreads over the other days. High readiness raises the floor (see [RECOVERY_FLOOR_AT_HIGH]).
  */
-fun dailyCardioRange(goal: FitnessGoal, chronicWeekly: Double, previousSixDays: Double, readiness: Readiness?): LoadRange {
+fun dailyCardioRange(goal: FitnessGoal, chronicWeekly: Double, previousSixDays: Double, readiness: Readiness?, restDay: Boolean = false): LoadRange {
     val shift = if (readiness?.level == ReadinessLevel.Low) LOW_READINESS_SHIFT else 0.0
     var high = max((goal.highLoadRatio + shift) * chronicWeekly - previousSixDays, MIN_TARGET_HIGH)
     var low = ((goal.lowLoadRatio + shift) * chronicWeekly - previousSixDays).coerceIn(MIN_TARGET_LOW, high)
-    if (readiness?.illness == true) {
-        low = 0.0
-        high = ILLNESS_HIGH_SHARE * chronicWeekly
+    when {
+        readiness?.illness == true -> {
+            low = 0.0
+            high = ILLNESS_HIGH_SHARE * chronicWeekly
+        }
+        restDay -> {
+            low = 0.0
+            high = MIN_TARGET_HIGH
+        }
+        readiness != null && readiness.level == ReadinessLevel.High -> {
+            val floor = recoveryFloor(chronicWeekly, readiness.score)
+            high = max(high, floor)
+            low = max(low, RECOVERY_FLOOR_LOW_SHARE * floor)
+        }
     }
     return LoadRange(low = low, high = high, scale = max(RING_SCALE_SHARE * chronicWeekly, RING_HEADROOM * high))
 }
 
+/** The top of the range a high-readiness day never drops below: part of a usual day, more with higher readiness. */
+fun recoveryFloor(chronicWeekly: Double, readinessScore: Int): Double {
+    val progress = ((readinessScore - HIGH_READINESS) / (100.0 - HIGH_READINESS)).coerceIn(0.0, 1.0)
+    return max(MIN_TARGET_HIGH, chronicWeekly / 7 * (RECOVERY_FLOOR_AT_HIGH + progress * (RECOVERY_FLOOR_AT_TOP - RECOVERY_FLOOR_AT_HIGH)))
+}
+
 /** The target for [date], or null without a week of history; Fitbit then shows "No target". */
-fun dailyCardioRange(date: LocalDate, goal: FitnessGoal, daily: Map<LocalDate, Double>, readiness: Readiness?): LoadRange? {
+fun dailyCardioRange(
+    date: LocalDate,
+    goal: FitnessGoal,
+    daily: Map<LocalDate, Double>,
+    readiness: Readiness?,
+    restDays: Set<DayOfWeek> = emptySet(),
+): LoadRange? {
     val chronic = chronicWeeklyLoad(date, daily) ?: return null
-    return dailyCardioRange(goal, chronic, previousSixDays(date, daily), readiness)
+    return dailyCardioRange(goal, chronic, previousSixDays(date, daily), readiness, restDay = date.dayOfWeek in restDays)
 }
 
 fun targetStatus(load: Double, range: LoadRange): TargetStatus = when {

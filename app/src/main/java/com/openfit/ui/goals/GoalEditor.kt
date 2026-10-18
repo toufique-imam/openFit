@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -34,11 +36,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import com.openfit.R
 import com.openfit.domain.FitnessGoal
+import com.openfit.domain.WeekStart
 import com.openfit.profile.Profile
 import com.openfit.profile.UnitSystem
 import com.openfit.profile.WeightUnit
 import com.openfit.ui.theme.OpenFitColors
+import java.time.DayOfWeek
 import java.time.LocalTime
+import java.time.format.TextStyle
+import java.util.Locale
 import java.time.format.DateTimeFormatter
 import kotlin.math.roundToInt
 
@@ -128,6 +134,8 @@ private fun GoalInput(goal: Goal, profile: Profile, onChange: (Profile?) -> Unit
         Goal.WakeTime -> InlineTime(profile.wakeTime) { onChange(profile.copy(wakeTime = it)) }
         Goal.HourlyActivity -> HourlyInput(profile, onChange)
         Goal.Fitness, Goal.ZoneMinutes -> FitnessInput(profile, onChange)
+        Goal.WeekStart -> WeekStartInput(profile, onChange)
+        Goal.RestDays -> RestDaysInput(profile, onChange)
     }
 }
 
@@ -274,6 +282,47 @@ private fun HourField(label: String, hour: Int?, options: IntRange, onPick: (Int
 }
 
 fun hourText(hour: Int): String = "%02d:00".format(hour % 24)
+
+@Composable
+private fun WeekStartInput(profile: Profile, onChange: (Profile?) -> Unit) {
+    var selected by remember { mutableStateOf(profile.weekStart) }
+    Column {
+        Text(stringResource(R.string.goal_week_start_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+        DayOfWeek.entries.forEach { day ->
+            Row(
+                Modifier.fillMaxWidth().selectable(selected = day == selected, onClick = {
+                    selected = day
+                    onChange(profile.copy(weekStart = day))
+                }).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                RadioButton(selected = day == selected, onClick = null)
+                Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault()), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+            }
+        }
+    }
+}
+
+@Composable
+private fun RestDaysInput(profile: Profile, onChange: (Profile?) -> Unit) {
+    var selected by remember { mutableStateOf(profile.restDays) }
+    Column {
+        Text(stringResource(R.string.goal_rest_days_body), style = MaterialTheme.typography.bodyMedium, color = OpenFitColors.OnSurfaceVariant)
+        WeekStart.days.forEach { day ->
+            val checked = day in selected
+            Row(
+                Modifier.fillMaxWidth().toggleable(value = checked, onValueChange = {
+                    selected = if (it) selected + day else selected - day
+                    onChange(profile.copy(restDays = selected))
+                }).padding(vertical = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Checkbox(checked = checked, onCheckedChange = null)
+                Text(day.getDisplayName(TextStyle.FULL, Locale.getDefault()), style = MaterialTheme.typography.bodyLarge, modifier = Modifier.padding(start = 12.dp))
+            }
+        }
+    }
+}
 
 @Composable
 private fun FitnessInput(profile: Profile, onChange: (Profile?) -> Unit) {

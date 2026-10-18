@@ -49,7 +49,10 @@ import com.openfit.ui.today.whole
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import com.openfit.domain.WeekStart
 import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.util.Locale
 import kotlin.math.ceil
 
 private const val METERS_PER_MILE = 1_609.344
@@ -168,6 +171,10 @@ fun goalValue(goal: Goal, profile: Profile): String? {
         Goal.MindfulDays -> profile.weeklyMindfulDaysGoal?.let { stringResource(R.string.goal_value_days, it) }
         Goal.HourlyActivity -> profile.activeHours?.let { "${hourText(it.first)} – ${hourText(it.last + 1)}" }
         Goal.Fitness -> stringResource(if (profile.fitnessGoal == FitnessGoal.Improve) R.string.goal_fitness_improve else R.string.goal_fitness_maintain)
+        Goal.WeekStart -> profile.weekStart.getDisplayName(TextStyle.FULL, Locale.getDefault())
+        Goal.RestDays -> WeekStart.days.filter { it in profile.restDays }
+            .joinToString(", ") { it.getDisplayName(TextStyle.SHORT, Locale.getDefault()) }
+            .ifEmpty { stringResource(R.string.goal_rest_days_none) }
         Goal.Food -> profile.dailyCaloriesInGoal?.let { "${whole(it)} ${stringResource(R.string.unit_cal)}" }
         Goal.Water -> profile.dailyWaterGoalLiters?.let {
             if (imperial) "${oneDecimal(it * FL_OZ_PER_LITER)} ${stringResource(R.string.unit_fl_oz)}" else "${whole(it * 1_000)} ${stringResource(R.string.unit_ml)}"
@@ -182,6 +189,7 @@ fun goalValue(goal: Goal, profile: Profile): String? {
 private fun goalMeta(goal: Goal): Int? = when (goal) {
     Goal.ExerciseDays, Goal.MindfulDays -> R.string.goal_meta_weekly
     Goal.Weight -> R.string.goal_meta_target_value
-    Goal.Fitness -> null
+    Goal.Fitness, Goal.WeekStart -> null
+    Goal.RestDays -> R.string.goal_meta_weekly
     else -> R.string.goal_meta_daily
 }

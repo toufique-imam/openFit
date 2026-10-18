@@ -70,7 +70,6 @@ import com.openfit.ui.today.valueText
 import com.openfit.ui.today.weekRange
 import com.openfit.ui.today.weekdayDayMonth
 import com.openfit.ui.today.whole
-import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.YearMonth
 import java.time.format.TextStyle
@@ -228,7 +227,7 @@ private fun MonthCalendar(state: ExerciseUiState.Ready) {
             }
         }
         Row(Modifier.fillMaxWidth().padding(top = 4.dp)) {
-            (0L until 7L).map { DayOfWeek.SUNDAY.plus(it) }.forEach { weekday ->
+            com.openfit.domain.WeekStart.days.forEach { weekday ->
                 Text(
                     weekday.getDisplayName(TextStyle.NARROW, com.openfit.ui.currentLocale()),
                     style = MaterialTheme.typography.bodySmall,

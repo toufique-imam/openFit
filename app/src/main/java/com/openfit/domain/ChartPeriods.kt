@@ -13,7 +13,7 @@ import kotlin.math.floor
 import kotlin.math.log10
 import kotlin.math.pow
 
-/** Fitbit's chart periods; only the Heart screen offers [ThreeMonths] (13 Sunday weeks, one point per week). */
+/** Fitbit's chart periods; only the Heart screen offers [ThreeMonths] (13 weeks, one point per week). */
 enum class ChartPeriod { Day, Week, Month, ThreeMonths, Year }
 
 /** One point on a Week/Month/Year chart: a day (or a month on the Year chart) with its load and target range. */
@@ -51,7 +51,15 @@ fun dayChartAxis(range: LoadRange?, load: Double): ChartAxis {
     return chartAxis(maxOf(range?.high ?: 0.0, load))
 }
 
-fun weekStart(date: LocalDate): LocalDate = date.with(TemporalAdjusters.previousOrSame(DayOfWeek.SUNDAY))
+/** The profile's first day of the week; [com.openfit.profile.ProfileStore] keeps it current. */
+object WeekStart {
+    @Volatile var first: DayOfWeek = DayOfWeek.SUNDAY
+
+    /** The seven weekdays in week order. */
+    val days: List<DayOfWeek> get() = (0L until 7L).map(first::plus)
+}
+
+fun weekStart(date: LocalDate, first: DayOfWeek = WeekStart.first): LocalDate = date.with(TemporalAdjusters.previousOrSame(first))
 
 /** The days the period containing [anchor] covers. */
 fun periodDays(period: ChartPeriod, anchor: LocalDate): List<LocalDate> {
@@ -97,7 +105,7 @@ fun averagePerDay(days: List<LocalDate>, loads: Map<LocalDate, Double>): Double?
 fun daysInTarget(points: List<PeriodPoint>): Int =
     points.count { point -> point.load != null && point.range != null && point.load in point.range }
 
-/** 3-month chart: each Sunday week's average day (non-zero days only), oldest first. */
+/** 3-month chart: each week's average day (non-zero days only), oldest first. */
 fun weeklyAverages(days: List<LocalDate>, values: Map<LocalDate, Double>): List<Double?> =
     days.chunked(7).map { week -> averagePerDay(week, values) }
 
@@ -109,7 +117,7 @@ fun weekRowsOf(days: List<LocalDate>, values: Map<LocalDate, Double>): List<Peri
 fun dayRows(days: List<LocalDate>, loads: Map<LocalDate, Double>): List<PeriodRow> =
     days.sortedDescending().mapNotNull { day -> loads[day]?.let { PeriodRow(day, day, it) } }
 
-/** Month tab list: the Sunday weeks touching the month, newest first, as daily averages. */
+/** Month tab list: the weeks touching the month, newest first, as daily averages. */
 fun weekRows(month: YearMonth, loads: Map<LocalDate, Double>): List<PeriodRow> =
     generateSequence(weekStart(month.atDay(1))) { it.plusWeeks(1) }
         .takeWhile { it <= month.atEndOfMonth() }

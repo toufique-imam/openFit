@@ -34,6 +34,10 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
 
     /** Maintain or improve: drives both the Cardio Load target and the weekly Active Zone Minutes goal. */
     Fitness(GoalCategory.Activity, R.string.goal_fitness),
+    WeekStart(GoalCategory.Activity, R.string.goal_week_start),
+
+    /** Planned rest days; none is a valid choice, so the goal always has a value. */
+    RestDays(GoalCategory.Activity, R.string.goal_rest_days),
     Weight(GoalCategory.Health, R.string.tile_weight),
     MindfulDays(GoalCategory.Mindfulness, R.string.tile_mindful_days),
     Food(GoalCategory.Nutrition, R.string.tile_food),
@@ -49,7 +53,7 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
         Distance -> profile.dailyDistanceGoalMeters != null
         Energy -> profile.dailyCaloriesOutGoal != null
         Floors -> profile.dailyFloorsGoal != null
-        ZoneMinutes, Fitness -> true
+        ZoneMinutes, Fitness, WeekStart, RestDays -> true
         ExerciseDays -> profile.weeklyExerciseDaysGoal != null
         HourlyActivity -> profile.activeHours != null
         Weight -> profile.weightGoalKg != null
@@ -58,8 +62,11 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
         Water -> profile.dailyWaterGoalLiters != null
     }
 
-    /** Whether "Reset goal" applies: the fitness goal and the zone-minutes goal derived from it always have a value. */
-    val resettable: Boolean get() = this != Fitness && this != ZoneMinutes
+    /**
+     * Whether "Reset goal" applies: the fitness goal and the zone-minutes goal derived from it always have a value, and
+     * week start and rest days are choices (clearing every rest day is "None").
+     */
+    val resettable: Boolean get() = this != Fitness && this != ZoneMinutes && this != WeekStart && this != RestDays
 
     /** The profile without this goal (Fitbit's "Reset goal"). */
     fun reset(profile: Profile): Profile = when (this) {
@@ -71,7 +78,7 @@ enum class Goal(val category: GoalCategory, @StringRes val title: Int, val liste
         Distance -> profile.copy(dailyDistanceGoalMeters = null)
         Energy -> profile.copy(dailyCaloriesOutGoal = null)
         Floors -> profile.copy(dailyFloorsGoal = null)
-        ZoneMinutes, Fitness -> profile
+        ZoneMinutes, Fitness, WeekStart, RestDays -> profile
         ExerciseDays -> profile.copy(weeklyExerciseDaysGoal = null)
         HourlyActivity -> profile.copy(activeHours = null)
         Weight -> profile.copy(weightGoalKg = null)

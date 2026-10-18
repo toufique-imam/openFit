@@ -216,7 +216,7 @@ class CardioLoadViewModel(
         val ranges = if (history.pendingDays > 0) {
             emptyMap()
         } else {
-            days.mapNotNull { day -> dailyCardioRange(day, profile.fitnessGoal, loads, readiness(day, history))?.let { day to it } }.toMap()
+            days.mapNotNull { day -> dailyCardioRange(day, profile.fitnessGoal, loads, readiness(day, history), profile.restDays)?.let { day to it } }.toMap()
         }
         val end = days.last()
         val ready = CardioLoadUiState.Ready(
